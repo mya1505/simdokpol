@@ -4,10 +4,9 @@ import (
 	"bytes"
 	"fmt"
 	"log"
-	"path/filepath"
 	"simdokpol/internal/dto"
 	"simdokpol/internal/models"
-	"simdokpol/web" // <-- Pastikan import ini ada
+	"simdokpol/web" // Import package web (Embed)
 	"strings"
 
 	"github.com/jung-kurt/gofpdf"
@@ -29,7 +28,6 @@ func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, ex
 	)
 
 	// --- LOAD LOGO DARI EMBED (SINGLE BINARY SAFE) ---
-	// Kita tidak menggunakan filepath.Join lagi agar aman saat jadi .exe
 	logoBytes, err := web.Assets.ReadFile("static/img/logo.png")
 	if err == nil {
 		// Register gambar dari memory ke PDF engine
@@ -45,7 +43,6 @@ func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, ex
 	}
 	
 	// Helper untuk text-align center halaman penuh
-	// (Fungsi ini yang sebelumnya bikin error karena tidak terpakai)
 	cellFitCenter := func(h float64, text string) {
 		pageWidth, _ := pdf.GetPageSize()
 		marginL, _, marginR, _ := pdf.GetMargins()
@@ -79,7 +76,6 @@ func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, ex
 	pdf.Ln(2)
 
 	// --- 2. LOGO ---
-	// Tampilkan logo yang sudah di-register tadi
 	if err == nil {
 		pdf.Image("logo.png", 99, 42, 12, 0, false, "", 0, "")
 	}
@@ -87,12 +83,9 @@ func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, ex
 	
 	// --- 3. JUDUL DOKUMEN ---
 	setFont("BU", 12)
-	// FIX: Memanggil cellFitCenter agar tidak error "unused"
 	cellFitCenter(lineHeight, "SURAT KETERANGAN HILANG")
 	pdf.Ln(lineHeight)
-	
 	setFont("", 11)
-	// FIX: Memanggil cellFitCenter lagi
 	cellFitCenter(lineHeight, fmt.Sprintf("Nomor: %s", doc.NomorSurat))
 	pdf.Ln(8)
 
@@ -146,7 +139,7 @@ func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, ex
 	pdf.MultiCell(170, lineHeight, fmt.Sprintf("Yang bersangkutan tersebut di atas benar telah datang di Kantor %s dan melaporkan bahwa telah kehilangan surat berharga berupa :", config.NamaKantor), "", "J", false)
 	pdf.Ln(3)
 
-	// Daftar barang dengan format yang lebih rapi
+	// Daftar barang
 	for i, item := range doc.LostItems {
 		pdf.SetX(30)
 		line := fmt.Sprintf("- 1 (Buah) %s Dengan Keterangan : %s A.n Pelapor", strings.ToUpper(item.NamaBarang), item.Deskripsi)
@@ -172,7 +165,7 @@ func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, ex
 	pdf.MultiCell(70, lineHeight, strings.ToUpper(doc.Resident.NamaLengkap), "", "C", false)
 	yPosAfterBermohon := pdf.GetY()
 
-	// --- 9. PARAGRAF PENUTUP 2 ("Demikian...") - DI BAWAH YANG BERMOHON ---
+	// --- 9. PARAGRAF PENUTUP 2 ---
 	setFont("", 11)
 	pdf.SetY(yPosAfterBermohon)
 	pdf.Ln(3)
@@ -198,7 +191,7 @@ func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, ex
 	if config.ArchiveDurationDays > 0 {
 		archiveDays = config.ArchiveDurationDays
 	}
-	// Menggunakan helper IntToIndonesianWords
+	
 	archiveDaysWords := IntToIndonesianWords(archiveDays)
 	pdf.MultiCell(165, lineHeightItem, fmt.Sprintf("2. Surat keterangan kehilangan ini berlaku selama %d (%s) hari, berlaku mulai tanggal dikeluarkan;", archiveDays, archiveDaysWords), "", "L", false)
 
@@ -213,7 +206,6 @@ func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, ex
 	pdf.MultiCell(70, lineHeight, fmt.Sprintf("%s, %s", config.TempatSurat, doc.TanggalLaporan.Format("02 January 2006")), "", "C", false)
 	pdf.Ln(2)
 
-	// Simpan Y pos
 	yPosTtd := pdf.GetY()
 	
 	jabatanPersetuju := strings.ToUpper(doc.PejabatPersetuju.Jabatan)

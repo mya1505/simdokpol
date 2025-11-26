@@ -1,23 +1,23 @@
 name: Test Cross-Platform Build
 
 on:
-  workflow_dispatch:
-  pull_request:
-    paths:
-      - 'cmd/**'
-      - 'internal/**'
-      - 'web/**'
-      - 'go.mod'
-      - 'go.sum'
-      - '.github/workflows/test-build.yml'
-  push:
-    branches:
-      - main
-      - develop
+  workflow_dispatch:  # Hanya bisa dijalankan manual lewat tombol "Run workflow"
+  # pull_request:
+  #   paths:
+  #     - 'cmd/**'
+  #     - 'internal/**'
+  #     - 'web/**'
+  #     - 'go.mod'
+  #     - 'go.sum'
+  #     - '.github/workflows/test-build.yml'
+  # push:
+  #   branches:
+  #     - main
+  #     - develop
 
 env:
   APP_NAME: simdokpol
-  GO_VERSION: '1.25.0'
+  GO_VERSION: '1.25'
   TEST_DIR: test-output
 
 jobs:
