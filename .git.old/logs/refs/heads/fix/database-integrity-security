@@ -1,0 +1,5 @@
+0000000000000000000000000000000000000000 79991a715ed28a9a073063e59d4dc2a6ea0c1224 MUHAMMAD YUSUF ABDURROHMAN <mylearning1505@gmail.com> 1763935140 +0800	branch: Created from HEAD
+79991a715ed28a9a073063e59d4dc2a6ea0c1224 2c331d18934c3362808252e7a47de64ddaac49f8 MUHAMMAD YUSUF ABDURROHMAN <mylearning1505@gmail.com> 1763935140 +0800	commit: fix: race condition document number & add sqlite file validation
+2c331d18934c3362808252e7a47de64ddaac49f8 7f5aa6bec1fad6dd746c3c09ffbd8f8edff1636b MUHAMMAD YUSUF ABDURROHMAN <mylearning1505@gmail.com> 1763939586 +0800	commit: fix: race condition document number & add sqlite file validation
+7f5aa6bec1fad6dd746c3c09ffbd8f8edff1636b 131658c39abb4cec12227aa47668f132d0d2f4f7 MUHAMMAD YUSUF ABDURROHMAN <mylearning1505@gmail.com> 1763939997 +0800	commit: fix: remove hardcoded secrets & add input sanitizer
+131658c39abb4cec12227aa47668f132d0d2f4f7 810d17fe096ef975287e858a73aa4916d1af9775 MUHAMMAD YUSUF ABDURROHMAN <mylearning1505@gmail.com> 1763940859 +0800	commit: fix: ui security warning & ldflags support

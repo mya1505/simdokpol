@@ -1,0 +1,3 @@
+0000000000000000000000000000000000000000 c838ecee2d40875b518d02890c21fb44bbed07ed MUHAMMAD YUSUF ABDURROHMAN <mylearning1505@gmail.com> 1763943971 +0800	branch: Created from HEAD
+c838ecee2d40875b518d02890c21fb44bbed07ed 75285e015ccc4e272515cf63d561c0994cdec952 MUHAMMAD YUSUF ABDURROHMAN <mylearning1505@gmail.com> 1763943972 +0800	commit: feat: add automatic https support if certs exist
+75285e015ccc4e272515cf63d561c0994cdec952 1c2e629df4ff6b272ad6d97010718d233cc0b33f MUHAMMAD YUSUF ABDURROHMAN <mylearning1505@gmail.com> 1763944157 +0800	commit: fix: ui security check & restart instruction on settings page

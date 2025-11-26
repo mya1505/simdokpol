@@ -1,0 +1,43 @@
+{{template "_header.html" .}}
+{{template "_sidebar.html" .}}
+
+<div id="content-wrapper" class="d-flex flex-column">
+    <div id="content">
+        {{template "_topbar.html" .}}
+        <div class="container-fluid">
+
+            <h1 class="h3 mb-2 text-gray-800">Laporan Agregat Dokumen</h1>
+            <p class="mb-4">Buat laporan PDF yang berisi ringkasan data, statistik operator, dan komposisi barang hilang berdasarkan rentang tanggal yang dipilih. (Fitur Super Admin)</p>
+
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Pilih Rentang Tanggal Laporan</h6>
+                </div>
+                <div class="card-body">
+                    <form id="report-form">
+                        <div class="form-row align-items-end">
+                            <div class="form-group col-md-5">
+                                <label for="start_date">Tanggal Mulai</label>
+                                <input type="text" class="form-control" id="start_date" name="start_date" placeholder="DD-MM-YYYY" autocomplete="off" required>
+                            </div>
+                            <div class="form-group col-md-5">
+                                <label for="end_date">Tanggal Selesai</label>
+                                <input type="text" class="form-control" id="end_date" name="end_date" placeholder="DD-MM-YYYY" autocomplete="off" required>
+                            </div>
+                            <div class="form-group col-md-2">
+                                <button type="submit" id="generate-report-btn" class="btn btn-danger btn-block">
+                                    <i class="fas fa-file-pdf fa-sm"></i> Generate PDF
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+        </div>
+    </div>
+    {{template "_footer.html" .}}
+</div>
+
+{{template "_scripts.html" .}}
+{{template "_reportScript.html" .}}

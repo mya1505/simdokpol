@@ -1,0 +1,101 @@
+<script>
+$(document).ready(function() {
+    let templatesTable;
+
+    function loadTemplatesTable() {
+        if (templatesTable) {
+            templatesTable.destroy();
+        }
+
+        templatesTable = $('#templatesTable').DataTable({
+            "processing": true,
+            "serverSide": false,
+            "ajax": {
+                "url": "/api/item-templates", // Mengambil semua (termasuk non-aktif)
+                "type": "GET",
+                "dataSrc": ""
+            },
+            "columns": [
+                { "data": null, "render": (data, type, row, meta) => meta.row + 1 },
+                { "data": "nama_barang" },
+                { 
+                    "data": "fields_config",
+                    "render": function(data) {
+                        if (!data || data.length === 0) return '<em>Tidak ada fields</em>';
+                        return data.map(f => f.label).join(', ');
+                    }
+                },
+                { 
+                    "data": "is_active",
+                    "render": (data) => data 
+                        ? '<span class="badge badge-success">Aktif</span>' 
+                        : '<span class="badge badge-secondary">Non-Aktif</span>'
+                },
+                { "data": "urutan" },
+                { 
+                    "data": "id",
+                    "render": function(data, type, row) {
+                        let editButton = `<a href="/templates/${data}/edit" class="btn btn-warning btn-sm" title="Edit"><i class="fas fa-edit"></i><span class="btn-caption">Edit</span></a>`;
+                        let deleteButton;
+
+                        // Gunakan deleted_at untuk menentukan apakah akan menampilkan tombol Hapus atau Aktifkan
+                        if (row.DeletedAt && row.DeletedAt.Valid) {
+                            deleteButton = `<button type="button" class="btn btn-success btn-sm activate-template-btn" data-id="${data}" data-name="${row.nama_barang}" title="Aktifkan"><i class="fas fa-user-check"></i><span class="btn-caption">Aktifkan</span></button>`;
+                        } else {
+                            deleteButton = `<button type="button" class="btn btn-danger btn-sm delete-template-btn" data-id="${data}" data-name="${row.nama_barang}" title="Hapus"><i class="fas fa-trash"></i><span class="btn-caption">Hapus</span></button>`;
+                        }
+                        return `<div class="btn-group" role="group">${editButton} ${deleteButton}</div>`;
+                    }
+                }
+            ],
+            "language": { "url": "/static/vendor/datatables/Indonesian.json" },
+            "columnDefs": [ 
+                { "orderable": false, "targets": [0, 5] },
+                { "width": "25%", "targets": 2 }
+            ],
+            "order": [[ 4, "asc" ]] // Urutkan berdasarkan kolom 'Urutan'
+        });
+    }
+
+    loadTemplatesTable();
+
+    // Handler Hapus (Soft Delete)
+    $('#templatesTable tbody').on('click', '.delete-template-btn', function() {
+        const templateId = $(this).data('id');
+        const templateName = $(this).data('name');
+        
+        if (templateName === 'LAINNYA') {
+            Swal.fire('Aksi Dilarang', 'Template "LAINNYA" tidak dapat dihapus.', 'error');
+            return;
+        }
+
+        Swal.fire({
+            title: 'Hapus Template?',
+            text: `Anda akan menghapus (soft delete) template: ${templateName}`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Ya, hapus!',
+            cancelButtonText: 'Batal'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: `/api/item-templates/${templateId}`,
+                    method: 'DELETE',
+                    success: function(response) {
+                        Swal.fire('Berhasil!', 'Template telah dihapus.', 'success');
+                        loadTemplatesTable();
+                    },
+                    error: function(jqXHR) {
+                        Swal.fire('Gagal', 'Gagal menghapus template.', 'error');
+                    }
+                });
+            }
+        });
+    });
+    
+    // Handler Aktifkan (TODO: Implementasi API-nya jika perlu, saat ini kita edit)
+    // Untuk saat ini, 'activate' akan dilakukan melalui halaman Edit
+});
+</script>

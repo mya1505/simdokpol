@@ -1,0 +1,439 @@
+<script>
+$(document).ready(function() {
+    const isEdit = {{.IsEdit}};
+    const docID = {{.DocID}};
+    const $form = $('#create-doc-form');
+    const currentUserID = $form.data('current-user-id');
+    const currentUserRegu = $form.data('current-user-regu').toString();
+    const currentUserJabatan = $form.data('current-user-jabatan');
+
+    // --- PERUBAHAN: Variabel global untuk menyimpan template ---
+    let itemTemplates = {}; // Format: { "KTP": { fields_config: [...] }, "SIM": { ... } }
+    // --- AKHIR PERUBAHAN ---
+
+    $('#tanggal_lahir').datepicker({
+        format: 'dd-mm-yyyy',
+        language: 'id',
+        autoclose: true,
+        todayHighlight: true,
+        endDate: '0d'
+    });
+
+    // --- FUNGSI HELPER VALIDASI & FORMATTER (TIDAK BERUBAH) ---
+    function showInputError($input, message) {
+        $input.addClass('is-invalid');
+        $input.siblings('.invalid-feedback').text(message);
+        $input.focus();
+    }
+    function clearInputErrors() {
+        $('.conditional-fields input').removeClass('is-invalid');
+    }
+    
+    function validateItemFields() {
+        clearInputErrors();
+        let isValid = true;
+        
+        $('.conditional-fields:visible input[data-label]').each(function() {
+            const $input = $(this);
+            const val = $input.val().trim();
+            const requiredLength = $input.data('required-length');
+            const minLength = $input.data('min-length');
+            const label = $input.data('label') || 'Field';
+            const regexPattern = $input.data('regex'); // <-- Validasi regex baru
+
+            // 1. Cek Required Length (Panjang Pasti)
+            if (requiredLength && val.length > 0 && val.length !== parseInt(requiredLength)) {
+                showInputError($input, `${label} harus ${requiredLength} digit/karakter.`);
+                isValid = false;
+                return false;
+            }
+            
+            // 2. Cek Min Length (Panjang Minimal)
+            if (minLength && val.length > 0 && val.length < parseInt(minLength)) {
+                showInputError($input, `${label} minimal ${minLength} digit/karakter.`);
+                isValid = false;
+                return false;
+            }
+
+            // 3. Cek Regex (jika ada)
+            if (regexPattern && val.length > 0) {
+                const regex = new RegExp(regexPattern);
+                if (!regex.test(val)) {
+                    showInputError($input, `Format ${label} tidak valid.`);
+                    isValid = false;
+                    return false;
+                }
+            }
+        });
+        
+        return isValid;
+    }
+    
+    // Formatter Input (TIDAK BERUBAH)
+    $('body').on('input', '.numeric-only', function() { this.value = this.value.replace(/[^0-9]/g,''); });
+    $('body').on('input', '.alphanumeric-only.auto-uppercase', function() { this.value = this.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase(); });
+    $('body').on('input', '.alphanumeric-slash-dash.auto-uppercase', function() { this.value = this.value.replace(/[^a-zA-Z0-9\/-]/g, '').toUpperCase(); });
+    $('body').on('input', '.auto-uppercase', function() { if (!$(this).hasClass('alphanumeric-only') && !$(this).hasClass('alphanumeric-slash-dash')) { $(this).val($(this).val().toUpperCase()); } });
+    function toTitleCase(str) { return str.replace(/\w\S*/g, function(txt) { return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase(); }); }
+    $('body').on('input', '.auto-titlecase', function() { $(this).val(toTitleCase($(this).val())); });
+    // --- AKHIR FUNGSI HELPER ---
+
+    
+    // --- PERUBAHAN BESAR: LOGIKA MODAL DINAMIS ---
+    
+    // 1. Ambil Template dari API
+    $.ajax({
+        url: '/api/item-templates/active', // API yang kita buat di Tahap 1
+        method: 'GET',
+        success: function(templates) {
+            const $itemTypeSelect = $('#modal_item_type');
+            $itemTypeSelect.empty().append(new Option('Pilih Jenis Barang...', ''));
+            
+            templates.forEach(template => {
+                if (template.nama_barang === 'LAINNYA') return; // Tangani 'LAINNYA' secara khusus
+                
+                // Simpan template di variabel global
+                itemTemplates[template.nama_barang] = template; 
+                $itemTypeSelect.append(new Option(template.nama_barang, template.nama_barang));
+            });
+            
+            // Selalu tambahkan 'LAINNYA' di akhir
+            itemTemplates['LAINNYA'] = { fields_config: [] }; // Template 'LAINNYA' kosong
+            $itemTypeSelect.append(new Option('Lainnya...', 'LAINNYA'));
+        },
+        error: function() {
+            $('#modal_item_type').empty().append(new Option('Gagal memuat template', ''));
+        }
+    });
+
+    // 2. Helper untuk membangun HTML form
+    function buildFormField(field) {
+        let formGroup = '<div class="form-group">';
+        formGroup += `<label>${field.label}</label>`;
+
+        let inputClass = "form-control";
+        if (field.is_numeric) inputClass += " numeric-only";
+        if (field.is_uppercase) inputClass += " auto-uppercase alphanumeric-only"; // Asumsi
+        if (field.is_titlecase) inputClass += " auto-titlecase";
+
+        let dataAttrs = `data-label="${field.data_label}"`;
+        if (field.placeholder) dataAttrs += ` placeholder="${field.placeholder}"`;
+        if (field.regex) dataAttrs += ` data-regex="${field.regex}"`;
+        if (field.required_length > 0) dataAttrs += ` data-required-length="${field.required_length}"`;
+        if (field.min_length > 0) dataAttrs += ` data-min-length="${field.min_length}"`;
+        if (field.max_length > 0) dataAttrs += ` maxlength="${field.max_length}"`;
+
+        if (field.type === 'select') {
+            formGroup += `<select class="${inputClass}" ${dataAttrs}>`;
+            if (field.options) {
+                field.options.forEach(opt => {
+                    formGroup += `<option value="${opt}">${opt}</option>`;
+                });
+            }
+            formGroup += `</select>`;
+        } else {
+            // Default ke 'text'
+            formGroup += `<input type="text" class="${inputClass}" ${dataAttrs}>`;
+            formGroup += '<div class="invalid-feedback">Input tidak valid.</div>';
+        }
+        
+        formGroup += '</div>';
+        return formGroup;
+    }
+
+    // 3. Handler saat dropdown 'Jenis Barang' diubah
+    $('#modal_item_type').on('change', function() {
+        var selection = $(this).val();
+        var template = itemTemplates[selection];
+        
+        $('.conditional-fields').hide(); // Sembunyikan 'LAINNYA'
+        $('#dynamic-fields-container').empty(); // Kosongkan container dinamis
+        clearInputErrors();
+
+        if (selection === 'LAINNYA') {
+            $('#fields-lainnya').show();
+        } else if (template && template.fields_config) {
+            // Bangun form dinamis
+            template.fields_config.forEach(field => {
+                const fieldHtml = buildFormField(field);
+                $('#dynamic-fields-container').append(fieldHtml);
+            });
+            // Tampilkan container
+            $('#dynamic-fields-container').show();
+        }
+    });
+
+    // 4. Handler 'Simpan Barang' yang diperbarui
+    $('#save-item-btn').on('click', function() {
+        var selection = $('#modal_item_type').val();
+        var finalItemName = selection;
+        
+        if (!selection) {
+             Swal.fire('Perhatian', 'Silakan pilih jenis barang.', 'warning'); 
+             return;
+        }
+
+        if (selection === 'LAINNYA') {
+            finalItemName = $('#lainnya_nama_barang').val();
+            if (!finalItemName) {
+                Swal.fire('Perhatian', 'Nama barang tidak boleh kosong.', 'warning');
+                $('#lainnya_nama_barang').focus();
+                return;
+            }
+        }
+        
+        // Validasi field dinamis
+        if (!validateItemFields()) {
+            return;
+        }
+
+        var descriptionParts = [];
+        
+        if (selection === 'LAINNYA') {
+            let desc = $('#lainnya_deskripsi').val();
+            if (desc) descriptionParts.push(desc);
+        } else {
+            // Loop semua input dinamis
+            $('#dynamic-fields-container').find('input, select, textarea').each(function() {
+                if ($(this).val()) {
+                    var label = $(this).data('label');
+                    descriptionParts.push(label + ': ' + $(this).val());
+                }
+            });
+        }
+        
+        addItemToTable(finalItemName, descriptionParts.join(', '));
+        $('#addItemModal').modal('hide');
+    });
+
+    // 5. Handler reset modal
+    $('#addItemModal').on('hidden.bs.modal', function () {
+        $('#modal-item-form')[0].reset();
+        $('.conditional-fields').hide();
+        $('#dynamic-fields-container').empty();
+        clearInputErrors();
+    });
+    // --- AKHIR PERUBAHAN BESAR ---
+
+
+    // --- SISA KODE (AJAX PETUGAS, LOAD DATA, SUBMIT FORM) TIDAK BERUBAH ---
+    
+    function addItemToTable(name, description) {
+        var tableBody = $('#lost-items-table tbody');
+        var rowCount = tableBody.find('tr').length + 1;
+        var newRow = `<tr class="lost-item-row"><td>`+ rowCount +`</td><td data-name="nama_barang">`+ name +`</td><td data-name="deskripsi">`+ description +`</td><td><button type="button" class="btn btn-danger btn-sm remove-item-btn">X</button></td></tr>`;
+        tableBody.append(newRow);
+    }
+
+    $('#lost-items-table').on('click', '.remove-item-btn', function() {
+        $(this).closest('tr').remove();
+        $('#lost-items-table tbody tr').each(function(index) { $(this).find('td:first').text(index + 1); });
+    });
+
+    let anggotaJagaList = [];
+    let kanitList = [];
+    const $penerimaSelect = $('#penerima_laporan');
+    const $penanggungJawabSelect = $('#penanggung_jawab');
+
+    $.ajax({
+        url: '/api/users/operators',
+        method: 'GET',
+        success: function(operators) {
+            anggotaJagaList = operators.filter(op => op.jabatan.includes('ANGGOTA JAGA'));
+            kanitList = operators.filter(op => op.jabatan.includes('KANIT SPKT'));
+            $penerimaSelect.empty().append(new Option('Pilih Anggota Jaga...', ''));
+            anggotaJagaList.forEach(op => {
+                const optionText = `${op.pangkat} ${op.nama_lengkap}`;
+                $penerimaSelect.append(new Option(optionText, op.id));
+            });
+            $penanggungJawabSelect.empty().append(new Option('Pilih Kanit SPKT...', ''));
+            kanitList.forEach(op => {
+                const optionText = `${op.pangkat} ${op.nama_lengkap}`;
+                $penanggungJawabSelect.append(new Option(optionText, op.id));
+            });
+            applyDropdownLogic();
+            loadInitialData(); 
+            const params = new URLSearchParams(window.location.search);
+            if (!isEdit && !params.has('duplicate_from')) {
+                setDefaultOfficers();
+            }
+        },
+        error: function() {
+             $penerimaSelect.empty().append(new Option('Gagal memuat', ''));
+             $penanggungJawabSelect.empty().append(new Option('Gagal memuat', ''));
+        }
+    });
+
+    function setDefaultOfficers() {
+        if (currentUserJabatan.includes('ANGGOTA JAGA')) {
+            $penerimaSelect.val(currentUserID);
+            const defaultKanit = kanitList.find(op => op.regu === currentUserRegu);
+            if (defaultKanit) $penanggungJawabSelect.val(defaultKanit.id);
+        } else if (currentUserJabatan.includes('KANIT SPKT')) {
+            $penanggungJawabSelect.val(currentUserID);
+            const defaultAnggota = anggotaJagaList.find(op => op.regu === currentUserRegu);
+            if (defaultAnggota) $penerimaSelect.val(defaultAnggota.id);
+        }
+    }
+    
+    function applyDropdownLogic() {
+        if (currentUserJabatan.includes('ANGGOTA JAGA')) {
+            $penerimaSelect.prop('disabled', true);
+            $penanggungJawabSelect.prop('disabled', false);
+        } else if (currentUserJabatan.includes('KANIT SPKT')) {
+            $penanggungJawabSelect.prop('disabled', true);
+            $penerimaSelect.prop('disabled', false);
+        } else {
+            $penerimaSelect.prop('disabled', false);
+            $penanggungJawabSelect.prop('disabled', false);
+        }
+    }
+
+    function populateForm(data) {
+        $('#nama_lengkap').val(data.resident.nama_lengkap);
+        $('#tempat_lahir').val(data.resident.tempat_lahir);
+        
+        if (data.resident.tanggal_lahir) {
+            const dateParts = data.resident.tanggal_lahir.split('T')[0].split('-');
+            const formattedDate = `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`;
+            $('#tanggal_lahir').val(formattedDate);
+        }
+
+        $('#jenis_kelamin').val(data.resident.jenis_kelamin);
+        $('#agama').val(data.resident.agama);
+        $('#pekerjaan').val(data.resident.pekerjaan);
+        $('#alamat').val(data.resident.alamat);
+        $('#lokasi_hilang').val(data.lokasi_hilang);
+        
+        $('#lost-items-table tbody').empty();
+        if (data.lost_items) data.lost_items.forEach(item => addItemToTable(item.nama_barang, item.deskripsi));
+        
+        if (data.petugas_pelapor) $penerimaSelect.val(data.petugas_pelapor.id);
+        if (data.pejabat_persetuju) $penanggungJawabSelect.val(data.pejabat_persetuju.id);
+
+        const params = new URLSearchParams(window.location.search);
+        if(params.has('duplicate_from')) {
+            setDefaultOfficers();
+        }
+    }
+
+    function loadInitialData() {
+        const params = new URLSearchParams(window.location.search);
+        const duplicateFromId = params.get('duplicate_from');
+        let dataUrl = '';
+        let mode = '';
+
+        if (isEdit && docID > 0) {
+            dataUrl = '/api/documents/' + docID;
+            mode = 'edit';
+        } else if (duplicateFromId) {
+            dataUrl = '/api/documents/' + duplicateFromId;
+            mode = 'duplicate';
+        } else {
+            return;
+        }
+
+        if (mode === 'edit') {
+            $('#form-title').text('Edit Data Surat Keterangan');
+            $('#submit-btn').text('Simpan Perubahan');
+        } else if (mode === 'duplicate') {
+            $('#form-title').text('Buat Ulang (Duplikat) Surat Keterangan');
+        }
+
+        $.ajax({
+            url: dataUrl,
+            method: 'GET',
+            success: function(data) {
+                const interval = setInterval(function() {
+                    if (anggotaJagaList.length > 0 && kanitList.length > 0) {
+                        clearInterval(interval);
+                        populateForm(data);
+                    }
+                }, 100);
+            },
+            error: function() { 
+                Swal.fire('Error', 'Gagal memuat data dokumen sumber.', 'error').then(() => {
+                    window.location.href = '/documents';
+                });
+            }
+        });
+    }
+
+    $form.on('submit', function(e) {
+        e.preventDefault();
+        
+        var items = [];
+        $('#lost-items-table tbody tr').each(function() {
+            items.push({
+                nama_barang: $(this).find('td[data-name="nama_barang"]').text(),
+                deskripsi: $(this).find('td[data-name="deskripsi"]').text()
+            });
+        });
+        if (items.length === 0) {
+            Swal.fire('Perhatian', 'Harap tambahkan minimal satu barang yang hilang.', 'warning');
+            return;
+        }
+
+        const tglLahirVal = $('#tanggal_lahir').val();
+        let tglLahirISO = '';
+        if (tglLahirVal) {
+            const dateParts = tglLahirVal.split('-');
+            tglLahirISO = `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`;
+        }
+
+        $penerimaSelect.prop('disabled', false);
+        $penanggungJawabSelect.prop('disabled', false);
+        
+        var formData = {
+            nama_lengkap: $('#nama_lengkap').val(),
+            tempat_lahir: $('#tempat_lahir').val(),
+            tanggal_lahir: tglLahirISO,
+            jenis_kelamin: $('#jenis_kelamin').val(),
+            agama: $('#agama').val(),
+            pekerjaan: $('#pekerjaan').val(),
+            alamat: $('#alamat').val(),
+            lokasi_hilang: $('#lokasi_hilang').val(),
+            petugas_pelapor_id: parseInt($penerimaSelect.val()) || 0,
+            pejabat_persetuju_id: parseInt($penanggungJawabSelect.val()) || 0,
+            items: items
+        };
+
+        applyDropdownLogic();
+
+        let ajaxSettings = {
+            url: '/api/documents',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(formData),
+            success: function(response) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Berhasil!',
+                    text: 'Surat berhasil diterbitkan dengan nomor: ' + response.nomor_surat,
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => { window.location.href = '/documents'; });
+            },
+            error: function(jqXHR) {
+                Swal.fire('Gagal', (jqXHR.responseJSON ? jqXHR.responseJSON.error : 'Terjadi kesalahan.'), 'error');
+            }
+        };
+
+        if (isEdit) {
+            ajaxSettings.url = '/api/documents/' + docID;
+            ajaxSettings.method = 'PUT';
+            ajaxSettings.success = function(response) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Berhasil!',
+                    text: 'Dokumen berhasil diperbarui!',
+                    timer: 1500,
+                    showConfirmButton: false
+                }).then(() => { window.location.href = '/documents'; });
+            };
+        }
+
+        $.ajax(ajaxSettings);
+    });
+});
+</script>

@@ -1,0 +1,126 @@
+{{template "_header.html" .}}
+{{template "_sidebar.html" .}}
+
+<style>
+    .img-panduan {
+        width: 100%;
+        height: auto;
+        border: 1px solid #e3e6f0;
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        margin-bottom: 1rem;
+        transition: transform 0.2s;
+    }
+    .img-panduan:hover {
+        transform: scale(1.02);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+        z-index: 10;
+        position: relative;
+    }
+    .guide-section { margin-bottom: 3rem; }
+    .guide-title {
+        border-left: 5px solid #4e73df;
+        padding-left: 15px;
+        margin-bottom: 1.5rem;
+        font-weight: 700;
+        color: #2e59d9;
+    }
+</style>
+
+<div id="content-wrapper" class="d-flex flex-column">
+    <div id="content">
+        {{template "_topbar.html" .}}
+        <div class="container-fluid">
+
+            <div class="d-sm-flex align-items-center justify-content-between mb-4">
+                <h1 class="h3 mb-0 text-gray-800">Panduan Pengguna v1.0.9</h1>
+            </div>
+
+            <div class="card shadow mb-4 guide-section">
+                <div class="card-body">
+                    <h4 class="guide-title">1. Pendahuluan</h4>
+                    <p>Selamat datang di <strong>SIMDOKPOL</strong>. Aplikasi ini dirancang untuk membantu unit pelayanan kepolisian dalam menerbitkan Surat Keterangan Tanda Lapor Kehilangan (SKTLK) secara cepat, akurat, dan tercatat rapi.</p>
+                </div>
+            </div>
+
+            <div class="card shadow mb-4 guide-section">
+                <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary">2. Instalasi & Setup Awal</h6></div>
+                <div class="card-body">
+                    <h6 class="font-weight-bold">Tampilan Login & Setup</h6>
+                    <div class="row">
+                        <div class="col-lg-6">
+                             <p>Halaman Login Modern.</p>
+                             <img src="/static/img/panduan/guide-login.png" alt="Login" class="img-panduan">
+                        </div>
+                        <div class="col-lg-6">
+                            <p>Wizard Setup Database.</p>
+                            <img src="/static/img/panduan/guide-setup.png" alt="Setup" class="img-panduan">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow mb-4 guide-section">
+                <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary">3. Manajemen Surat Keterangan</h6></div>
+                <div class="card-body">
+                    <h5 class="font-weight-bold mt-2">3.1. Dasbor</h5>
+                    <img src="/static/img/panduan/guide-dashboard.png" alt="Dasbor" class="img-panduan">
+
+                    <h5 class="font-weight-bold mt-4">3.2. Membuat Surat Baru</h5>
+                    <img src="/static/img/panduan/guide-doc-form.png" alt="Formulir" class="img-panduan">
+
+                    <h5 class="font-weight-bold mt-4">3.3. Daftar & Cetak</h5>
+                    <img src="/static/img/panduan/guide-doc-active.png" alt="Daftar Dokumen" class="img-panduan">
+                </div>
+            </div>
+
+            <div class="card shadow mb-4 guide-section">
+                <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary">4. Manajemen Pengguna (Admin)</h6></div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Daftar Petugas</h6>
+                            <img src="/static/img/panduan/guide-user-list.png" alt="List User" class="img-panduan">
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Tambah Petugas</h6>
+                            <img src="/static/img/panduan/guide-user-add.png" alt="Add User" class="img-panduan">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow mb-4 guide-section border-left-success">
+                <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-success">5. Fitur Pro (Berlisensi)</h6></div>
+                <div class="card-body">
+                    <h5 class="font-weight-bold">5.1. Laporan Agregat</h5>
+                    <img src="/static/img/panduan/guide-report.png" alt="Laporan" class="img-panduan">
+
+                    <h5 class="font-weight-bold mt-4">5.2. Kustomisasi Template</h5>
+                    <img src="/static/img/panduan/guide-template-list.png" alt="Template List" class="img-panduan">
+                    <img src="/static/img/panduan/guide-template-edit.png" alt="Template Edit" class="img-panduan">
+                </div>
+            </div>
+            
+             <div class="card shadow mb-4 guide-section">
+                <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary">6. Pengaturan Sistem</h6></div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                             <h6>Umum & KOP Surat</h6>
+                             <img src="/static/img/panduan/guide-settings-general.png" alt="Settings General" class="img-panduan">
+                        </div>
+                         <div class="col-md-6">
+                             <h6>Database & Backup</h6>
+                             <img src="/static/img/panduan/guide-settings-db.png" alt="Settings DB" class="img-panduan">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+    {{template "_footer.html" .}}
+</div>
+
+{{template "_scripts.html" .}}

@@ -1,0 +1,57 @@
+<script>
+$(document).ready(function() {
+    // Handler Export (Tetap)
+    $('#export-audit-btn').on('click', function() {
+        window.location.href = '/api/audit-logs/export';
+    });
+
+    // Inisialisasi DataTables dengan Server-Side Processing
+    $('#auditLogsTable').DataTable({
+        "processing": true,
+        "serverSide": true, // <-- AKTIFKAN SERVER SIDE
+        "ordering": false, // Matikan sorting client-side karena backend hardcode sort by timestamp desc
+        "ajax": {
+            "url": "/api/audit-logs",
+            "type": "GET",
+            "error": function(xhr, error, code) {
+                console.error("DataTables Error:", error);
+                $('#auditLogsTable tbody').html('<tr><td colspan="4" class="text-center text-danger">Gagal memuat data.</td></tr>');
+                $("#auditLogsTable_processing").css("display", "none");
+            }
+        },
+        "columns": [
+            { 
+                "data": "Timestamp",
+                "render": function(data) {
+                    if(!data) return "-";
+                    return new Date(data).toLocaleString('id-ID', {
+                        year: 'numeric', month: 'long', day: 'numeric',
+                        hour: '2-digit', minute: '2-digit', second: '2-digit'
+                    });
+                }
+            },
+            { 
+                "data": "User",
+                "defaultContent": "",
+                "render": function(data) {
+                    return data ? data.nama_lengkap : '<span class="font-italic text-muted">SISTEM</span>';
+                }
+            },
+            { 
+                "data": "Aksi",
+                "render": function(data) {
+                    let badgeClass = 'badge-secondary';
+                    if (data.includes('BUAT') || data.includes('AKTIFKAN')) badgeClass = 'badge-success';
+                    else if (data.includes('UPDATE')) badgeClass = 'badge-warning';
+                    else if (data.includes('HAPUS') || data.includes('NONAKTIFKAN')) badgeClass = 'badge-danger';
+                    return `<span class="badge ${badgeClass}">${data}</span>`;
+                }
+            },
+            { "data": "Detail" }
+        ],
+        "language": { "url": "/static/vendor/datatables/Indonesian.json" },
+        "pageLength": 10,
+        "lengthMenu": [[10, 25, 50, 100], [10, 25, 50, 100]]
+    });
+});
+</script>

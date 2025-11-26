@@ -1,0 +1,177 @@
+{{template "_header.html" .}}
+{{template "_sidebar.html" .}}
+
+<div id="content-wrapper" class="d-flex flex-column">
+    <div id="content">
+        {{template "_topbar.html" .}}
+        <div class="container-fluid">
+
+            <h1 class="h3 mb-2 text-gray-800">Pengaturan Sistem</h1>
+            <p class="mb-4">Halaman ini hanya dapat diakses oleh Super Admin. Ubah konfigurasi sistem dengan hati-hati.</p>
+
+            <ul class="nav nav-tabs" id="settingsTab" role="tablist">
+                <li class="nav-item">
+                    <a class="nav-link active" id="config-tab" data-toggle="tab" href="#config" role="tab" aria-controls="config" aria-selected="true">
+                        <i class="fas fa-cogs fa-sm mr-1"></i> Konfigurasi Aplikasi
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" id="utility-tab" data-toggle="tab" href="#utility" role="tab" aria-controls="utility" aria-selected="false">
+                        <i class="fas fa-tools fa-sm mr-1"></i> Utilitas & Database
+                    </a>
+                </li>
+            </ul>
+
+            <div class="tab-content" id="settingsTabContent">
+                
+                <div class="tab-pane fade show active" id="config" role="tabpanel" aria-labelledby="config-tab">
+                    <form id="settings-form" class="mt-4">
+                        <div class="row">
+                            
+                            <div class="col-lg-6">
+                                <div class="card shadow mb-4">
+                                    <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary">KOP Surat & Instansi</h6></div>
+                                    <div class="card-body">
+                                        <div class="form-group"><label>KOP Baris 1</label><input type="text" class="form-control auto-uppercase" id="kop_baris_1" required></div>
+                                        <div class="form-group"><label>KOP Baris 2</label><input type="text" class="form-control auto-uppercase" id="kop_baris_2" required></div>
+                                        <div class="form-group"><label>KOP Baris 3</label><input type="text" class="form-control auto-uppercase" id="kop_baris_3" required></div>
+                                        <hr>
+                                        <div class="form-row">
+                                            <div class="form-group col-md-6"><label>Nama Kantor</label><input type="text" class="form-control auto-titlecase" id="nama_kantor" required></div>
+                                            <div class="form-group col-md-6"><label>Tempat Terbit</label><input type="text" class="form-control auto-titlecase" id="tempat_surat" required></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-lg-6">
+                                <div class="card shadow mb-4">
+                                    <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary">Sistem Penomoran</h6></div>
+                                    <div class="card-body">
+                                        <div class="form-row">
+                                            <div class="form-group col-md-8"><label>Format Nomor</label><input type="text" class="form-control" id="format_nomor_surat" required><small class="text-muted">Kode: <code>%03d</code>, <code>%s</code>, <code>%d</code></small></div>
+                                            <div class="form-group col-md-4"><label>No. Terakhir</label><input type="number" class="form-control" id="nomor_surat_terakhir" required></div>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group col-md-6"><label>Durasi Arsip (Hari)</label><input type="number" class="form-control" id="archive_duration_days" required></div>
+                                            <div class="form-group col-md-6"><label>Zona Waktu</label><select id="zona_waktu" class="form-control" required><option value="Asia/Jakarta">WIB</option><option value="Asia/Makassar">WITA</option><option value="Asia/Jayapura">WIT</option></select></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="card shadow mb-4">
+                                    <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary">Koneksi Database</h6></div>
+                                    <div class="card-body">
+                                        <div class="alert alert-warning" id="db-free-alert" style="display: none;">
+                                            <i class="fas fa-lock mr-2"></i><strong>Fitur Pro:</strong> Koneksi ke Database Eksternal (MySQL/PostgreSQL) hanya tersedia di versi Pro.
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Tipe Database <span id="db-pro-badge" class="badge badge-success ml-2" style="display:none;">PRO</span></label>
+                                            <select id="db_dialect" class="form-control" required>
+                                                <option value="sqlite">SQLite (Default)</option>
+                                                <option value="mysql">MySQL</option>
+                                                <option value="postgres">PostgreSQL</option>
+                                            </select>
+                                        </div>
+                                        <div id="sqlite-settings">
+                                            <div class="form-group"><label>Path File Database</label><input type="text" class="form-control" id="db_dsn"><small class="text-muted">Biarkan default jika ragu.</small></div>
+                                        </div>
+                                        <div id="server-db-settings" style="display: none;">
+                                            <div class="form-row">
+                                                <div class="form-group col-md-8"><input type="text" class="form-control" id="db_host" placeholder="Host"></div>
+                                                <div class="form-group col-md-4"><input type="text" class="form-control" id="db_port" placeholder="Port"></div>
+                                            </div>
+                                            <div class="form-row">
+                                                <div class="form-group col-md-6"><input type="text" class="form-control" id="db_name" placeholder="Nama DB"></div>
+                                                <div class="form-group col-md-6"><input type="text" class="form-control" id="db_user" placeholder="User"></div>
+                                            </div>
+                                            <div class="form-group"><input type="password" class="form-control" id="db_pass" placeholder="Password (Biarkan kosong jika tidak diubah)"></div>
+                                            
+                                            <div class="form-group" id="settings-pg-ssl-group" style="display: none;">
+                                                <label class="small font-weight-bold">Mode SSL (PostgreSQL Only)</label>
+                                                <select id="db_sslmode" class="form-control">
+                                                    <option value="disable">Disable (Lokal)</option>
+                                                    <option value="require">Require (Cloud)</option>
+                                                    <option value="verify-full">Verify Full</option>
+                                                </select>
+                                                <small class="form-text text-muted">Gunakan <b>Require</b> jika menggunakan layanan Cloud Database.</small>
+                                            </div>
+
+                                            <button type="button" class="btn btn-info btn-sm btn-block" id="test-db-btn"><i class="fas fa-plug mr-1"></i> Test Koneksi</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="card shadow mb-4">
+                                    <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary">Konfigurasi Path Backup</h6></div>
+                                    <div class="card-body">
+                                        <div class="form-group"><label>Path Folder Backup</label><input type="text" class="form-control" id="backup_path" placeholder="Default: ./backups"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-end mb-4">
+                            <button type="submit" class="btn btn-primary btn-lg px-5 shadow-lg" id="submit-btn">
+                                <i class="fas fa-save mr-2"></i> Simpan Semua Perubahan
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="tab-pane fade" id="utility" role="tabpanel" aria-labelledby="utility-tab">
+                    <div class="row mt-4">
+                        <div class="col-lg-6">
+                            <div class="card shadow mb-4 border-left-primary">
+                                <div class="card-body">
+                                    <h5 class="font-weight-bold text-primary mb-3"><i class="fas fa-download mr-2"></i>Backup Database</h5>
+                                    <p>Unduh salinan database saat ini untuk keamanan data.</p>
+                                    <div class="form-group">
+                                        <label>Lokasi Folder Backup (Server)</label>
+                                        <input type="text" class="form-control bg-light" id="backup_path_display" readonly>
+                                    </div>
+                                    <button id="backup-btn" class="btn btn-primary btn-block"><i class="fas fa-download mr-1"></i> Download Backup (.db)</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-lg-6">
+                            <div class="card shadow mb-4 border-left-danger">
+                                <div class="card-body">
+                                    <h5 class="font-weight-bold text-danger mb-3"><i class="fas fa-upload mr-2"></i>Restore Database</h5>
+                                    <p>Kembalikan data dari file backup. <strong>Data saat ini akan ditimpa!</strong></p>
+                                    <form id="restore-form" enctype="multipart/form-data">
+                                        <div class="form-group">
+                                            <div class="custom-file">
+                                                <input type="file" class="custom-file-input" id="restore-file" name="restore-file" accept=".db" required>
+                                                <label class="custom-file-label" for="restore-file">Pilih file .db...</label>
+                                            </div>
+                                        </div>
+                                        <button type="submit" id="restore-btn" class="btn btn-danger btn-block"><i class="fas fa-upload mr-1"></i> Pulihkan Database</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle mr-1"></i> Fitur Backup & Restore di atas hanya berlaku untuk database <strong>SQLite</strong>.
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+    {{template "_footer.html" .}}
+</div>
+
+{{template "_scripts.html" .}}
+{{template "_settingsScript.html" .}}
+
+<script>
+    // Script kecil untuk menampilkan nama file di input custom file bootstrap
+    $('.custom-file-input').on('change', function() {
+        let fileName = $(this).val().split('\\').pop();
+        $(this).next('.custom-file-label').addClass("selected").html(fileName);
+    });
+</script>

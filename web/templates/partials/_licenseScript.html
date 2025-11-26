@@ -1,0 +1,93 @@
+<script>
+$(document).ready(function() {
+    const $form = $('#license-form');
+    const $input = $('#serial_key');
+    const $button = $form.find('button[type="submit"]');
+    const $statusText = $('#license-status-text');
+    const $formGroup = $('#license-form-group');
+    const $activeMsg = $('#license-active-msg');
+
+    // 1. Ambil HWID
+    $.ajax({
+        url: "/api/license/hwid",
+        method: "GET",
+        success: function(resp) {
+            $('#hardware-id-val').text(resp.hardware_id);
+        },
+        error: function() {
+            $('#hardware-id-val').text('ERROR').addClass('text-danger');
+        }
+    });
+
+    // 2. Cek Status Lisensi
+    function checkLicenseStatus() {
+        $.ajax({
+            url: "/api/settings", 
+            method: "GET",
+            success: function (config) {
+                if (config.license_status === 'VALID') {
+                    $statusText.html('<span class="badge badge-success px-3 py-2"><i class="fas fa-check mr-1"></i> PRO AKTIF</span>');
+                    $formGroup.hide(); 
+                    $activeMsg.fadeIn(); 
+                } else {
+                    $statusText.html('<span class="badge badge-secondary px-3 py-2">FREE VERSION</span>');
+                    $activeMsg.hide();
+                    $formGroup.fadeIn();
+                }
+            },
+            error: function() {
+                 $statusText.html('<span class="badge badge-danger">Error Koneksi</span>');
+            }
+        });
+    }
+    
+    // Delay sedikit agar transisi terlihat halus
+    setTimeout(checkLicenseStatus, 500);
+
+    // 3. Handler Submit
+    $form.on('submit', function(e) {
+        e.preventDefault();
+        const key = $input.val().trim();
+        
+        if (key.length < 20) { // Minimal check panjang key
+            Swal.fire('Format Salah', 'Serial Key tampaknya terlalu pendek.', 'warning');
+            return;
+        }
+
+        const originalButtonText = $button.html();
+        $button.html('<span class="spinner-border spinner-border-sm"></span> Memvalidasi...').prop('disabled', true);
+
+        $.ajax({
+            url: "/api/license/activate",
+            method: "POST",
+            contentType: "application/json",
+            data: JSON.stringify({ key: key }),
+            success: function(response) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Aktivasi Berhasil!',
+                    text: 'Selamat! Fitur Pro telah aktif.',
+                    showConfirmButton: false,
+                    timer: 2000
+                }).then(() => {
+                    window.location.reload();
+                });
+            },
+            error: function(jqXHR) {
+                let errorMsg = 'Terjadi kesalahan pada server.';
+                if (jqXHR.responseJSON && jqXHR.responseJSON.error) {
+                    errorMsg = jqXHR.responseJSON.error;
+                }
+                
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Aktivasi Gagal',
+                    text: errorMsg,
+                    footer: 'Pastikan Anda menyalin Serial Key yang sesuai dengan Hardware ID di atas.'
+                });
+                $button.html(originalButtonText).prop('disabled', false);
+            }
+        });
+    });
+});
+</script>

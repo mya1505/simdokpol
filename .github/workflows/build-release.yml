@@ -1,0 +1,1138 @@
+name: Build Multiplatform Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Nomor versi rilis (contoh: 1.0.0)'
+        required: true
+        default: '1.0.0'
+
+permissions:
+  contents: write
+
+env:
+  APP_NAME: simdokpol
+  GO_VERSION: '1.25.0' # --- DISESUAIKAN DENGAN VERSI GO.MOD ANDA ---
+
+jobs:
+  prepare:
+    name: Prepare Release Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.VERSION }}
+      previous_tag: ${{ steps.get_tags.outputs.PREVIOUS_TAG }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version number
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get previous tag
+        id: get_tags
+        run: |
+          CURRENT_TAG="${GITHUB_REF#refs/tags/}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            CURRENT_TAG="v${{ github.event.inputs.version }}"
+          fi
+          
+          PREVIOUS_TAG=$(git tag --sort=-v:refname | grep -v "^${CURRENT_TAG}$" | head -n 1)
+          
+          if [ -z "$PREVIOUS_TAG" ]; then
+            PREVIOUS_TAG=$(git rev-list --max-parents=0 HEAD)
+          fi
+          
+          echo "PREVIOUS_TAG=$PREVIOUS_TAG" >> $GITHUB_OUTPUT
+          echo "Current tag: $CURRENT_TAG"
+          echo "Previous tag: $PREVIOUS_TAG"
+
+  generate-changelog:
+    name: Generate Changelog from Commits
+    needs: prepare
+    runs-on: ubuntu-latest
+    outputs:
+      changelog: ${{ steps.create_changelog.outputs.CHANGELOG }}
+      changelog_file: ${{ steps.create_changelog.outputs.CHANGELOG_FILE }}
+      # --- OUTPUT BARU UNTUK BASE64 ---
+      changelog_b64: ${{ steps.encode_changelog.outputs.CHANGELOG_B64 }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog from commits
+        id: create_changelog
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          PREVIOUS_TAG="${{ needs.prepare.outputs.previous_tag }}"
+          CURRENT_TAG="v${VERSION}"
+          
+          echo "Generating changelog from $PREVIOUS_TAG to $CURRENT_TAG"
+          
+          CHANGELOG_FILE="CHANGELOG_${VERSION}.md"
+          
+          {
+            echo "## 🚀 SIMDOKPOL v${VERSION}"
+            echo ""
+            echo "Rilis stabil baru untuk **SIMDOKPOL** - Sistem Informasi Manajemen Dokumen Kepolisian."
+            echo ""
+            echo "---"
+            echo ""
+            
+            FEATURES=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"%s" --grep="^feat" --grep="^feature" -i)
+            if [ ! -z "$FEATURES" ]; then
+              echo "### ✨ Fitur Baru"
+              echo ""
+              echo "$FEATURES" | while read -r line; do
+                CLEAN_LINE=$(echo "$line" | sed 's/^feat://i' | sed 's/^feature://i' | sed 's/^ *//')
+                echo "- $CLEAN_LINE"
+              done
+              echo ""
+            fi
+            
+            IMPROVEMENTS=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"%s" --grep="^improve" --grep="^enhancement" --grep="^perf" -i)
+            if [ ! -z "$IMPROVEMENTS" ]; then
+              echo "### 🚀 Peningkatan"
+              echo ""
+              echo "$IMPROVEMENTS" | while read -r line; do
+                CLEAN_LINE=$(echo "$line" | sed 's/^improve://i' | sed 's/^enhancement://i' | sed 's/^perf://i' | sed 's/^ *//')
+                echo "- $CLEAN_LINE"
+              done
+              echo ""
+            fi
+            
+            FIXES=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"%s" --grep="^fix" --grep="^bugfix" -i)
+            if [ ! -z "$FIXES" ]; then
+              echo "### 🐛 Bug Fixes"
+              echo ""
+              echo "$FIXES" | while read -r line; do
+                CLEAN_LINE=$(echo "$line" | sed 's/^fix://i' | sed 's/^bugfix://i' | sed 's/^ *//')
+                echo "- $CLEAN_LINE"
+              done
+              echo ""
+            fi
+            
+            SECURITY=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"%s" --grep="^security" --grep="^sec:" -i)
+            if [ ! -z "$SECURITY" ]; then
+              echo "### 🔒 Keamanan"
+              echo ""
+              echo "$SECURITY" | while read -r line; do
+                CLEAN_LINE=$(echo "$line" | sed 's/^security://i' | sed 's/^sec://i' | sed 's/^ *//')
+                echo "- $CLEAN_LINE"
+              done
+              echo ""
+            fi
+            
+            DOCS=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"%s" --grep="^docs" -i)
+            if [ ! -z "$DOCS" ]; then
+              echo "### 📚 Dokumentasi"
+              echo ""
+              echo "$DOCS" | while read -r line; do
+                CLEAN_LINE=$(echo "$line" | sed 's/^docs://i' | sed 's/^ *//')
+                echo "- $CLEAN_LINE"
+              done
+              echo ""
+            fi
+            
+            OTHER=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"%s" --invert-grep --grep="^feat" --grep="^feature" --grep="^fix" --grep="^bugfix" --grep="^improve" --grep="^enhancement" --grep="^perf" --grep="^security" --grep="^sec:" --grep="^docs" -i)
+            if [ ! -z "$OTHER" ]; then
+              echo "### 🔧 Perubahan Lainnya"
+              echo ""
+              echo "$OTHER" | while read -r line; do
+                echo "- $line"
+              done
+              echo ""
+            fi
+            
+            echo "---"
+            echo ""
+          } > "$CHANGELOG_FILE"
+          
+          echo "CHANGELOG_FILE=$CHANGELOG_FILE" >> $GITHUB_OUTPUT
+          
+          CHANGELOG_CONTENT=$(cat "$CHANGELOG_FILE")
+          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      # --- LANGKAH BARU: ENCODE CHANGELOG KE BASE64 ---
+      - name: Encode Changelog to Base64
+        id: encode_changelog
+        run: |
+          CHANGELOG_B64=$(echo "${{ steps.create_changelog.outputs.CHANGELOG }}" | base64 -w 0)
+          echo "CHANGELOG_B64=$CHANGELOG_B64" >> $GITHUB_OUTPUT
+
+      - name: Upload changelog artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: changelog
+          path: CHANGELOG_*.md
+          retention-days: 5
+
+  build-windows:
+    name: Build untuk Windows (x64)
+    needs: [prepare, generate-changelog] # <-- Pastikan generate-changelog ada di needs
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          choco install -y mingw nsis 7zip imagemagick.app --no-progress --force
+          
+          NSIS_PATH="C:\Program Files (x86)\NSIS"
+          echo "$NSIS_PATH" >> $GITHUB_PATH
+          
+          echo "Verifying installations..."
+          if [ -f "${NSIS_PATH}/makensis.exe" ]; then
+            echo "✓ NSIS installed"
+          else
+            echo "ERROR: NSIS not found!"
+            exit 1
+          fi
+
+      - name: Setup environment
+        shell: bash
+        run: |
+          echo "CGO_ENABLED=1" >> $GITHUB_ENV
+          echo "GOOS=windows" >> $GITHUB_ENV
+          echo "GOARCH=amd64" >> $GITHUB_ENV
+
+      - name: Install Go tools
+        run: |
+          go mod download
+          go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
+          go install github.com/akavel/rsrc@latest
+
+      - name: Generate Windows icon resource
+        shell: bash
+        run: |
+          set -e
+          
+          ICON_PATH="web/static/img/icon.png"
+          if [ ! -f "$ICON_PATH" ]; then
+            echo "ERROR: Icon file not found at $ICON_PATH"
+            exit 1
+          fi
+          
+          echo "✓ Found icon at: $ICON_PATH"
+          
+          echo "Converting PNG to ICO format with multiple sizes..."
+          magick convert "$ICON_PATH" \
+            -background transparent \
+            \( -clone 0 -resize 256x256 \) \
+            \( -clone 0 -resize 128x128 \) \
+            \( -clone 0 -resize 64x64 \) \
+            \( -clone 0 -resize 48x48 \) \
+            \( -clone 0 -resize 32x32 \) \
+            \( -clone 0 -resize 16x16 \) \
+            -delete 0 app-icon.ico
+          
+          echo "✓ ICO file created: app-icon.ico"
+          
+          echo "Generating Windows resource file..."
+          rsrc -ico app-icon.ico -o rsrc.syso
+          
+          echo "✓ Resource file created: rsrc.syso"
+
+      - name: Create version info
+        shell: bash
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          MAJOR=$(echo $VERSION | cut -d. -f1)
+          MINOR=$(echo $VERSION | cut -d. -f2)
+          PATCH=$(echo $VERSION | cut -d. -f3 | cut -d- -f1)
+          
+          cat > versioninfo.json << EOF
+          {
+            "FixedFileInfo": {
+              "FileVersion": {
+                "Major": ${MAJOR},
+                "Minor": ${MINOR},
+                "Patch": ${PATCH},
+                "Build": 0
+              },
+              "ProductVersion": {
+                "Major": ${MAJOR},
+                "Minor": ${MINOR},
+                "Patch": ${PATCH},
+                "Build": 0
+              },
+              "FileFlagsMask": "3f",
+              "FileFlags": "00",
+              "FileOS": "040004",
+              "FileType": "01",
+              "FileSubType": "00"
+            },
+            "StringFileInfo": {
+              "Comments": "Sistem Informasi Manajemen Dokumen Kepolisian",
+              "CompanyName": "SIMDOKPOL Team",
+              "FileDescription": "SIMDOKPOL Application",
+              "FileVersion": "${VERSION}",
+              "InternalName": "${{ env.APP_NAME }}",
+              "LegalCopyright": "Copyright © 2025 SIMDOKPOL Team",
+              "OriginalFilename": "${{ env.APP_NAME }}.exe",
+              "ProductName": "SIMDOKPOL",
+              "ProductVersion": "${VERSION}"
+            },
+            "VarFileInfo": {
+              "Translation": {
+                "LangID": "0409",
+                "CharsetID": "04B0"
+              }
+            }
+          }
+          EOF
+          
+          goversioninfo -64
+
+      # --- PERUBAHAN: Tambahkan ldflags untuk changelog ---
+      - name: Build Windows executables
+        shell: bash
+        # Tambahkan env CHANGELOG_B64
+        env:
+          CHANGELOG_B64: ${{ needs.generate-changelog.outputs.changelog_b64 }}
+        run: |
+          set -e
+          VERSION="${{ needs.prepare.outputs.version }}"
+          
+          # Buat string ldflags yang lengkap
+          LDFLAGS="-s -w -X main.version=$VERSION -X 'main.changelogBase64=$CHANGELOG_B64' -extldflags '-static'"
+          
+          mkdir -p build
+          
+          echo "Building GUI version with icon..."
+          go build -trimpath \
+            -ldflags="-H windowsgui $LDFLAGS" \
+            -tags sqlite_omit_load_extension \
+            -o "build/${{ env.APP_NAME }}.exe" ./cmd/main.go
+          
+          echo "Building console version..."
+          go build -trimpath \
+            -ldflags="$LDFLAGS" \
+            -tags sqlite_omit_load_extension \
+            -o "build/${{ env.APP_NAME }}-console.exe" ./cmd/main.go
+          
+          rm -f rsrc.syso resource.syso versioninfo.json
+      # --- AKHIR PERUBAHAN ---
+      
+      - name: Prepare release package
+        shell: bash
+        run: |
+          set -e
+          mkdir -p release/backups
+          cp -r build/* release/
+          cp -r web migrations release/
+          cp app-icon.ico release/icon.ico
+          [ -f README.md ] && cp README.md release/ || true
+          [ -f LICENSE ] && cp LICENSE release/ || true
+          
+          cat > "release/start.bat" << 'EOF'
+          @echo off
+          title SIMDOKPOL Server
+          echo ========================================
+          echo   SIMDOKPOL - System Startup
+          echo ========================================
+          echo.
+          echo [INFO] Memulai SIMDOKPOL Server...
+          echo [INFO] Aplikasi akan terbuka otomatis di browser
+          echo [INFO] Icon aplikasi tersedia di system tray
+          echo.
+          
+          start simdokpol.exe
+          
+          echo [SUCCESS] Server berjalan di background
+          echo [INFO] Klik icon di system tray untuk kontrol aplikasi
+          echo.
+          EOF
+          
+          cat > "release/start-console.bat" << 'EOF'
+          @echo off
+          title SIMDOKPOL Server (Console Mode)
+          echo ========================================
+          echo   SIMDOKPOL - Console Mode
+          echo ========================================
+          echo.
+          echo [INFO] Memulai SIMDOKPOL Server (Console Mode)...
+          echo [INFO] Mode ini menampilkan log server
+          echo [INFO] Aplikasi akan terbuka otomatis di browser
+          echo [INFO] Tekan Ctrl+C untuk menghentikan server
+          echo.
+          
+          simdokpol-console.exe
+          
+          pause
+          EOF
+
+      - name: Create NSIS installer
+        shell: bash
+        run: |
+          set -e
+          VERSION="${{ needs.prepare.outputs.version }}"
+          
+          if [ ! -f "app-icon.ico" ]; then
+            echo "ERROR: app-icon.ico not found!"
+            exit 1
+          fi
+          
+          echo "✓ Icon file ready for NSIS"
+          
+          ICON_PNG="web/static/img/icon.png"
+          
+          if [ ! -f "web/static/img/installer-banner.bmp" ]; then
+            echo "Creating installer banner image (NSIS compatible)..."
+            magick convert "$ICON_PNG" -resize 100x100 -gravity center -background "#0078D7" -extent 164x314 BMP3:web/static/img/installer-banner.bmp
+          fi
+          
+          if [ ! -f "web/static/img/installer-header.bmp" ]; then
+            echo "Creating installer header image (NSIS compatible)..."
+            magick convert "$ICON_PNG" -resize 40x40 -gravity west -background "#FFFFFF" -extent 150x57 BMP3:web/static/img/installer-header.bmp
+          fi
+          
+          echo "✓ Installer images ready"
+          
+          BANNER_EXISTS="false"
+          HEADER_EXISTS="false"
+          
+          if [ -f "web/static/img/installer-banner.bmp" ]; then
+            BANNER_EXISTS="true"
+          fi
+          
+          if [ -f "web/static/img/installer-header.bmp" ]; then
+            HEADER_EXISTS="true"
+          fi
+          
+          cat > installer.nsi << 'NSIEOF'
+          !define APP_NAME "SIMDOKPOL"
+          !define VERSION "${{ needs.prepare.outputs.version }}"
+          !define PUBLISHER "SIMDOKPOL Team"
+          !define WEB_SITE "https://github.com/muhammad1505/simdokpol"
+          !define INSTALLER_NAME "${{ env.APP_NAME }}-windows-x64-v${{ needs.prepare.outputs.version }}-installer.exe"
+          
+          Name "${APP_NAME} ${VERSION}"
+          OutFile "${INSTALLER_NAME}"
+          InstallDir "$PROGRAMFILES64\${APP_NAME}"
+          RequestExecutionLevel admin
+          
+          !include "MUI2.nsh"
+          
+          !define MUI_ICON "app-icon.ico"
+          !define MUI_UNICON "app-icon.ico"
+          
+          NSIEOF
+          
+          if [ "$BANNER_EXISTS" = "true" ]; then
+            cat >> installer.nsi << 'NSIEOF'
+          !define MUI_WELCOMEFINISHPAGE_BITMAP "web\static\img\installer-banner.bmp"
+          
+          NSIEOF
+          fi
+          
+          if [ "$HEADER_EXISTS" = "true" ]; then
+            cat >> installer.nsi << 'NSIEOF'
+          !define MUI_HEADERIMAGE
+          !define MUI_HEADERIMAGE_BITMAP "web\static\img\installer-header.bmp"
+          
+          NSIEOF
+          fi
+          
+          cat >> installer.nsi << 'NSIEOF'
+          !define MUI_ABORTWARNING
+          
+          !insertmacro MUI_PAGE_WELCOME
+          NSIEOF
+          
+          if [ -f "LICENSE" ]; then
+            cat >> installer.nsi << 'NSIEOF'
+          
+          !insertmacro MUI_PAGE_LICENSE "LICENSE"
+          NSIEOF
+          fi
+          
+          cat >> installer.nsi << 'NSIEOF'
+          
+          !insertmacro MUI_PAGE_DIRECTORY
+          !insertmacro MUI_PAGE_INSTFILES
+          
+          !define MUI_FINISHPAGE_RUN "$INSTDIR\${{ env.APP_NAME }}.exe"
+          !define MUI_FINISHPAGE_RUN_TEXT "Jalankan ${APP_NAME}"
+          !insertmacro MUI_PAGE_FINISH
+          
+          !insertmacro MUI_UNPAGE_CONFIRM
+          !insertmacro MUI_UNPAGE_INSTFILES
+          !insertmacro MUI_UNPAGE_FINISH
+          
+          !insertmacro MUI_LANGUAGE "English"
+          
+          Section "Install"
+            SetOutPath "$INSTDIR"
+            File /r "release\*.*"
+            
+            CreateDirectory "$INSTDIR\backups"
+            
+            WriteUninstaller "$INSTDIR\Uninstall.exe"
+            
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "DisplayName" "${APP_NAME}"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "UninstallString" "$INSTDIR\Uninstall.exe"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "DisplayIcon" "$INSTDIR\icon.ico"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "Publisher" "${PUBLISHER}"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "DisplayVersion" "${VERSION}"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "URLInfoAbout" "${WEB_SITE}"
+            
+            CreateShortcut "$DESKTOP\${APP_NAME}.lnk" "$INSTDIR\${{ env.APP_NAME }}.exe" "" "$INSTDIR\icon.ico" 0
+            
+            CreateDirectory "$SMPROGRAMS\${APP_NAME}"
+            CreateShortcut "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk" "$INSTDIR\${{ env.APP_NAME }}.exe" "" "$INSTDIR\icon.ico" 0
+            CreateShortcut "$SMPROGRAMS\${APP_NAME}\${APP_NAME} (Console).lnk" "$INSTDIR\${{ env.APP_NAME }}-console.exe" "" "$INSTDIR\icon.ico" 0
+            CreateShortcut "$SMPROGRAMS\${APP_NAME}\Uninstall.lnk" "$INSTDIR\Uninstall.exe" "" "$INSTDIR\icon.ico" 0
+          SectionEnd
+          
+          Section "Uninstall"
+            Delete "$DESKTOP\${APP_NAME}.lnk"
+            RMDir /r "$SMPROGRAMS\${APP_NAME}"
+            
+            DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
+            
+            RMDir /r "$INSTDIR"
+          SectionEnd
+          NSIEOF
+          
+          echo "✓ NSIS script created"
+          
+          echo "Building NSIS installer..."
+          makensis installer.nsi
+          
+          echo "✓ Installer created successfully"
+          
+      - name: Create portable package
+        shell: bash
+        run: |
+          PORTABLE_NAME="${{ env.APP_NAME }}-windows-x64-v${{ needs.prepare.outputs.version }}-portable.zip"
+          cd release
+          7z a -tzip "../$PORTABLE_NAME" . -xr!.env
+          
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: |
+            ${{ env.APP_NAME }}-windows-x64-v${{ needs.prepare.outputs.version }}-*.zip
+            ${{ env.APP_NAME }}-windows-x64-v${{ needs.prepare.outputs.version }}-*.exe
+          retention-days: 5
+  
+  build-linux:
+    name: Build untuk Linux (amd64)
+    needs: [prepare, generate-changelog] # <-- Pastikan generate-changelog ada di needs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc libgtk-3-dev libayatana-appindicator3-dev dpkg-dev rpm
+
+      # --- PERUBAHAN: Tambahkan ldflags untuk changelog ---
+      - name: Build executable
+        env:
+          CGO_ENABLED: '1'
+          CHANGELOG_B64: ${{ needs.generate-changelog.outputs.changelog_b64 }} # <-- Ambil output B64
+        run: |
+          set -e
+          mkdir -p build
+          
+          # Buat string ldflags yang lengkap
+          LDFLAGS="-s -w -X main.version=${{ needs.prepare.outputs.version }} -X 'main.changelogBase64=$CHANGELOG_B64'"
+          
+          go build -trimpath \
+            -ldflags="$LDFLAGS" \
+            -o "build/${{ env.APP_NAME }}" ./cmd/main.go
+          chmod +x "build/${{ env.APP_NAME }}"
+      # --- AKHIR PERUBAHAN ---
+
+      - name: Prepare release package
+        run: |
+          set -e
+          mkdir -p release/backups
+          cp "build/${{ env.APP_NAME }}" release/
+          cp -r web migrations release/
+          [ -f README.md ] && cp README.md release/ || true
+          [ -f LICENSE ] && cp LICENSE release/ || true
+          
+          cat > "release/start.sh" << 'EOF'
+          #!/bin/bash
+          
+          echo "========================================"
+          echo "  SIMDOKPOL - System Startup"
+          echo "========================================"
+          echo ""
+          echo "[INFO] Memulai SIMDOKPOL Server..."
+          echo "[INFO] Aplikasi akan terbuka otomatis di browser"
+          echo "[INFO] Icon aplikasi tersedia di system tray"
+          echo "[INFO] Tekan Ctrl+C untuk menghentikan server"
+          echo ""
+          
+          ./simdokpol
+          EOF
+          chmod +x "release/start.sh"
+
+      - name: Create DEB package
+        run: |
+          set -e
+          VERSION="${{ needs.prepare.outputs.version }}"
+          PKG_NAME="${{ env.APP_NAME }}_${VERSION}_amd64"
+          
+          mkdir -p "${PKG_NAME}/DEBIAN"
+          mkdir -p "${PKG_NAME}/opt/${{ env.APP_NAME }}"
+          mkdir -p "${PKG_NAME}/opt/${{ env.APP_NAME }}/backups"
+          mkdir -p "${PKG_NAME}/usr/share/applications"
+          mkdir -p "${PKG_NAME}/usr/share/icons/hicolor/256x256/apps"
+          mkdir -p "${PKG_NAME}/usr/bin"
+          
+          cp -r release/* "${PKG_NAME}/opt/${{ env.APP_NAME }}/"
+          
+          ICON_SRC="web/static/img/icon.png"
+          ICON_DEST="${PKG_NAME}/usr/share/icons/hicolor/256x256/apps/${{ env.APP_NAME }}.png"
+          
+          if [ -f "$ICON_SRC" ]; then
+            echo "✓ Copying icon from: $ICON_SRC"
+            cp "$ICON_SRC" "$ICON_DEST"
+          else
+            echo "WARNING: Icon not found at $ICON_SRC"
+          fi
+          
+          ln -s "/opt/${{ env.APP_NAME }}/${{ env.APP_NAME }}" "${PKG_NAME}/usr/bin/${{ env.APP_NAME }}"
+          
+          cat > "${PKG_NAME}/usr/share/applications/${{ env.APP_NAME }}.desktop" << EOF
+          [Desktop Entry]
+          Version=1.0
+          Type=Application
+          Name=SIMDOKPOL
+          Comment=Sistem Informasi Manajemen Dokumen Kepolisian
+          Exec=/opt/${{ env.APP_NAME }}/start.sh
+          Icon=${{ env.APP_NAME }}
+          Terminal=false
+          Categories=Office;Database;
+          StartupWMClass=SIMDOKPOL
+          EOF
+          
+          cat > "${PKG_NAME}/DEBIAN/control" << EOF
+          Package: ${{ env.APP_NAME }}
+          Version: ${VERSION}
+          Section: utils
+          Priority: optional
+          Architecture: amd64
+          Depends: libgtk-3-0, libayatana-appindicator3-1
+          Maintainer: SIMDOKPOL Team
+          Description: Sistem Informasi Manajemen Dokumen Kepolisian
+           SIMDOKPOL adalah aplikasi desktop untuk manajemen dokumen
+           kepolisian berbasis web yang dapat diakses melalui browser.
+          EOF
+          
+          cat > "${PKG_NAME}/DEBIAN/postinst" << 'EOF'
+          #!/bin/bash
+          set -e
+          
+          chmod +x "/opt/simdokpol/simdokpol"
+          chmod +x "/opt/simdokpol/start.sh"
+          
+          echo "SIMDOKPOL berhasil diinstall!"
+          echo "Jalankan dengan perintah: simdokpol"
+          echo "atau cari 'SIMDOKPOL' di Application Menu"
+          
+          exit 0
+          EOF
+          chmod 755 "${PKG_NAME}/DEBIAN/postinst"
+          
+          dpkg-deb --build "${PKG_NAME}"
+
+      - name: Create RPM package
+        run: |
+          set -e
+          VERSION="${{ needs.prepare.outputs.version }}"
+          
+          mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          
+          TEMP_DIR=$(mktemp -d)
+          mkdir -p "${TEMP_DIR}/${{ env.APP_NAME }}-${VERSION}"
+          mkdir -p "${TEMP_DIR}/${{ env.APP_NAME }}-${VERSION}/backups"
+          cp -r release/* "${TEMP_DIR}/${{ env.APP_NAME }}-${VERSION}/"
+          
+          cd "${TEMP_DIR}"
+          tar -czf ~/rpmbuild/SOURCES/${{ env.APP_NAME }}-${VERSION}.tar.gz "${{ env.APP_NAME }}-${VERSION}"
+          cd -
+          rm -rf "${TEMP_DIR}"
+          
+          cat > ~/rpmbuild/SPECS/${{ env.APP_NAME }}.spec << EOF
+          Name:           ${{ env.APP_NAME }}
+          Version:        ${VERSION}
+          Release:        1%{?dist}
+          Summary:        Sistem Informasi Manajemen Dokumen Kepolisian
+          License:        MIT
+          Source0:        %{name}-%{version}.tar.gz
+          
+          Requires:       gtk3 libappindicator-gtk3
+          
+          %description
+          SIMDOKPOL adalah aplikasi desktop untuk manajemen dokumen
+          kepolisian berbasis web yang dapat diakses melalui browser.
+          
+          %prep
+          %setup -q
+          
+          %install
+          mkdir -p %{buildroot}/opt/%{name}
+          mkdir -p %{buildroot}/opt/%{name}/backups
+          mkdir -p %{buildroot}/usr/bin
+          mkdir -p %{buildroot}/usr/share/applications
+          mkdir -p %{buildroot}/usr/share/icons/hicolor/256x256/apps
+          
+          cp -r * %{buildroot}/opt/%{name}/
+          ln -s /opt/%{name}/%{name} %{buildroot}/usr/bin/%{name}
+          
+          if [ -f "%{buildroot}/opt/%{name}/web/static/img/icon.png" ]; then
+              cp "%{buildroot}/opt/%{name}/web/static/img/icon.png" \
+                 "%{buildroot}/usr/share/icons/hicolor/256x256/apps/%{name}.png"
+          fi
+          
+          cat > %{buildroot}/usr/share/applications/%{name}.desktop << 'DESKTOP'
+          [Desktop Entry]
+          Version=1.0
+          Type=Application
+          Name=SIMDOKPOL
+          Comment=Sistem Informasi Manajemen Dokumen Kepolisian
+          Exec=/opt/%{name}/start.sh
+          Icon=%{name}
+          Terminal=false
+          Categories=Office;Database;
+          StartupWMClass=SIMDOKPOL
+          DESKTOP
+          
+          %files
+          /opt/%{name}/*
+          /usr/bin/%{name}
+          /usr/share/applications/%{name}.desktop
+          /usr/share/icons/hicolor/256x256/apps/%{name}.png
+          
+          %post
+          chmod +x "/opt/%{name}/%{name}"
+          chmod +x "/opt/%{name}/start.sh"
+          
+          if [ -x /usr/bin/gtk-update-icon-cache ]; then
+              gtk-update-icon-cache -f -t /usr/share/icons/hicolor || :
+          fi
+          
+          echo "SIMDOKPOL berhasil diinstall!"
+          echo "Jalankan dengan perintah: %{name}"
+          
+          %postun
+          if [ \$1 -eq 0 ]; then
+              if [ -x /usr/bin/gtk-update-icon-cache ]; then
+                  gtk-update-icon-cache -f -t /usr/share/icons/hicolor || :
+              fi
+          fi
+          
+          %changelog
+          * $(date "+%a %b %d %Y") SIMDOKPOL Team
+          - Release ${VERSION}
+          EOF
+          
+          rpmbuild -ba ~/rpmbuild/SPECS/${{ env.APP_NAME }}.spec
+          
+          cp ~/rpmbuild/RPMS/x86_64/${{ env.APP_NAME }}-*.rpm .
+
+      - name: Create portable package
+        run: |
+          PORTABLE_NAME="${{ env.APP_NAME }}-linux-amd64-v${{ needs.prepare.outputs.version }}-portable.tar.gz"
+          cd release
+          tar -czf "../$PORTABLE_NAME" *
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-amd64
+          path: |
+            ${{ env.APP_NAME }}-linux-amd64-v${{ needs.prepare.outputs.version }}-portable.tar.gz
+            ${{ env.APP_NAME }}_${{ needs.prepare.outputs.version }}_amd64.deb
+            ${{ env.APP_NAME }}-${{ needs.prepare.outputs.version }}-1.*.rpm
+          retention-days: 5
+
+  build-macos:
+    name: Build untuk macOS (amd64)
+    needs: [prepare, generate-changelog] # <-- Pastikan generate-changelog ada di needs
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      # --- PERUBAHAN: Tambahkan ldflags untuk changelog ---
+      - name: Build executable
+        env:
+          CGO_ENABLED: '1'
+          CHANGELOG_B64: ${{ needs.generate-changelog.outputs.changelog_b64 }} # <-- Ambil output B64
+        run: |
+          set -e
+          mkdir -p build
+          
+          # Buat string ldflags yang lengkap
+          LDFLAGS="-s -w -X main.version=${{ needs.prepare.outputs.version }} -X 'main.changelogBase64=$CHANGELOG_B64'"
+          
+          go build -trimpath \
+            -ldflags="$LDFLAGS" \
+            -o "build/${{ env.APP_NAME }}" ./cmd/main.go
+          chmod +x "build/${{ env.APP_NAME }}"
+      # --- AKHIR PERUBAHAN ---
+
+      - name: Create macOS App Bundle
+        run: |
+          set -e
+          APP_NAME="SIMDOKPOL"
+          BUNDLE_NAME="${APP_NAME}.app"
+          
+          mkdir -p "${BUNDLE_NAME}/Contents/MacOS"
+          mkdir -p "${BUNDLE_NAME}/Contents/Resources"
+          mkdir -p "${BUNDLE_NAME}/Contents/Resources/backups"
+          
+          cp "build/${{ env.APP_NAME }}" "${BUNDLE_NAME}/Contents/MacOS/${{ env.APP_NAME }}"
+          
+          cp -r web migrations "${BUNDLE_NAME}/Contents/Resources/"
+          
+          ICON_SRC="web/static/img/icon.png"
+          
+          if [ -f "$ICON_SRC" ]; then
+            echo "✓ Converting icon to ICNS format..."
+            
+            mkdir -p icon.iconset
+            
+            sips -z 16 16     "$ICON_SRC" --out "icon.iconset/icon_16x16.png"
+            sips -z 32 32     "$ICON_SRC" --out "icon.iconset/icon_16x16@2x.png"
+            sips -z 32 32     "$ICON_SRC" --out "icon.iconset/icon_32x32.png"
+            sips -z 64 64     "$ICON_SRC" --out "icon.iconset/icon_32x32@2x.png"
+            sips -z 128 128   "$ICON_SRC" --out "icon.iconset/icon_128x128.png"
+            sips -z 256 256   "$ICON_SRC" --out "icon.iconset/icon_128x128@2x.png"
+            sips -z 256 256   "$ICON_SRC" --out "icon.iconset/icon_256x256.png"
+            sips -z 512 512   "$ICON_SRC" --out "icon.iconset/icon_256x256@2x.png"
+            sips -z 512 512   "$ICON_SRC" --out "icon.iconset/icon_512x512.png"
+            sips -z 1024 1024 "$ICON_SRC" --out "icon.iconset/icon_512x512@2x.png"
+            
+            iconutil -c icns icon.iconset -o "${BUNDLE_NAME}/Contents/Resources/icon.icns"
+            rm -rf icon.iconset
+            
+            echo "✓ ICNS icon created successfully"
+          else
+            echo "WARNING: Icon not found at $ICON_SRC"
+          fi
+          
+          cat > "${BUNDLE_NAME}/Contents/Info.plist" << 'PLISTEOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>simdokpol</string>
+              <key>CFBundleIconFile</key>
+              <string>icon</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.simdokpol.app</string>
+              <key>CFBundleName</key>
+              <string>SIMDOKPOL</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>${{ needs.prepare.outputs.version }}</string>
+              <key>CFBundleVersion</key>
+              <string>${{ needs.prepare.outputs.version }}</string>
+              <key>LSMinimumSystemVersion</key>
+              <string>10.13</string>
+              <key>NSHighResolutionCapable</key>
+              <true/>
+              <key>CFBundleDisplayName</key>
+              <string>SIMDOKPOL</string>
+          </dict>
+          </plist>
+          PLISTEOF
+          
+          cat > "${BUNDLE_NAME}/Contents/MacOS/launch.sh" << 'LAUNCHEOF'
+          #!/bin/bash
+          RESOURCES_DIR="$(dirname "$0")/../Resources"
+          cd "$RESOURCES_DIR"
+          "$(dirname "$0")/simdokpol"
+          LAUNCHEOF
+          chmod +x "${BUNDLE_NAME}/Contents/MacOS/launch.sh"
+
+      - name: Create DMG installer
+        run: |
+          set -e
+          VERSION="${{ needs.prepare.outputs.version }}"
+          DMG_NAME="${{ env.APP_NAME }}-macos-amd64-v${VERSION}-installer.dmg"
+          
+          mkdir -p dmg-contents
+          cp -r SIMDOKPOL.app dmg-contents/
+          
+          ln -s /Applications dmg-contents/Applications
+          
+          hdiutil create -volname "SIMDOKPOL" -srcfolder dmg-contents -ov -format UDZO "${DMG_NAME}"
+
+      - name: Create portable package
+        run: |
+          PORTABLE_NAME="${{ env.APP_NAME }}-macos-amd64-v${{ needs.prepare.outputs.version }}-portable.zip"
+          zip -r "$PORTABLE_NAME" SIMDOKPOL.app
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-amd64
+          path: |
+            ${{ env.APP_NAME }}-macos-amd64-v${{ needs.prepare.outputs.version }}-portable.zip
+            ${{ env.APP_NAME }}-macos-amd64-v${{ needs.prepare.outputs.version }}-installer.dmg
+          retention-days: 5
+
+  create-release:
+    name: Create GitHub Release
+    needs: [prepare, generate-changelog, build-windows, build-linux, build-macos]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        id: prep_assets
+        run: |
+          set -e
+          mkdir -p release-assets
+          find artifacts -type f -name "*.zip" -o -name "*.exe" -o -name "*.deb" -o -name "*.rpm" -o -name "*.dmg" -o -name "*.tar.gz" | while read file; do
+            mv "$file" release-assets/
+          done
+          cd release-assets
+          sha256sum * > checksums.txt
+          ls -lh
+          echo "ASSETS_PATH=release-assets/*" >> $GITHUB_OUTPUT
+
+      - name: Create release notes template
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          
+          cat > release-notes.md << 'EOF'
+          ${{ needs.generate-changelog.outputs.changelog }}
+          
+          ---
+          
+          ### 📦 Windows (x64)
+          
+          **Installer (Recommended)**
+          - `simdokpol-windows-x64-v${{ needs.prepare.outputs.version }}-installer.exe`
+            - ✅ Instalasi otomatis ke Program Files
+            - ✅ Shortcut desktop & Start Menu
+            - ✅ Uninstaller terintegrasi
+            - ✅ Icon aplikasi menarik
+            - ✅ GUI mode & Console mode
+          
+          **Portable**
+          - `simdokpol-windows-x64-v${{ needs.prepare.outputs.version }}-portable.zip`
+            - 📁 Extract & run, tidak perlu install
+            - 💾 Cocok untuk USB drive
+          
+          ---
+          
+          ### 🐧 Linux (amd64)
+          
+          **DEB Package (Ubuntu/Debian)**
+          - `simdokpol_${{ needs.prepare.outputs.version }}_amd64.deb`
+            ```bash
+            sudo dpkg -i simdokpol_${{ needs.prepare.outputs.version }}_amd64.deb
+            sudo apt-get install -f
+            ```
+            - ✅ Menu entry otomatis
+            - ✅ Icon desktop
+            - ✅ Systemd integration ready
+          
+          **RPM Package (Fedora/RHEL/CentOS)**
+          - `simdokpol-${{ needs.prepare.outputs.version }}-1.*.rpm`
+            ```bash
+            sudo rpm -i simdokpol-${{ needs.prepare.outputs.version }}-1.*.rpm
+            ```
+          
+          **Portable**
+          - `simdokpol-linux-amd64-v${{ needs.prepare.outputs.version }}-portable.tar.gz`
+            ```bash
+            tar -xzf simdokpol-linux-amd64-v${{ needs.prepare.outputs.version }}-portable.tar.gz
+            cd simdokpol
+            ./start.sh
+            ```
+          
+          ---
+          
+          ### 🍎 macOS (amd64)
+          
+          **DMG Installer (Recommended)**
+          - `simdokpol-macos-amd64-v${{ needs.prepare.outputs.version }}-installer.dmg`
+            - ✅ Drag & drop ke Applications
+            - ✅ macOS App Bundle native
+            - ✅ Icon aplikasi terintegrasi
+            - ✅ Compatible dengan Intel & Apple Silicon (via Rosetta 2)
+          
+          **Portable**
+          - `simdokpol-macos-amd64-v${{ needs.prepare.outputs.version }}-portable.zip`
+            - 📁 Extract & run SIMDOKPOL.app
+          
+          ---
+          
+          ### 🔐 Verifikasi Integritas
+          
+          Gunakan file `checksums.txt` untuk memverifikasi integritas file yang diunduh:
+          
+          **Linux/macOS:**
+          ```bash
+          sha256sum -c checksums.txt
+          ```
+          
+          **Windows (PowerShell):**
+          ```powershell
+          Get-Content checksums.txt | ForEach-Object {
+              $hash, $file = $_ -split '\s+', 2
+              $computed = (Get-FileHash $file -Algorithm SHA256).Hash.ToLower()
+              if ($computed -eq $hash) { 
+                  Write-Host "✓ $file" -ForegroundColor Green 
+              } else { 
+                  Write-Host "✗ $file" -ForegroundColor Red 
+              }
+          }
+          ```
+          
+          ---
+          
+          ### 📝 Petunjuk Instalasi
+          
+          #### Windows
+          1. Download installer `.exe`
+          2. Jalankan installer (Klik kanan → Run as Administrator jika perlu)
+          3. Ikuti wizard instalasi
+          4. Jalankan dari Start Menu atau Desktop shortcut
+          
+          #### Linux (DEB/RPM)
+          1. Download package sesuai distro
+          2. Install menggunakan package manager
+          3. Jalankan dari Application Menu atau terminal: `simdokpol`
+          
+          #### macOS
+          1. Download file `.dmg`
+          2. Buka DMG dan drag SIMDOKPOL.app ke Applications
+          3. Jalankan dari Launchpad atau Applications folder
+          4. Jika muncul warning "from unidentified developer":
+             - Buka System Preferences → Security & Privacy
+             - Klik "Open Anyway"
+          
+          ---
+          
+          ### 🚀 Menjalankan Aplikasi
+          
+          Setelah instalasi selesai, cukup jalankan aplikasi melalui shortcut yang tersedia. Aplikasi akan otomatis membuka browser dan menampilkan halaman aplikasi, berjalan di background dengan icon di system tray, menampilkan notifikasi saat siap digunakan, generate file `.env` dengan JWT secret yang aman secara otomatis, serta membuat folder backups untuk database.
+          
+          **Setup Pertama Kali:**
+          Anda akan diarahkan ke halaman setup untuk membuat akun admin pertama. Ikuti wizard setup yang mudah dan intuitif. File `.env` akan dibuat otomatis dengan konfigurasi keamanan yang optimal tanpa memerlukan konfigurasi manual.
+          
+          ---
+          
+          ### 🆘 Troubleshooting
+          
+          **Port 8080 sudah digunakan?**
+          Edit file `.env` di folder instalasi aplikasi, ganti `PORT=8080` ke port lain (misal `PORT=8081`), kemudian restart aplikasi.
+          
+          **Aplikasi tidak muncul di system tray?**
+          Pastikan desktop environment Anda mendukung system tray. Untuk Linux, pastikan ekstensi AppIndicator terinstall. Untuk Windows, cek Windows Notification Settings dan pastikan aplikasi diizinkan. Untuk macOS, periksa System Preferences → Notifications.
+          
+          **File .env tidak ditemukan?**
+          Aplikasi akan membuat file `.env` secara otomatis saat pertama kali dijalankan. Jika file hilang atau rusak, hapus dan restart aplikasi untuk regenerasi otomatis. JWT secret key akan di-generate ulang dengan algoritma cryptographically secure.
+          
+          ---
+          
+          ### 📚 Dokumentasi & Support
+          
+          - 📖 **Dokumentasi Lengkap**: [README.md](https://github.com/muhammad1505/simdokpol)
+          - 🐛 **Laporkan Bug**: [Issues](https://github.com/muhammad1505/simdokpol/issues)
+          - 💬 **Diskusi & Pertanyaan**: [Discussions](https://github.com/muhammad1505/simdokpol/discussions)
+          - 📧 **Kontak**: emailbaruku50@gmail.com
+          
+          ---
+          
+          ### 🙏 Kontribusi
+          
+          Kami sangat menghargai kontribusi dari komunitas. Jika Anda ingin berkontribusi, fork repository ini, buat branch untuk fitur baru Anda, submit pull request dengan deskripsi yang jelas, dan pastikan code Anda mengikuti style guide yang ada.
+          
+          ---
+          
+          ### 📜 Lisensi
+          
+          SIMDOKPOL dirilis di bawah lisensi MIT. Lihat file LICENSE untuk detail lengkap.
+          
+          ---
+          
+          **Terima kasih telah menggunakan SIMDOKPOL!** 🙏
+          
+          Jika aplikasi ini membantu pekerjaan Anda, pertimbangkan untuk memberikan ⭐ star di repository ini!
+          EOF
+
+      - name: Create GitHub Release to Public Repo
+        uses: softprops/action-gh-release@v2
+        with:
+          # Gunakan token PAT yang kita buat, BUKAN GITHUB_TOKEN bawaan
+          token: ${{ secrets.RELEASE_TOKEN }}
+          
+          # Target Repo (Ganti username dengan username asli kamu)
+          repository: muhammad1505/simdokpol-release
+          
+          # Tag dan Nama Release
+          tag_name: v${{ needs.prepare.outputs.version }}
+          name: Release v${{ needs.prepare.outputs.version }}
+          
+          # Body / Catatan Rilis
+          body_path: release-notes.md
+          
+          # File yang diupload
+          files: release-assets/*
+          
+          # PENTING: Targetkan branch 'main' di repo tujuan agar tidak error "SHA not found"
+          target_commitish: main
+          
+          draft: false
+          prerelease: false

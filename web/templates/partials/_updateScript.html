@@ -1,0 +1,76 @@
+<script>
+$(document).ready(function() {
+    // Handler untuk tombol di dalam Modal "Lihat Versi"
+    $('#btn-check-update-modal').on('click', function(e) {
+        e.preventDefault();
+        
+        // Opsional: Tutup modal changelog agar SweetAlert terlihat jelas
+        $('#changelogModal').modal('hide');
+        
+        // Tampilkan loading
+        Swal.fire({
+            title: 'Memeriksa Pembaruan...',
+            text: 'Sedang menghubungi server GitHub.',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        $.ajax({
+            url: '/api/updates/check',
+            method: 'GET',
+            success: function(resp) {
+                if (resp.error) {
+                    Swal.fire({
+                        icon: 'info',
+                        title: 'Gagal Memeriksa',
+                        text: resp.error,
+                        confirmButtonText: 'Oke'
+                    });
+                    return;
+                }
+
+                if (resp.has_update) {
+                    Swal.fire({
+                        icon: 'info',
+                        title: 'Update Tersedia!',
+                        html: `
+                            <div class="text-left">
+                                <p>Versi Baru: <strong>${resp.latest_version}</strong></p>
+                                <p>Versi Anda: ${resp.current_version}</p>
+                                <hr>
+                                <small class="text-muted">Catatan Rilis:</small><br>
+                                <div style="max-height: 150px; overflow-y: auto; background: #f8f9fc; padding: 10px; border-radius: 5px; font-size: 0.85rem;">
+                                    <pre style="white-space: pre-wrap; margin: 0; font-family: inherit;">${resp.release_notes}</pre>
+                                </div>
+                            </div>
+                        `,
+                        showCancelButton: true,
+                        confirmButtonText: '<i class="fas fa-download"></i> Unduh Sekarang',
+                        cancelButtonText: 'Nanti Saja'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            window.open(resp.download_url, '_blank');
+                        }
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Aplikasi Terbaru',
+                        text: `Anda sudah menggunakan versi terbaru (${resp.current_version}).`,
+                        confirmButtonText: 'Mantap!'
+                    });
+                }
+            },
+            error: function() {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Kesalahan Jaringan',
+                    text: 'Gagal menghubungi server. Periksa koneksi internet Anda.',
+                });
+            }
+        });
+    });
+});
+</script>

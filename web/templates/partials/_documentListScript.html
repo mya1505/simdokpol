@@ -1,0 +1,205 @@
+<script>
+$(document).ready(function() {
+    let dataTableInstance;
+    const $table = $('#documentsTable');
+    
+    // Ambil metadata dari atribut HTML (dikirim dari Controller)
+    const currentUserID = parseInt($table.data('current-user-id')) || 0;
+    const currentUserPeran = $table.data('current-user-peran');
+    const pageType = $table.data('page-type'); // 'active' atau 'archived'
+
+    // --- 1. HANDLER EKSPOR EXCEL ---
+    $('#export-excel-btn').on('click', function() {
+        // Ambil nilai pencarian saat ini dari DataTables
+        const query = dataTableInstance.search(); 
+        
+        const params = new URLSearchParams();
+        params.append('status', pageType); // Filter status sesuai halaman
+        if (query) {
+            params.append('q', query);
+        }
+
+        // Redirect ke endpoint download
+        window.location.href = '/api/documents/export?' + params.toString();
+    });
+
+    // --- 2. INITIALIZATION DATATABLES (SERVER-SIDE) ---
+    // Cek apakah ada query pencarian dari URL (misal dari Global Search di navbar)
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialSearch = urlParams.get('q') || "";
+
+    if (initialSearch) {
+        $('#page-title').text(`Hasil Pencarian: "${initialSearch}"`);
+        $('#page-description').hide();
+    }
+
+    dataTableInstance = $table.DataTable({
+        "processing": true, // Tampilkan indikator loading
+        "serverSide": true, // AKTIFKAN MODE SERVER-SIDE
+        "responsive": true,
+        "search": {
+            "search": initialSearch // Isi kolom search otomatis jika ada query URL
+        },
+        "ajax": {
+            "url": "/api/documents",
+            "type": "GET",
+            "data": function(d) {
+                // Kirim parameter tambahan ke backend selain standar DataTables
+                d.status = pageType; 
+                // d.search.value, d.start, d.length otomatis dikirim oleh DataTables
+            },
+            "error": function(xhr, error, code) {
+                console.error("DataTables Error:", error);
+                // Handling error visual di tabel
+                $('#documentsTable tbody').html('<tr><td colspan="7" class="text-center text-danger"><i class="fas fa-exclamation-triangle"></i> Gagal memuat data dari server.</td></tr>');
+                $("#documentsTable_processing").css("display", "none");
+            }
+        },
+        "columns": [
+            { 
+                // Kolom No (Index)
+                "data": null, 
+                "orderable": false,
+                "searchable": false,
+                "render": function (data, type, row, meta) {
+                    // Rumus Index Server-Side: (Halaman Saat Ini * Limit) + Baris + 1
+                    return meta.row + meta.settings._iDisplayStart + 1;
+                }
+            },
+            { "data": "nomor_surat", "name": "nomor_surat" }, // name dipakai backend untuk sorting (opsional)
+            { 
+                "data": "resident.nama_lengkap", 
+                "defaultContent": "<em>Tanpa Nama</em>",
+                "name": "resident.nama_lengkap"
+            },
+            { 
+                "data": "tanggal_laporan", 
+                "name": "tanggal_laporan",
+                "render": function(data) {
+                    if (!data) return "-";
+                    // Format Tanggal Indonesia
+                    return new Date(data).toLocaleDateString('id-ID', { 
+                        day: '2-digit', month: 'long', year: 'numeric' 
+                    });
+                }
+            },
+            { 
+                "data": "status", 
+                "name": "status",
+                "render": function(data) {
+                    if (data === 'DIARSIPKAN') {
+                        return `<span class="badge badge-secondary">${data}</span>`;
+                    }
+                    return `<span class="badge badge-success">${data}</span>`;
+                }
+            },
+            { 
+                "data": "operator.nama_lengkap", 
+                "defaultContent": "<em>Sistem/Terhapus</em>",
+                "name": "operator.nama_lengkap"
+            },
+            {
+                // Kolom Aksi
+                "data": "id",
+                "orderable": false,
+                "searchable": false,
+                "render": function(data, type, row) {
+                    // Logika Hak Akses (Frontend Side)
+                    // Backend juga memvalidasi ini, tapi kita sembunyikan tombol biar rapi
+                    const opID = row.operator ? row.operator.id : 0;
+                    const isOwner = opID === currentUserID;
+                    const isAdmin = currentUserPeran === 'SUPER_ADMIN';
+                    
+                    // Jika Admin atau Pemilik Dokumen, boleh edit/hapus
+                    const canModify = isOwner || isAdmin;
+                    
+                    // Semua user boleh cetak/pdf/duplikat jika punya akses ke halaman ini
+                    
+                    let buttons = `<div class="btn-group" role="group">`;
+                    
+                    // Tombol PDF
+                    buttons += `<a href="/api/documents/${data}/pdf" class="btn btn-danger btn-sm" title="Download PDF" target="_blank">
+                                    <i class="fas fa-file-pdf"></i><span class="btn-caption">PDF</span>
+                                </a>`;
+                                
+                    // Tombol Preview
+                    buttons += `<a href="/documents/${data}/print" class="btn btn-info btn-sm" title="Preview Cetak">
+                                    <i class="fas fa-print"></i><span class="btn-caption">Preview</span>
+                                </a>`;
+                                
+                    // Tombol Duplikat (Buat Ulang)
+                    buttons += `<a href="/documents/new?duplicate_from=${data}" class="btn btn-success btn-sm" title="Buat Ulang">
+                                    <i class="fas fa-copy"></i><span class="btn-caption">Copy</span>
+                                </a>`;
+
+                    // Tombol Edit
+                    if (canModify) {
+                        buttons += `<a href="/documents/${data}/edit" class="btn btn-warning btn-sm" title="Edit">
+                                        <i class="fas fa-edit"></i><span class="btn-caption">Edit</span>
+                                    </a>`;
+                    } else {
+                        buttons += `<button class="btn btn-secondary btn-sm disabled" disabled><i class="fas fa-edit"></i></button>`;
+                    }
+
+                    // Tombol Hapus
+                    if (canModify) {
+                        buttons += `<button type="button" class="btn btn-danger btn-sm delete-btn" 
+                                        data-id="${data}" 
+                                        data-number="${row.nomor_surat}" 
+                                        title="Hapus">
+                                        <i class="fas fa-trash"></i><span class="btn-caption">Hapus</span>
+                                    </button>`;
+                    } else {
+                        buttons += `<button class="btn btn-secondary btn-sm disabled" disabled><i class="fas fa-trash"></i></button>`;
+                    }
+
+                    buttons += `</div>`;
+                    return buttons;
+                }
+            }
+        ],
+        "language": {
+            "url": "/static/vendor/datatables/Indonesian.json" // Pastikan file json bahasa ada
+        },
+        "order": [[ 3, "desc" ]], // Default sort by Tanggal Laporan (Kolom index 3) descending
+        "pageLength": 10,
+        "lengthMenu": [[10, 25, 50, 100], [10, 25, 50, 100]]
+    });
+
+    // --- 3. HANDLER DELETE ---
+    $('#documentsTable').on('click', '.delete-btn', function() {
+        const docId = $(this).data('id');
+        const docNumber = $(this).data('number');
+        
+        Swal.fire({
+            title: 'Hapus Dokumen?',
+            html: `Anda akan menghapus surat nomor: <strong>${docNumber}</strong>.<br><small class="text-muted">Data tidak akan hilang permanen (soft delete), tapi tidak akan muncul di daftar.</small>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Ya, Hapus!',
+            cancelButtonText: 'Batal'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // Tampilkan loading
+                Swal.fire({title: 'Memproses...', allowOutsideClick: false, didOpen: () => Swal.showLoading()});
+                
+                $.ajax({
+                    url: '/api/documents/' + docId,
+                    method: 'DELETE',
+                    success: function(response) {
+                        Swal.fire('Terhapus!', 'Dokumen berhasil dihapus.', 'success');
+                        // Refresh tabel tanpa reload halaman (tetap di page yang sama)
+                        dataTableInstance.ajax.reload(null, false); 
+                    },
+                    error: function(jqXHR) {
+                        const msg = jqXHR.responseJSON ? jqXHR.responseJSON.error : 'Gagal menghapus data.';
+                        Swal.fire('Gagal', msg, 'error');
+                    }
+                });
+            }
+        });
+    });
+});
+</script>

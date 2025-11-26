@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="id">
+    <head>
+        <meta charset="utf-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1, shrink-to-fit=no"
+        />
+        <title>SIMDOKPOL - {{ .Title }}</title>
+        <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico" />
+        <link
+            href="/static/vendor/fontawesome-free/css/all.min.css"
+            rel="stylesheet"
+            type="text/css"
+        />
+        <link href="/static/fonts/nunito.css" rel="stylesheet" />
+        <link href="/static/css/sb-admin-2.min.css" rel="stylesheet" />
+        <link
+            href="/static/vendor/sweetalert2/sweetalert2.min.css"
+            rel="stylesheet"
+        />
+        <link href="/static/css/custom.css" rel="stylesheet" />
+    </head>
+    <body class="bg-gradient-primary">
+        <div class="container">
+            <div class="card o-hidden border-0 shadow-lg my-5">
+                <div class="card-body p-0">
+                    <div class="row">
+                        <div class="col-lg-10 mx-auto">
+                            <div class="p-5">
+                                <div class="text-center">
+                                    <h1 class="h4 text-gray-900 mb-4">
+                                        Konfigurasi Awal Aplikasi
+                                    </h1>
+                                    <p>
+                                        Selamat datang! Silakan pilih metode
+                                        konfigurasi:
+                                    </p>
+                                </div>
+
+                                <ul
+                                    class="nav nav-pills nav-fill mb-3"
+                                    id="setupTab"
+                                    role="tablist"
+                                >
+                                    <li class="nav-item">
+                                        <a
+                                            class="nav-link active"
+                                            id="new-setup-tab"
+                                            data-toggle="tab"
+                                            href="#new-setup"
+                                            role="tab"
+                                            aria-controls="new-setup"
+                                            aria-selected="true"
+                                            ><i class="fas fa-file-alt mr-2"></i>Konfigurasi Baru</a
+                                        >
+                                    </li>
+                                    <li class="nav-item">
+                                        <a
+                                            class="nav-link"
+                                            id="restore-setup-tab"
+                                            data-toggle="tab"
+                                            href="#restore-setup"
+                                            role="tab"
+                                            aria-controls="restore-setup"
+                                            aria-selected="false"
+                                            ><i class="fas fa-upload mr-2"></i>Pulihkan dari Backup</a
+                                        >
+                                    </li>
+                                </ul>
+
+                                <div class="tab-content" id="setupTabContent">
+                                    <div
+                                        class="tab-pane fade show active"
+                                        id="new-setup"
+                                        role="tabpanel"
+                                        aria-labelledby="new-setup-tab"
+                                    >
+                                        <form id="setup-form">
+                                            <div class="stepper-slide active" id="slide-1">
+                                                <hr />
+                                                <h5 class="mb-3 text-gray-800">Langkah 1 dari 5: Pilih Database</h5>
+                                                <div class="card shadow-sm mb-4">
+                                                    <div class="card-body">
+                                                        <div class="form-group">
+                                                            <label>Pilih Tipe Database</label>
+                                                            <select id="db_dialect" class="form-control" required>
+                                                                <option value="sqlite" {{if eq .CurrentConfig.DBDialect "sqlite"}}selected{{end}}>SQLite (Default, Standalone, Tanpa Setup)</option>
+                                                                <option value="mysql" {{if eq .CurrentConfig.DBDialect "mysql"}}selected{{end}}>MySQL (Client-Server, Perlu Kredensial)</option>
+                                                                <option value="postgres" {{if eq .CurrentConfig.DBDialect "postgres"}}selected{{end}}>PostgreSQL (Client-Server, Perlu Kredensial)</option>
+                                                            </select>
+                                                            <small class="form-text text-muted">Untuk penggunaan pribadi/satu komputer, pilih SQLite.</small>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <button type="button" class="btn btn-primary btn-user btn-block next-step">
+                                                    Lanjut <i class="fas fa-arrow-right ml-2"></i>
+                                                </button>
+                                            </div>
+
+                                            <div class="stepper-slide" id="slide-2">
+                                                <hr />
+                                                <h5 class="mb-3 text-gray-800">Langkah 2 dari 5: Konfigurasi Database</h5>
+                                                <div class="card shadow-sm mb-4">
+                                                    <div class="card-body">
+                                                        <div class="form-row">
+                                                            <div class="form-group col-md-8"><label>Host</label><input type="text" class="form-control" id="db_host" placeholder="127.0.0.1"></div>
+                                                            <div class="form-group col-md-4"><label>Port</label><input type="text" class="form-control" id="db_port" placeholder="3306"></div>
+                                                        </div>
+                                                        <div class="form-row">
+                                                            <div class="form-group col-md-6"><label>Nama Database</label><input type="text" class="form-control" id="db_name" placeholder="simdokpol"></div>
+                                                            <div class="form-group col-md-6"><label>User</label><input type="text" class="form-control" id="db_user" placeholder="root"></div>
+                                                        </div>
+                                                        <div class="form-group">
+                                                            <label>Password</label>
+                                                            <div class="password-wrapper">
+                                                                <input type="password" class="form-control" id="db_pass">
+                                                                <i class="fas fa-eye password-peek" id="toggleDbPassword"></i>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div class="form-group" id="pg-ssl-group" style="display: none;">
+                                                            <label class="font-weight-bold text-primary small text-uppercase">Mode Keamanan (SSL/TLS)</label>
+                                                            <select id="db_sslmode" class="form-control">
+                                                                <option value="disable" selected>Disable (Non-Aktif) - Untuk LAN/Lokal</option>
+                                                                <option value="require">Require (Wajib Enkripsi) - Untuk Cloud DB</option>
+                                                                <option value="verify-full">Verify Full - Paling Aman (Butuh Sertifikat CA)</option>
+                                                            </select>
+                                                            <small class="form-text text-muted">
+                                                                <i class="fas fa-info-circle mr-1"></i> Gunakan <b>Disable</b> untuk jaringan lokal. Gunakan <b>Require</b> jika menggunakan Supabase, Neon, atau AWS RDS.
+                                                            </small>
+                                                        </div>
+
+                                                        <button type="button" class="btn btn-info btn-sm btn-block" id="test-db-btn"><i class="fas fa-plug mr-1"></i> Test Koneksi</button>
+                                                    </div>
+                                                </div>
+                                                <div class="d-flex justify-content-between">
+                                                    <button type="button" class="btn btn-secondary btn-user prev-step"><i class="fas fa-arrow-left mr-2"></i> Kembali</button>
+                                                    <button type="button" class="btn btn-primary btn-user next-step">Lanjut <i class="fas fa-arrow-right ml-2"></i></button>
+                                                </div>
+                                            </div>
+
+                                            <div class="stepper-slide" id="slide-3">
+                                                <hr />
+                                                <h5 class="mb-3 text-gray-800">Langkah 3 dari 5: Konfigurasi Instansi</h5>
+                                                <div class="card shadow-sm mb-4">
+                                                    <div class="card-header">Kop Surat & Nama Instansi</div>
+                                                    <div class="card-body">
+                                                        <div class="form-group"><input type="text" class="form-control auto-uppercase" id="kop_baris_1" placeholder="Baris 1 KOP" required></div>
+                                                        <div class="form-group"><input type="text" class="form-control auto-uppercase" id="kop_baris_2" placeholder="Baris 2 KOP" required></div>
+                                                        <div class="form-group"><input type="text" class="form-control auto-uppercase" id="kop_baris_3" placeholder="Baris 3 KOP" required></div>
+                                                        <hr>
+                                                        <div class="form-row">
+                                                            <div class="form-group col-md-6"><label>Nama Kantor</label><input type="text" class="form-control auto-titlecase" id="nama_kantor" required></div>
+                                                            <div class="form-group col-md-6"><label>Tempat Terbit</label><input type="text" class="form-control auto-titlecase" id="tempat_surat" required></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="d-flex justify-content-between">
+                                                    <button type="button" class="btn btn-secondary btn-user prev-step"><i class="fas fa-arrow-left mr-2"></i> Kembali</button>
+                                                    <button type="button" class="btn btn-primary btn-user next-step">Lanjut <i class="fas fa-arrow-right ml-2"></i></button>
+                                                </div>
+                                            </div>
+
+                                            <div class="stepper-slide" id="slide-4">
+                                                <hr />
+                                                <h5 class="mb-3 text-gray-800">Langkah 4 dari 5: Konfigurasi Dokumen</h5>
+                                                <div class="card shadow-sm mb-4">
+                                                    <div class="card-body">
+                                                        <div class="form-group"><label>Format Nomor Surat</label><input type="text" class="form-control" id="format_nomor_surat" value="SKH/%03d/%s/TUK.7.2.1/%d" required><small class="text-muted">Kode: %03d(urut), %s(bln), %d(thn)</small></div>
+                                                        <div class="form-group"><label>Nomor Terakhir</label><input type="number" class="form-control" id="nomor_surat_terakhir" value="0" required></div>
+                                                        <div class="form-group"><label>Durasi Arsip (Hari)</label><input type="number" class="form-control" id="archive_duration_days" value="15" required></div>
+                                                        <div class="form-group"><label>Zona Waktu</label><select id="zona_waktu" class="form-control" required><option value="Asia/Jakarta">WIB</option><option value="Asia/Makassar" selected>WITA</option><option value="Asia/Jayapura">WIT</option></select></div>
+                                                    </div>
+                                                </div>
+                                                <div class="d-flex justify-content-between">
+                                                    <button type="button" class="btn btn-secondary btn-user prev-step"><i class="fas fa-arrow-left mr-2"></i> Kembali</button>
+                                                    <button type="button" class="btn btn-primary btn-user next-step">Lanjut <i class="fas fa-arrow-right ml-2"></i></button>
+                                                </div>
+                                            </div>
+
+                                            <div class="stepper-slide" id="slide-5">
+                                                <hr />
+                                                <h5 class="mb-3 text-gray-800">Langkah 5 dari 5: Buat Akun Super Admin</h5>
+                                                <div class="card shadow-sm mb-4">
+                                                    <div class="card-body">
+                                                        <div class="form-group"><label>Nama Lengkap</label><input type="text" class="form-control auto-uppercase" id="admin_nama_lengkap" required></div>
+                                                        <div class="form-row">
+                                                            <div class="form-group col-md-6"><label>NRP</label><input type="text" class="form-control" id="admin_nrp" required></div>
+                                                            <div class="form-group col-md-6"><label>Pangkat</label><input type="text" class="form-control auto-uppercase" id="admin_pangkat" required></div>
+                                                        </div>
+                                                        <div class="form-row">
+                                                            <div class="form-group col-md-6">
+                                                                <label>Kata Sandi</label>
+                                                                <div class="password-wrapper">
+                                                                    <input type="password" class="form-control" id="admin_password" required minlength="8">
+                                                                    <i class="fas fa-eye password-peek" id="togglePassword"></i>
+                                                                </div>
+                                                            </div>
+                                                            <div class="form-group col-md-6">
+                                                                <label>Konfirmasi Sandi</label>
+                                                                <div class="password-wrapper">
+                                                                    <input type="password" class="form-control" id="admin_password_confirm" required>
+                                                                    <i class="fas fa-eye password-peek" id="togglePasswordConfirm"></i>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="d-flex justify-content-between">
+                                                    <button type="button" class="btn btn-secondary btn-user prev-step"><i class="fas fa-arrow-left mr-2"></i> Kembali</button>
+                                                    <button type="submit" class="btn btn-primary btn-user"><i class="fas fa-check-circle mr-2"></i> Selesai & Simpan</button>
+                                                </div>
+                                            </div>
+                                        </form>
+                                    </div>
+
+                                    <div class="tab-pane fade" id="restore-setup" role="tabpanel" aria-labelledby="restore-setup-tab">
+                                        <hr />
+                                        <h5 class="mb-3 text-gray-800">Pulihkan Konfigurasi dari Backup</h5>
+                                        <p>Pilih file backup (<code>.db</code>) dari instalasi sebelumnya. Ini akan memulihkan semua data.</p>
+                                        <div class="card shadow-sm mb-4 border-left-danger">
+                                            <div class="card-body">
+                                                <form id="restore-setup-form" enctype="multipart/form-data">
+                                                    <div class="form-group">
+                                                        <label for="restore-file">Pilih File Backup (<code>.db</code>)</label>
+                                                        <input type="file" class="form-control-file" id="restore-file" name="restore-file" accept=".db" required>
+                                                    </div>
+                                                    <hr />
+                                                    <button type="submit" id="restore-setup-btn" class="btn btn-danger btn-user btn-block">
+                                                        <i class="fas fa-upload mr-2"></i> Pulihkan Database
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script src="/static/vendor/jquery/jquery.min.js"></script>
+        <script src="/static/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+        <script src="/static/vendor/sweetalert2/sweetalert2.all.min.js"></script>
+        {{template "_setupScript.html" .}}
+    </body>
+</html>

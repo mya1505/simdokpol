@@ -1,0 +1,66 @@
+{{template "_header.html" .}}
+{{template "_sidebar.html" .}}
+
+<div id="content-wrapper" class="d-flex flex-column">
+    <div id="content">
+        {{template "_topbar.html" .}}
+        <div class="container-fluid">
+
+            <div class="d-sm-flex align-items-center justify-content-between mb-2">
+                <div>
+                    {{if eq .PageType "archived"}}
+                        <h1 class="h3 mb-0 text-gray-800" id="page-title">Arsip Dokumen</h1>
+                    {{else}}
+                        <h1 class="h3 mb-0 text-gray-800" id="page-title">Daftar Dokumen Aktif</h1>
+                    {{end}}
+                </div>
+                {{if eq .CurrentUser.Peran "SUPER_ADMIN"}}
+                <div>
+                    <button class="btn btn-success btn-sm shadow-sm" id="export-excel-btn">
+                        <i class="fas fa-file-excel fa-sm text-white-50"></i> Ekspor ke Excel
+                    </button>
+                </div>
+                {{end}}
+                 </div>
+            
+            {{if eq .PageType "archived"}}
+                <p class="mb-4" id="page-description">Halaman ini menampilkan semua surat keterangan yang telah kedaluwarsa.</p>
+            {{else}}
+                <p class="mb-4" id="page-description">Halaman ini menampilkan semua surat keterangan yang masih berlaku.</p>
+            {{end}}
+
+
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Data Surat Keterangan</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered" id="documentsTable" 
+                               data-page-type="{{if .PageType}}{{.PageType}}{{else}}active{{end}}" 
+                               data-current-user-id="{{.CurrentUser.ID}}"
+                               data-current-user-peran="{{.CurrentUser.Peran}}"
+                               width="100%" cellspacing="0">
+                            <thead>
+                                <tr>
+                                    <th>No.</th>
+                                    <th>Nomor Surat</th>
+                                    <th>Nama Pemohon</th>
+                                    <th>Tgl Laporan</th>
+                                    <th>Status</th>
+                                    <th>Operator (Dibuat Oleh)</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+        </div>
+    {{template "_footer.html" .}}
+</div>
+{{template "_scripts.html" .}}
+{{template "_documentListScript.html" .}}
