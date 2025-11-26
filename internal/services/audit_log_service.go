@@ -3,9 +3,10 @@ package services
 import (
 	"bytes"
 	"fmt"
+	"simdokpol/internal/dto" // Pastikan import DTO ada
 	"simdokpol/internal/models"
 	"simdokpol/internal/repositories"
-	"sync" // <-- IMPORT BARU
+	"sync"
 	"time"
 
 	"github.com/xuri/excelize/v2"
@@ -15,37 +16,63 @@ type AuditLogService interface {
 	LogActivity(userID uint, action string, details string)
 	FindAll() ([]models.AuditLog, error)
 	ExportAuditLogs() (*bytes.Buffer, string, error)
-	SetWaitGroup(wg *sync.WaitGroup) // <-- METHOD BARU UNTUK TESTING
+	SetWaitGroup(wg *sync.WaitGroup)
+	// Method baru untuk paging (Fix Performance)
 	GetAuditLogsPaged(req dto.DataTableRequest) (*dto.DataTableResponse, error)
-}
 }
 
 type auditLogService struct {
 	repo repositories.AuditLogRepository
-	wg   *sync.WaitGroup // <-- FIELD BARU
+	wg   *sync.WaitGroup
 }
 
 func NewAuditLogService(repo repositories.AuditLogRepository) AuditLogService {
 	return &auditLogService{repo: repo}
 }
 
-func (s *auditLogService) GetAuditLogsPaged(req dto.DataTableRequest) (*dto.DataTableResponse, error) {
-    logs, total, filtered, err := s.repo.FindAllPaged(req)
-    if err != nil {
-        return nil, err
-    }
-
-    return &dto.DataTableResponse{
-        Draw:            req.Draw,
-        RecordsTotal:    total,
-        RecordsFiltered: filtered,
-        Data:            logs,
-    }, nil
-}
-
-// SetWaitGroup digunakan oleh unit test untuk menyinkronkan goroutine
+// SetWaitGroup digunakan oleh unit test
 func (s *auditLogService) SetWaitGroup(wg *sync.WaitGroup) {
 	s.wg = wg
+}
+
+// LogActivity berjalan async
+func (s *auditLogService) LogActivity(userID uint, action string, details string) {
+	if s.wg != nil {
+		s.wg.Add(1)
+	}
+
+	go func() {
+		if s.wg != nil {
+			defer s.wg.Done()
+		}
+		
+		logEntry := &models.AuditLog{
+			UserID:    userID,
+			Aksi:      action,
+			Detail:    details,
+			Timestamp: time.Now(),
+		}
+		_ = s.repo.Create(logEntry)
+	}()
+}
+
+func (s *auditLogService) FindAll() ([]models.AuditLog, error) {
+	return s.repo.FindAll()
+}
+
+// GetAuditLogsPaged: Logic baru untuk server-side paging
+func (s *auditLogService) GetAuditLogsPaged(req dto.DataTableRequest) (*dto.DataTableResponse, error) {
+	logs, total, filtered, err := s.repo.FindAllPaged(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.DataTableResponse{
+		Draw:            req.Draw,
+		RecordsTotal:    total,
+		RecordsFiltered: filtered,
+		Data:            logs,
+	}, nil
 }
 
 func (s *auditLogService) ExportAuditLogs() (*bytes.Buffer, string, error) {
@@ -91,31 +118,4 @@ func (s *auditLogService) ExportAuditLogs() (*bytes.Buffer, string, error) {
 
 	filename := fmt.Sprintf("Export_Audit_Log_%s.xlsx", time.Now().Format("20060102_150405"))
 	return buffer, filename, nil
-}
-
-// LogActivity berjalan sebagai goroutine agar tidak memblokir proses utama.
-func (s *auditLogService) LogActivity(userID uint, action string, details string) {
-	// Jika WaitGroup di-set (hanya saat testing), tambahkan 1
-	if s.wg != nil {
-		s.wg.Add(1)
-	}
-
-	go func() {
-		// Jika WaitGroup di-set, panggil Done() saat goroutine selesai
-		if s.wg != nil {
-			defer s.wg.Done()
-		}
-		
-		logEntry := &models.AuditLog{
-			UserID:    userID,
-			Aksi:      action,
-			Detail:    details,
-			Timestamp: time.Now(),
-		}
-		_ = s.repo.Create(logEntry)
-	}()
-}
-
-func (s *auditLogService) FindAll() ([]models.AuditLog, error) {
-	return s.repo.FindAll()
 }
