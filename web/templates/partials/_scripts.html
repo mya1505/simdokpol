@@ -122,6 +122,15 @@ $(document).ready(function() {
     });
 });
 </script>
+<script>
+// Global Password Toggle
+$('body').on('click', '.password-peek', function() {
+    let input = $(this).siblings('input');
+    let type = input.attr('type') === 'password' ? 'text' : 'password';
+    input.attr('type', type);
+    $(this).toggleClass('fa-eye fa-eye-slash');
+});
+</script>
 {{template "_updateScript.html" .}}
 </body>
 </html>

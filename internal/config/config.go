@@ -7,67 +7,88 @@ import (
 	"simdokpol/internal/dto"
 	"simdokpol/internal/utils"
 	"strconv"
-	"strings" // Pastikan import strings
+	"strings"
 
 	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Config struct menampung konfigurasi kritikal startup
 type Config struct {
 	*dto.AppConfig
 	JWTSecretKey []byte
 	BcryptCost   int
-	DBPass       string // <-- TAMBAHAN: Field khusus internal, tidak terekspos di JSON
+	DBPass       string
 }
 
 func LoadConfig() *Config {
-	// 1. Load .env dari AppData (Prioritas) atau Local
-	envPath := filepath.Join(utils.GetAppDataDir(), ".env")
-	if err := godotenv.Load(envPath); err != nil {
-		// Fallback ke local .env jika di AppData gak ada
-		_ = godotenv.Load()
-	}
+	// 1. Load .env dari AppData (Konsisten!)
+	appDataDir := utils.GetAppDataDir()
+	envPath := filepath.Join(appDataDir, ".env")
+	
+	// Coba load, ignore error kalau belum ada (first run)
+	_ = godotenv.Load(envPath)
 
-	// 2. Setup JWT Secret
+	// 2. Setup JWT
 	secretStr := os.Getenv("JWT_SECRET_KEY")
 	if secretStr == "" {
-		if os.Getenv("APP_ENV") == "production" {
-			log.Fatal("FATAL: JWT_SECRET_KEY wajib diisi di mode production!")
-		}
-		log.Println("WARNING: Menggunakan default JWT Secret (TIDAK AMAN UNTUK PRODUCTION)")
-		secretStr = "default-insecure-secret-change-me-immediately"
+		secretStr = "default-insecure-secret-change-me"
 	}
 
-	// 3. Determine Bcrypt Cost
+	// 3. Cost Bcrypt
 	costStr := os.Getenv("BCRYPT_COST")
-	cost, err := strconv.Atoi(costStr)
-	if err != nil || cost < bcrypt.MinCost {
-		cost = 10 // Default safe
-	}
+	cost, _ := strconv.Atoi(costStr)
+	if cost < bcrypt.MinCost { cost = 10 }
 	
-	// Logic SSL Mode (Default disable)
-	sslMode := os.Getenv("DB_SSLMODE")
-	if sslMode == "" { sslMode = "disable" }
-	
-	// Logic Dialect (Default sqlite)
+	// 4. Database Logic (CRITICAL FIX)
 	dialect := strings.ToLower(os.Getenv("DB_DIALECT"))
 	if dialect == "" { dialect = "sqlite" }
 
-	// 4. Return Config Object
+	dsn := os.Getenv("DB_DSN")
+	
+	// JIKA SQLITE: Paksa Absolute Path ke AppData jika DSN masih relatif
+	if dialect == "sqlite" {
+		if dsn == "" {
+			// Default DSN
+			dsn = filepath.Join(appDataDir, "simdokpol.db?_foreign_keys=on")
+		} else if !filepath.IsAbs(strings.Split(dsn, "?")[0]) {
+			// Jika user set "simdokpol.db", kita ubah jadi "C:\Users\Name\AppData\...\simdokpol.db"
+			cleanDSN := strings.TrimPrefix(dsn, "file:")
+			// Ambil filename saja (ignore query params)
+			parts := strings.Split(cleanDSN, "?")
+			fname := filepath.Base(parts[0])
+			
+			// Rebuild DSN dengan path absolut
+			dsn = filepath.Join(appDataDir, fname)
+			if len(parts) > 1 {
+				dsn += "?" + parts[1]
+			}
+		}
+	}
+
 	return &Config{
 		AppConfig: &dto.AppConfig{
 			DBDialect:           dialect,
-			DBDSN:               os.Getenv("DB_DSN"),
+			DBDSN:               dsn, // <-- DSN YANG SUDAH DIPERBAIKI
 			DBHost:              os.Getenv("DB_HOST"),
 			DBPort:              os.Getenv("DB_PORT"),
 			DBUser:              os.Getenv("DB_USER"),
 			DBName:              os.Getenv("DB_NAME"),
-			DBSSLMode:           sslMode,
-			IsSetupComplete:     false, // Default, akan di-override service nanti
+			DBSSLMode:           os.Getenv("DB_SSLMODE"),
+			IsSetupComplete:     os.Getenv("is_setup_complete") == "true",
+			
+			// Load settings lainnya...
+			KopBaris1:           os.Getenv("kop_baris_1"),
+			KopBaris2:           os.Getenv("kop_baris_2"),
+			KopBaris3:           os.Getenv("kop_baris_3"),
+			NamaKantor:          os.Getenv("nama_kantor"),
+			TempatSurat:         os.Getenv("tempat_surat"),
+			FormatNomorSurat:    os.Getenv("format_nomor_surat"),
+			NomorSuratTerakhir:  os.Getenv("nomor_surat_terakhir"),
+			ZonaWaktu:           os.Getenv("zona_waktu"),
+			ArchiveDurationDays: 15, // Default
 		},
 		JWTSecretKey: []byte(secretStr),
 		BcryptCost:   cost,
-		DBPass:       os.Getenv("DB_PASS"), // <-- ISI DARI ENV
+		DBPass:       os.Getenv("DB_PASS"),
 	}
 }
