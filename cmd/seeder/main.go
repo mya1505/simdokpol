@@ -14,7 +14,6 @@ import (
 	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
 	
-	// Import Driver Database
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
@@ -23,7 +22,6 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-// --- DATA DUMMY (Data Kependudukan & Polisi) ---
 var (
 	firstNames = []string{"Agus", "Budi", "Citra", "Dewi", "Eko", "Fajar", "Gita", "Hendra", "Indah", "Joko", "Kartika", "Lukman", "Maya", "Nur", "Oki", "Putri", "Rudi", "Siti", "Tono", "Wawan", "Dedi", "Yudi", "Rina", "Sari", "Bambang"}
 	lastNames  = []string{"Santoso", "Purnomo", "Wijaya", "Saputra", "Hidayat", "Suryana", "Kusuma", "Pratama", "Setiawan", "Wulandari", "Permana", "Kurniawan", "Nugroho", "Susanti", "Rahayu", "Siregar", "Nasution", "Chaniago", "Wibowo", "Utami"}
@@ -53,10 +51,9 @@ var (
 func main() {
 	rand.Seed(time.Now().UnixNano())
 
-	// 1. Load Konfigurasi (Otomatis baca dari .env)
 	envPath := filepath.Join(utils.GetAppDataDir(), ".env")
 	_ = godotenv.Load(envPath)
-	_ = godotenv.Load() // Fallback local
+	_ = godotenv.Load()
 
 	cfg := config.LoadConfig()
 
@@ -72,7 +69,6 @@ func main() {
 	}
 	fmt.Println("----------------------------------------")
 	
-	// --- INPUT INTERAKTIF ---
 	var userCountInput int
 	fmt.Print("👉 Jumlah User Tambahan (Default 5): ")
 	_, err := fmt.Scanln(&userCountInput)
@@ -88,17 +84,11 @@ func main() {
 	}
 	fmt.Println("========================================")
 
-	// 2. Koneksi Database
 	db := setupDatabase(cfg)
 	log.Println("🚀 Terhubung ke database, memulai proses seeding...")
 
-	// 3. Seed Config (Wajib ada agar aplikasi jalan)
 	seedConfigs(db)
-
-	// 4. Seed Users
 	users := seedUsers(db, cfg.BcryptCost, userCountInput)
-
-	// 5. Seed Transaction Data
 	seedDocuments(db, users, docCountInput)
 
 	log.Println("✅ SEEDING SELESAI! Silakan jalankan aplikasi.")
@@ -108,7 +98,6 @@ func setupDatabase(cfg *config.Config) *gorm.DB {
 	var db *gorm.DB
 	var err error
 	
-	// Gunakan logger silent biar console bersih, error tetap muncul
 	gormConfig := &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Error),
 	}
@@ -122,7 +111,7 @@ func setupDatabase(cfg *config.Config) *gorm.DB {
 		dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=Asia/Jakarta",
 			cfg.DBHost, cfg.DBUser, cfg.DBPass, cfg.DBName, cfg.DBPort)
 		db, err = gorm.Open(postgres.Open(dsn), gormConfig)
-	default: // sqlite
+	default: 
 		db, err = gorm.Open(sqlite.Open(cfg.DBDSN), gormConfig)
 		if err == nil { db.Exec("PRAGMA foreign_keys = ON") }
 	}
@@ -131,8 +120,6 @@ func setupDatabase(cfg *config.Config) *gorm.DB {
 		log.Fatalf("❌ Gagal koneksi ke database (%s): %v", cfg.DBDialect, err)
 	}
 	
-	// AutoMigrate memastikan tabel ada sebelum diisi
-	// Ini aman dijalankan di semua jenis DB
 	err = db.AutoMigrate(
 		&models.User{}, &models.Resident{}, &models.LostDocument{}, 
 		&models.LostItem{}, &models.AuditLog{}, &models.Configuration{}, 
@@ -171,7 +158,6 @@ func seedUsers(db *gorm.DB, cost int, count int) []models.User {
 	passBytes, _ := bcrypt.GenerateFromPassword([]byte("password"), cost)
 	passwordHash := string(passBytes)
 
-	// 1. Super Admin (Fixed)
 	admin := models.User{
 		NamaLengkap: "ADMINISTRATOR",
 		NRP:         "12345678", 
@@ -186,9 +172,8 @@ func seedUsers(db *gorm.DB, cost int, count int) []models.User {
 	var allUsers []models.User
 	allUsers = append(allUsers, admin)
 
-	// 2. Random Operators
 	for i := 0; i < count; i++ {
-		nrp := fmt.Sprintf("%d", 80000000+rand.Intn(10000000)) // NRP 80xxxxxx
+		nrp := fmt.Sprintf("%d", 80000000+rand.Intn(10000000)) 
 		
 		user := models.User{
 			NamaLengkap: randomName(),
@@ -200,7 +185,6 @@ func seedUsers(db *gorm.DB, cost int, count int) []models.User {
 			Regu:        regus[rand.Intn(len(regus))],
 		}
 
-		// Cek duplikat NRP
 		var exist models.User
 		if err := db.Where("nrp = ?", nrp).First(&exist).Error; err != nil {
 			db.Create(&user)
@@ -221,19 +205,16 @@ func seedDocuments(db *gorm.DB, users []models.User, count int) {
 	startNum := int(existingCount) + 1
 
 	for i := 0; i < count; i++ {
-		// Random Tanggal (Mundur 0-90 hari)
 		daysAgo := rand.Intn(90)
 		date := time.Now().AddDate(0, 0, -daysAgo)
 		
-		// Random Actor
 		operator := users[rand.Intn(len(users))]
 		petugas := users[rand.Intn(len(users))]
 		
-		// Buat Penduduk
+		// --- FIX: Generate NIK 16 Digit Pas ---
 		nik := fmt.Sprintf("72%02d%02d%02d%02d%02d%04d", 
-			rand.Intn(10)+1, rand.Intn(30)+1, rand.Intn(12)+1, 
-			rand.Intn(30)+1, rand.Intn(12)+1, rand.Intn(99), 
-			rand.Intn(9999)) 
+			rand.Intn(90)+10, rand.Intn(90)+10, rand.Intn(28)+1, 
+			rand.Intn(12)+1, rand.Intn(99), rand.Intn(9999))
 		
 		res := models.Resident{
 			NIK:          nik,
@@ -247,7 +228,6 @@ func seedDocuments(db *gorm.DB, users []models.User, count int) {
 		}
 		db.Create(&res)
 
-		// Status Dokumen
 		status := models.StatusDiterbitkan
 		if daysAgo > 15 {
 			status = models.StatusDiarsipkan
@@ -262,7 +242,7 @@ func seedDocuments(db *gorm.DB, users []models.User, count int) {
 			LokasiHilang:       locations[rand.Intn(len(locations))],
 			ResidentID:         res.ID,
 			PetugasPelaporID:   petugas.ID,
-			PejabatPersetujuID: &users[0].ID, // Admin/Kanit
+			PejabatPersetujuID: &users[0].ID,
 			OperatorID:         operator.ID,
 			TanggalPersetujuan: &date,
 		}
@@ -271,7 +251,6 @@ func seedDocuments(db *gorm.DB, users []models.User, count int) {
 			continue 
 		}
 
-		// Items
 		itemCount := rand.Intn(2) + 1
 		for k := 0; k < itemCount; k++ {
 			tmpl := itemTypes[rand.Intn(len(itemTypes))]
@@ -285,7 +264,6 @@ func seedDocuments(db *gorm.DB, users []models.User, count int) {
 			db.Create(&item)
 		}
 
-		// Audit Log (PENTING UNTUK DASHBOARD ACTIVITY)
 		audit := models.AuditLog{
 			UserID:    operator.ID,
 			Aksi:      models.AuditCreateDocument,
@@ -295,8 +273,6 @@ func seedDocuments(db *gorm.DB, users []models.User, count int) {
 		db.Create(&audit)
 	}
 }
-
-// --- HELPERS ---
 
 func randomName() string {
 	return fmt.Sprintf("%s %s", firstNames[rand.Intn(len(firstNames))], lastNames[rand.Intn(len(lastNames))])
