@@ -1,304 +1,187 @@
 <script>
 $(document).ready(function() {
-    // --- HELPER FUNCTIONS ---
-    function toTitleCase(str) {
-        return str.replace(/\w\S*/g, function(txt) {
-            return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
-        });
-    }
-    $('body').on('input', '.auto-uppercase', function() {
-        $(this).val($(this).val().toUpperCase());
+    // --- LOGIKA UI DASAR ---
+    $('body').on('input', '.auto-uppercase', function() { $(this).val($(this).val().toUpperCase()); });
+    $('body').on('input', '.auto-titlecase', function() { 
+        $(this).val($(this).val().toLowerCase().replace(/\b\w/g, s => s.toUpperCase())); 
     });
-    $('body').on('input', '.auto-titlecase', function() {
-        $(this).val(toTitleCase($(this).val()));
-    });
-
-    function togglePasswordVisibility(inputId, toggleId) {
-        const password = $(inputId);
-        const toggle = $(toggleId);
-        const type = password.attr('type') === 'password' ? 'text' : 'password';
-        password.attr('type', type);
-        toggle.toggleClass('fa-eye fa-eye-slash');
-    }
-    $('#togglePassword').on('click', function() {
-        togglePasswordVisibility('#admin_password', '#togglePassword');
-    });
-    $('#togglePasswordConfirm').on('click', function() {
-        togglePasswordVisibility('#admin_password_confirm', '#togglePasswordConfirm');
-    });
-    $('#toggleDbPassword').on('click', function() {
-        togglePasswordVisibility('#db_pass', '#toggleDbPassword');
+    
+    $('#toggleDbPassword').click(function() {
+        let input = $('#db_pass');
+        input.attr('type', input.attr('type') === 'password' ? 'text' : 'password');
+        $(this).toggleClass('fa-eye fa-eye-slash');
     });
 
-    // --- STEPPER LOGIC ---
-    let currentSlide = 1;
-    const totalSlides = 5; // 1:DB, 2:DB Config, 3:Instansi, 4:Dokumen, 5:Admin
-
-    function showSlide(slideNumber) {
+    // --- STEPPER NAVIGASI ---
+    let currentStep = 1;
+    function showStep(step) {
         $('.stepper-slide').removeClass('active').hide();
-        $(`#slide-${slideNumber}`).fadeIn().addClass('active');
-        currentSlide = slideNumber;
+        $('#slide-' + step).fadeIn().addClass('active');
+        currentStep = step;
     }
 
-    function validateSlide(slideNumber) {
-        let isValid = true;
-        $(`#slide-${slideNumber} .is-invalid`).removeClass('is-invalid');
-        
-        // Validasi field required yang terlihat (visible) saja
-        $(`#slide-${slideNumber} [required]:visible`).each(function() {
-            if ($(this).val().trim() === '') {
-                isValid = false;
-                $(this).addClass('is-invalid');
-            }
+    $('.next-step').click(function() {
+        // Validasi input di step ini
+        let valid = true;
+        $(`#slide-${currentStep} input[required], #slide-${currentStep} select[required]`).each(function() {
+            if (!$(this).val()) { $(this).addClass('is-invalid'); valid = false; }
+            else { $(this).removeClass('is-invalid'); }
         });
-        return isValid;
-    }
 
-    // Logika Navigasi Tombol Lanjut
-    $('.next-step').on('click', function() {
-        if (validateSlide(currentSlide)) {
-            if (currentSlide === 1) {
-                const dialect = $('#db_dialect').val();
-                if (dialect === 'sqlite') {
-                    // Jika SQLite, lompat ke Step 3 (Instansi)
-                    showSlide(3); 
-                } else {
-                    // Jika MySQL/Postgres, lanjut ke Step 2 (Config)
-                    showSlide(2);
-                }
-            } else {
-                if (currentSlide < totalSlides) {
-                    showSlide(currentSlide + 1);
-                }
-            }
+        if(!valid) return Swal.fire("Lengkapi Data", "Harap isi semua kolom bertanda wajib.", "warning");
+
+        // Logika Lompat Step (SQLite skip config server)
+        if (currentStep === 1) {
+            if ($('#db_dialect').val() === 'sqlite') showStep(3);
+            else showStep(2);
         } else {
-            Swal.fire('Perhatian', 'Harap isi semua field yang wajib diisi.', 'warning');
+            if(currentStep < 5) showStep(currentStep + 1);
         }
     });
 
-    $('.prev-step').on('click', function() {
-        if (currentSlide === 3) {
-             const dialect = $('#db_dialect').val();
-             if (dialect === 'sqlite') {
-                 showSlide(1); 
-             } else {
-                 showSlide(2); 
-             }
-        } else if (currentSlide > 1) {
-            showSlide(currentSlide - 1);
+    $('.prev-step').click(function() {
+        if (currentStep === 3) {
+            if ($('#db_dialect').val() === 'sqlite') showStep(1);
+            else showStep(2);
+        } else {
+            showStep(currentStep - 1);
         }
     });
 
-    // --- DATABASE CONFIG LOGIC (PRE-FILL & AUTO-JUMP) ---
-    const currentDialect = "{{.CurrentConfig.DBDialect}}";
-    const currentHost = "{{.CurrentConfig.DBHost}}";
-
-    // 1. Pre-fill Data
-    if (currentDialect) {
-        $('#db_dialect').val(currentDialect);
-        if(currentDialect !== 'sqlite') {
-            $('#db_host').val(currentHost);
-            $('#db_port').val("{{.CurrentConfig.DBPort}}");
-            $('#db_name').val("{{.CurrentConfig.DBName}}");
-            $('#db_user').val("{{.CurrentConfig.DBUser}}");
-            // Set SSL Mode jika ada (perlu dipass dari backend, tapi default disable oke)
-        }
-    }
-
-    // 2. Handler perubahan dropdown DB (UI Update) & SSL Logic
-    $('#db_dialect').on('change', function() {
-        const dialect = $(this).val();
-        
+    // --- LOGIKA AUTO DETECT PORT & SSL ---
+    $('#db_dialect').change(function() {
+        let dialect = $(this).val();
         if (dialect === 'mysql') {
-            $('#db_port').attr('placeholder', '3306').val('3306');
+            $('#db_port').val('3306');
             $('#pg-ssl-group').slideUp();
         } else if (dialect === 'postgres') {
-            $('#db_port').attr('placeholder', '5432').val('5432');
-            $('#pg-ssl-group').slideDown();
-        } else {
-            $('#pg-ssl-group').slideUp();
+            $('#db_port').val('5432');
+            $('#pg-ssl-group').slideDown(); // Tampilkan SSL hanya untuk Postgres
         }
     });
 
-    // 3. LOGIKA BARU: AUTO-JUMP JIKA SUDAH CONFIG
-    if (currentDialect && currentDialect !== 'sqlite' && currentHost) {
-        console.log("Database server detected in .env, skipping DB selection steps.");
-        setTimeout(function() {
-            showSlide(3);
-            const Toast = Swal.mixin({
-                toast: true, position: 'top-end', showConfirmButton: false, timer: 3000
-            });
-            Toast.fire({
-                icon: 'info',
-                title: 'Koneksi Database Terdeteksi',
-                text: 'Melanjutkan ke konfigurasi instansi...'
-            });
-        }, 100);
+    // Pre-fill jika ada config dari .env (Auto Jump)
+    let envDialect = "{{.CurrentConfig.DBDialect}}";
+    if (envDialect && envDialect !== 'sqlite') {
+        $('#db_dialect').val(envDialect).trigger('change');
+        $('#db_host').val("{{.CurrentConfig.DBHost}}");
+        $('#db_name').val("{{.CurrentConfig.DBName}}");
+        $('#db_user').val("{{.CurrentConfig.DBUser}}");
+        // Auto jump ke step 3 jika sudah terkoneksi
+        if ("{{.CurrentConfig.DBHost}}") {
+            setTimeout(() => showStep(3), 500);
+        }
     }
 
-    // Handler Test Koneksi
-    $('#test-db-btn').on('click', function() {
-        const $btn = $(this);
-        const originalHtml = $btn.html();
-        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Menguji...');
+    // --- TEST KONEKSI ---
+    $('#test-db-btn').click(function() {
+        let btn = $(this);
+        let originalText = btn.html();
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Menguji...');
 
-        const connectionData = {
+        let payload = {
             db_dialect: $('#db_dialect').val(),
             db_host: $('#db_host').val(),
             db_port: $('#db_port').val(),
             db_name: $('#db_name').val(),
             db_user: $('#db_user').val(),
             db_pass: $('#db_pass').val(),
-            db_sslmode: $('#db_sslmode').val() // <-- KIRIM SSL MODE
+            db_sslmode: $('#db_sslmode').val()
         };
 
         $.ajax({
-            url: "/api/db/test",
-            method: "POST",
-            contentType: "application/json",
-            data: JSON.stringify(connectionData),
+            url: '/api/db/test',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(payload),
             success: function() {
-                Swal.fire("Berhasil!", "Koneksi database sukses!", "success");
+                Swal.fire("Sukses", "Koneksi database berhasil!", "success");
             },
-            error: function(jqXHR) {
-                const errorMsg = jqXHR.responseJSON ? jqXHR.responseJSON.error : "Gagal terhubung.";
-                Swal.fire("Koneksi Gagal", errorMsg, "error");
+            error: function(xhr) {
+                let msg = xhr.responseJSON ? xhr.responseJSON.error : "Gagal terkoneksi.";
+                Swal.fire("Gagal", msg, "error");
             },
             complete: function() {
-                $btn.prop('disabled', false).html(originalHtml);
+                btn.prop('disabled', false).html(originalText);
             }
         });
     });
 
-    // --- FORM SUBMIT (FINAL) ---
-    $('#setup-form').on('submit', function(e) {
+    // --- SUBMIT FINAL ---
+    $('#setup-form').submit(function(e) {
         e.preventDefault();
+        
+        // Validasi Password Admin
+        let p1 = $('#admin_password').val();
+        let p2 = $('#admin_password_confirm').val();
+        if (p1 !== p2) return Swal.fire("Error", "Konfirmasi password tidak cocok.", "error");
 
-        if (!validateSlide(currentSlide)) {
-            Swal.fire('Perhatian', 'Harap lengkapi data di langkah terakhir.', 'warning');
-            return;
-        }
-
-        const password = $('#admin_password').val();
-        const confirmPassword = $('#admin_password_confirm').val();
-        if (password !== confirmPassword) {
-            Swal.fire('Error', 'Konfirmasi kata sandi tidak cocok!', 'error');
-            return;
-        }
-        if (password.length < 8) {
-            Swal.fire('Perhatian', 'Kata sandi minimal harus 8 karakter.', 'warning');
-            return;
-        }
-
-        const formData = {
+        let formData = {
             db_dialect: $('#db_dialect').val(),
             db_host: $('#db_host').val(),
             db_port: $('#db_port').val(),
             db_name: $('#db_name').val(),
             db_user: $('#db_user').val(),
             db_pass: $('#db_pass').val(),
-            db_sslmode: $('#db_sslmode').val(), // <-- SIMPAN SSL MODE
-            
+            db_sslmode: $('#db_sslmode').val(),
+
             kop_baris_1: $('#kop_baris_1').val(),
             kop_baris_2: $('#kop_baris_2').val(),
             kop_baris_3: $('#kop_baris_3').val(),
             nama_kantor: $('#nama_kantor').val(),
             tempat_surat: $('#tempat_surat').val(),
-            
+
             format_nomor_surat: $('#format_nomor_surat').val(),
             nomor_surat_terakhir: $('#nomor_surat_terakhir').val(),
             zona_waktu: $('#zona_waktu').val(),
             archive_duration_days: $('#archive_duration_days').val(),
-            
+
             admin_nama_lengkap: $('#admin_nama_lengkap').val(),
             admin_nrp: $('#admin_nrp').val(),
             admin_pangkat: $('#admin_pangkat').val(),
-            admin_password: password,
+            admin_password: p1
         };
-
-        const $submitButton = $(this).find('button[type="submit"]');
-        $submitButton.html('<span class="spinner-border spinner-border-sm"></span> Menyimpan...').prop('disabled', true);
 
         $.ajax({
             url: '/api/setup',
             method: 'POST',
             contentType: 'application/json',
             data: JSON.stringify(formData),
-            success: function(response) {
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Setup Berhasil!',
-                    text: response.message,
-                    allowOutsideClick: false,
-                }).then(() => {
-                    window.location.href = '/login';
-                });
+            success: function() {
+                Swal.fire("Setup Selesai", "Konfigurasi tersimpan. Silakan login.", "success")
+                    .then(() => window.location.href = '/login');
             },
-            error: function(jqXHR) {
-                const errorMsg = jqXHR.responseJSON ? jqXHR.responseJSON.error : 'Terjadi kesalahan yang tidak diketahui.';
-                Swal.fire('Gagal', errorMsg, 'error');
-                $submitButton.text('Simpan Konfigurasi & Buat Akun').prop('disabled', false);
+            error: function(xhr) {
+                Swal.fire("Gagal", xhr.responseJSON ? xhr.responseJSON.error : "Terjadi kesalahan.", "error");
             }
         });
     });
 
-    // --- RESTORE LOGIC ---
-    $('#restore-setup-form').on('submit', function(e) {
+    // --- RESTORE SETUP ---
+    $('#restore-setup-form').submit(function(e) {
         e.preventDefault();
-        const $submitButton = $(this).find('button[type="submit"]');
-        const originalButtonText = $submitButton.html();
-
-        const fileInput = $("#restore-file")[0];
-        if (fileInput.files.length === 0) {
-            Swal.fire("Perhatian!", "Silakan pilih file backup (.db) terlebih dahulu.", "warning");
-            return;
-        }
+        let formData = new FormData(this);
         
-        const file = fileInput.files[0];
-        if (!file.name.endsWith('.db')) {
-             Swal.fire("Error", "Format file tidak valid. Harap unggah file .db", "error");
-             return;
-        }
-
-        const formData = new FormData();
-        formData.append("restore-file", file);
-
-        Swal.fire({
-            title: 'Pulihkan dari Backup?',
-            html: `Anda akan menimpa semua data dengan file <strong>${file.name}</strong>.<br><br><strong class="text-danger">Pastikan ini adalah file backup SIMDOKPOL yang valid.</strong>`,
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: 'Ya, Pulihkan Sekarang!',
-            cancelButtonText: 'Batal',
-            showLoaderOnConfirm: true,
-            preConfirm: () => {
-                $submitButton.html('<span class="spinner-border spinner-border-sm"></span> Memulihkan...').prop('disabled', true);
-                return fetch("/api/setup/restore", {
-                    method: "POST",
-                    body: formData
-                }).then(async response => {
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.error || "Gagal melakukan restore.");
-                    }
-                    return response.json();
-                });
+        $.ajax({
+            url: '/api/setup/restore',
+            method: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function() {
+                Swal.fire("Restore Sukses", "Database dipulihkan.", "success")
+                    .then(() => window.location.href = '/login');
             },
-            allowOutsideClick: () => !Swal.isLoading()
-        }).then((result) => {
-            if (result.isConfirmed) {
-                Swal.fire(
-                    'Restore Berhasil!',
-                    'Database telah berhasil dipulihkan. Anda akan diarahkan ke halaman login.',
-                    'success'
-                ).then(() => window.location.href = '/login');
-            } else {
-                $submitButton.html(originalButtonText).prop('disabled', false);
+            error: function(xhr) {
+                Swal.fire("Gagal", xhr.responseJSON ? xhr.responseJSON.error : "Gagal restore.", "error");
             }
-        }).catch(error => {
-            Swal.showValidationMessage(`Request gagal: ${error}`);
-            $submitButton.html(originalButtonText).prop('disabled', false);
         });
+    });
+    
+    // Nama file di input file
+    $('.custom-file-input').on('change', function() {
+        let fileName = $(this).val().split('\\').pop();
+        $(this).next('.custom-file-label').addClass("selected").html(fileName);
     });
 });
 </script>

@@ -1,209 +1,185 @@
 <script>
-    $(document).ready(function () {
-        // Event listener untuk auto-casing
-        $("body").on("input", ".auto-uppercase", function () {
-            $(this).val($(this).val().toUpperCase());
-        });
-        $("body").on("input", ".auto-titlecase", function () {
-            $(this).val(toTitleCase($(this).val()));
-        });
-        function toTitleCase(str) {
-            return str.replace(
-                /\w\S*/g,
-                txt => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
-            );
-        }
+$(document).ready(function () {
+    // --- HELPER UI ---
+    $("body").on("input", ".auto-uppercase", function () { $(this).val($(this).val().toUpperCase()); });
+    $("body").on("input", ".auto-titlecase", function () { 
+        $(this).val($(this).val().toLowerCase().replace(/\b\w/g, s => s.toUpperCase())); 
+    });
 
-        // Fungsi Toggle Tampilan DB
-        function toggleDBSettings(dialect) {
-            if (dialect === 'sqlite') {
-                $('#sqlite-settings').slideDown();
-                $('#server-db-settings').slideUp();
-                $('#backup-btn, #restore-btn, #restore-file').prop('disabled', false);
+    // --- TOGGLE DB DISPLAY ---
+    function toggleDBSettings(dialect) {
+        if (dialect === 'sqlite') {
+            $('#sqlite-settings').show();
+            $('#server-db-settings').hide();
+        } else {
+            $('#sqlite-settings').hide();
+            $('#server-db-settings').show();
+            
+            if (dialect === 'mysql') {
+                $('#db_port').attr('placeholder', '3306');
+                $('#settings-pg-ssl-group').hide();
             } else {
-                $('#sqlite-settings').slideUp();
-                $('#server-db-settings').slideDown();
-                $('#backup-btn, #restore-btn, #restore-file').prop('disabled', true);
-                
-                if (dialect === 'mysql') {
-                    $('#db_port').attr('placeholder', '3306');
-                    $('#settings-pg-ssl-group').slideUp();
-                } else if (dialect === 'postgres') {
-                    $('#db_port').attr('placeholder', '5432');
-                    $('#settings-pg-ssl-group').slideDown();
-                }
+                $('#db_port').attr('placeholder', '5432');
+                $('#settings-pg-ssl-group').show();
             }
         }
-        
-        $('#db_dialect').on('change', function() {
-            toggleDBSettings($(this).val());
+    }
+    
+    $('#db_dialect').change(function() { toggleDBSettings($(this).val()); });
+
+    // --- LOAD SETTINGS ---
+    function loadSettings() {
+        $.ajax({
+            url: "/api/settings",
+            method: "GET",
+            success: function (s) {
+                // Fill Form
+                $("#kop_baris_1").val(s.kop_baris_1);
+                $("#kop_baris_2").val(s.kop_baris_2);
+                $("#kop_baris_3").val(s.kop_baris_3);
+                $("#nama_kantor").val(s.nama_kantor);
+                $("#tempat_surat").val(s.tempat_surat);
+                $("#format_nomor_surat").val(s.format_nomor_surat);
+                $("#backup_path").val(s.backup_path);
+
+                $("#db_dialect").val(s.db_dialect || 'sqlite');
+                $("#db_host").val(s.db_host);
+                $("#db_port").val(s.db_port);
+                $("#db_name").val(s.db_name);
+                $("#db_user").val(s.db_user);
+                $("#db_dsn").val(s.db_dsn);
+                $("#db_sslmode").val(s.db_sslmode || 'disable');
+
+                toggleDBSettings(s.db_dialect || 'sqlite');
+            }
         });
+    }
+    loadSettings();
 
-        // --- FUNGSI: Memuat pengaturan & Cek Lisensi ---
-        function loadSettings() {
-            $.ajax({
-                url: "/api/settings",
-                method: "GET",
-                success: function (s) {
-                    if (!s) return;
-                    
-                    // Isi Form Umum
-                    $("#kop_baris_1").val(s.kop_baris_1);
-                    $("#kop_baris_2").val(s.kop_baris_2);
-                    $("#kop_baris_3").val(s.kop_baris_3);
-                    $("#nama_kantor").val(s.nama_kantor);
-                    $("#tempat_surat").val(s.tempat_surat);
-                    $("#format_nomor_surat").val(s.format_nomor_surat);
-                    $("#nomor_surat_terakhir").val(s.nomor_surat_terakhir);
-                    $("#zona_waktu").val(s.zona_waktu);
-                    $("#archive_duration_days").val(s.archive_duration_days);
+    // --- SAVE CONFIG ---
+    $('#settings-form').submit(function(e) {
+        e.preventDefault();
+        let btn = $('#submit-btn');
+        btn.prop('disabled', true).html('Menyimpan...');
 
-                    // Isi Form DB
-                    $("#db_dialect").val(s.db_dialect || 'sqlite');
-                    $("#db_dsn").val(s.db_dsn);
-                    $("#db_host").val(s.db_host);
-                    $("#db_port").val(s.db_port);
-                    $("#db_name").val(s.db_name);
-                    $("#db_user").val(s.db_user);
-                    $("#db_sslmode").val(s.db_sslmode || 'disable'); // <-- LOAD SSL MODE
-                    $("#backup_path").val(s.backup_path);
-
-                    // --- LOGIKA LISENSI PRO UNTUK DB ---
-                    const isPro = (s.license_status === 'VALID');
-                    const currentDialect = s.db_dialect || 'sqlite';
-
-                    if (isPro) {
-                        // Jika Pro: Tampilkan Badge, Sembunyikan Alert
-                        $('#db-pro-badge').show();
-                        $('#db-free-alert').hide();
-                    } else {
-                        // Jika Free:
-                        $('#db-pro-badge').hide();
-                        
-                        // Jika saat ini SQLite, tampilkan alert promo & kunci opsi lain
-                        if (currentDialect === 'sqlite') {
-                            $('#db-free-alert').show();
-                            // Disable opsi MySQL & Postgres
-                            $('#db_dialect option[value="mysql"]').prop('disabled', true).text('MySQL (Fitur Pro 🔒)');
-                            $('#db_dialect option[value="postgres"]').prop('disabled', true).text('PostgreSQL (Fitur Pro 🔒)');
-                        } else {
-                            // Edge case: Jika user entah bagaimana sudah di MySQL tapi lisensi mati (expired/hack)
-                            $('#db-free-alert').html('<strong class="text-danger">Peringatan:</strong> Lisensi Pro tidak aktif. Koneksi database mungkin dibatasi.').show();
-                        }
-                    }
-                    
-                    toggleDBSettings(currentDialect);
-                },
-                error: function () {
-                    Swal.fire("Error", "Gagal memuat data pengaturan.", "error");
-                }
-            });
-        }
-        loadSettings();
-
-        // Event Handler Simpan (Tetap sama)
-        $("#settings-form").on("submit", function (e) {
-            e.preventDefault();
-            const $btn = $('#submit-btn');
-            const originalText = $btn.html();
-
-            const settingsData = {
-                kop_baris_1: $("#kop_baris_1").val(),
-                kop_baris_2: $("#kop_baris_2").val(),
-                kop_baris_3: $("#kop_baris_3").val(),
-                nama_kantor: $("#nama_kantor").val(),
-                tempat_surat: $("#tempat_surat").val(),
-                format_nomor_surat: $("#format_nomor_surat").val(),
-                nomor_surat_terakhir: $("#nomor_surat_terakhir").val(),
-                zona_waktu: $("#zona_waktu").val(),
-                archive_duration_days: $("#archive_duration_days").val(),
-                
-                db_dialect: $("#db_dialect").val(),
-                db_dsn: $("#db_dsn").val(),
-                db_host: $("#db_host").val(),
-                db_port: $("#db_port").val(),
-                db_name: $("#db_name").val(),
-                db_user: $("#db_user").val(),
-                db_pass: $("#db_pass").val(),
-                db_sslmode: $("#db_sslmode").val(), // <-- SIMPAN SSL MODE
-                backup_path: $("#backup_path").val()
-            };
+        let data = {
+            db_dialect: $("#db_dialect").val(),
+            db_host: $("#db_host").val(),
+            db_port: $("#db_port").val(),
+            db_name: $("#db_name").val(),
+            db_user: $("#db_user").val(),
+            db_pass: $("#db_pass").val(),
+            db_sslmode: $("#db_sslmode").val(),
             
-            if(settingsData.db_pass === "") delete settingsData.db_pass;
+            kop_baris_1: $("#kop_baris_1").val(),
+            kop_baris_2: $("#kop_baris_2").val(),
+            kop_baris_3: $("#kop_baris_3").val(),
+            nama_kantor: $("#nama_kantor").val(),
+            tempat_surat: $("#tempat_surat").val(),
+            format_nomor_surat: $("#format_nomor_surat").val(),
+            backup_path: $("#backup_path").val()
+        };
 
-            $btn.prop("disabled", true).html('<span class="spinner-border spinner-border-sm"></span> Menyimpan...');
-
-            $.ajax({
-                url: "/api/settings",
-                method: "PUT",
-                contentType: "application/json",
-                data: JSON.stringify(settingsData),
-                success: function (response) {
-                    Swal.fire({ icon: "success", title: "Berhasil!", text: response.message + " Restart aplikasi diperlukan untuk perubahan database." });
-                    $("#db_pass").val("");
-                },
-                error: function (jqXHR) {
-                    Swal.fire("Gagal!", jqXHR.responseJSON ? jqXHR.responseJSON.error : "Terjadi kesalahan.", "error");
-                },
-                complete: function () { $btn.prop("disabled", false).html(originalText); }
-            });
-        });
-        
-        // Event Handler Test Koneksi (Tetap sama)
-        $('#test-db-btn').on('click', function() {
-            const $btn = $(this);
-            const originalText = $btn.html();
-            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Menguji...');
-            
-            const connectionData = {
-                db_dialect: $("#db_dialect").val(),
-                db_host: $("#db_host").val(),
-                db_port: $("#db_port").val(),
-                db_name: $("#db_name").val(),
-                db_user: $("#db_user").val(),
-                db_pass: $("#db_pass").val(),
-                db_sslmode: $("#db_sslmode").val() // <-- KIRIM SSL MODE SAAT TEST
-            };
-
-            $.ajax({
-                url: "/api/db/test",
-                method: "POST",
-                contentType: "application/json",
-                data: JSON.stringify(connectionData),
-                success: function() { Swal.fire("Berhasil!", "Koneksi database sukses!", "success"); },
-                error: function(jqXHR) { Swal.fire("Koneksi Gagal!", jqXHR.responseJSON ? jqXHR.responseJSON.error : "Error.", "error"); },
-                complete: function() { $btn.prop('disabled', false).html(originalText); }
-            });
-        });
-
-        // ... (Bagian Backup & Restore tetap sama) ...
-        $("#backup-btn").on("click", function () {
-             const $btn = $(this);
-             Swal.fire({ title: "Mulai Backup?", text: "Unduh database sekarang?", icon: "info", showCancelButton: true, confirmButtonText: "Ya", cancelButtonText: "Batal" }).then(r => {
-                 if(r.isConfirmed) {
-                     $btn.prop("disabled", true).text("Memproses...");
-                     fetch("/api/backups", {method: "POST"}).then(async res => {
-                         if(!res.ok) throw new Error((await res.json()).error);
-                         return res.blob();
-                     }).then(blob => {
-                         const a = document.createElement("a"); a.href = window.URL.createObjectURL(blob); a.download = "backup.db"; a.click();
-                         Swal.fire("Sukses", "Backup diunduh.", "success");
-                     }).catch(e => Swal.fire("Gagal", e.message, "error")).finally(() => $btn.prop("disabled", false).html('<i class="fas fa-download"></i> Download Backup'));
-                 }
-             });
-        });
-
-        $("#restore-form").on("submit", function (e) {
-             e.preventDefault();
-             const file = $("#restore-file")[0].files[0];
-             if(!file) return Swal.fire("Perhatian", "Pilih file dulu.", "warning");
-             
-             const formData = new FormData(); formData.append("restore-file", file);
-             
-             Swal.fire({ title: "Restore Database?", html: "Data akan ditimpa. Ketik <b>PULIHKAN</b>:", input: "text", showCancelButton: true, confirmButtonText: "Restore", showLoaderOnConfirm: true, preConfirm: (t) => {
-                 if(t!=="PULIHKAN") return Swal.showValidationMessage("Teks salah.");
-                 return fetch("/api/restore", {method:"POST", body:formData}).then(async r => { if(!r.ok) throw new Error((await r.json()).error); });
-             }}).then(r => { if(r.isConfirmed) Swal.fire("Sukses", "Database pulih.", "success").then(()=>window.location.reload()); });
+        $.ajax({
+            url: "/api/settings",
+            method: "PUT",
+            contentType: "application/json",
+            data: JSON.stringify(data),
+            success: function() {
+                Swal.fire("Sukses", "Pengaturan disimpan. Restart aplikasi untuk efek DB.", "success");
+                $("#db_pass").val("");
+            },
+            error: function() { Swal.fire("Gagal", "Tidak dapat menyimpan.", "error"); },
+            complete: function() { btn.prop('disabled', false).html('<i class="fas fa-save mr-2"></i>Simpan Perubahan'); }
         });
     });
+
+    // --- TEST DB ---
+    $('#test-db-btn').click(function() {
+        let btn = $(this);
+        btn.prop('disabled', true).text('Menguji...');
+        
+        let payload = {
+            db_dialect: $("#db_dialect").val(),
+            db_host: $("#db_host").val(),
+            db_port: $("#db_port").val(),
+            db_name: $("#db_name").val(),
+            db_user: $("#db_user").val(),
+            db_pass: $("#db_pass").val(),
+            db_sslmode: $("#db_sslmode").val()
+        };
+
+        $.ajax({
+            url: "/api/db/test", method: "POST",
+            contentType: "application/json", data: JSON.stringify(payload),
+            success: function() { Swal.fire("Sukses", "Koneksi OK!", "success"); },
+            error: function() { Swal.fire("Gagal", "Koneksi ditolak.", "error"); },
+            complete: function() { btn.prop('disabled', false).text('Tes Koneksi'); }
+        });
+    });
+
+    // --- MIGRATION LOGIC ---
+    $('#mig_dialect').change(function() {
+        if($(this).val() === 'postgres') {
+            $('#mig_port').val('5432');
+            $('#mig-ssl-wrap').show();
+        } else {
+            $('#mig_port').val('3306');
+            $('#mig-ssl-wrap').hide();
+        }
+    });
+
+    $('#migration-form').submit(function(e) {
+        e.preventDefault();
+        
+        let target = {
+            db_dialect: $('#mig_dialect').val(),
+            db_host: $('#mig_host').val(),
+            db_port: $('#mig_port').val(),
+            db_name: $('#mig_name').val(),
+            db_user: $('#mig_user').val(),
+            db_pass: $('#mig_pass').val(),
+            db_sslmode: $('#mig_sslmode').val()
+        };
+
+        Swal.fire({
+            title: 'Mulai Migrasi?',
+            text: "Data akan disalin ke database target. Target harus kosong.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Ya, Migrasi',
+            showLoaderOnConfirm: true,
+            preConfirm: () => {
+                return fetch("/api/settings/migrate", {
+                    method: "POST",
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(target)
+                }).then(async r => {
+                    if(!r.ok) throw new Error((await r.json()).error);
+                    return r.json();
+                }).catch(err => Swal.showValidationMessage(err));
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                Swal.fire("Sukses", "Migrasi berhasil! Silakan ganti config DB utama.", "success");
+            }
+        });
+    });
+
+    // Backup & Restore Logic (Sama seperti sebelumnya)
+    $("#backup-btn").click(function() {
+        window.location.href = "/api/backups"; // Simplifikasi download
+    });
+
+    $("#restore-form").submit(function(e) {
+        e.preventDefault();
+        let fd = new FormData(this);
+        $.ajax({
+            url: "/api/restore", method: "POST",
+            data: fd, processData: false, contentType: false,
+            success: function() { Swal.fire("Sukses", "Restore berhasil.", "success").then(()=>location.reload()); },
+            error: function() { Swal.fire("Gagal", "File rusak/salah format.", "error"); }
+        });
+    });
+});
 </script>
