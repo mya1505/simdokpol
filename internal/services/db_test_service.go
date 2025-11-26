@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"simdokpol/internal/dto"
-	"strings"
 	"time"
 
 	gormmysql "gorm.io/driver/mysql"
