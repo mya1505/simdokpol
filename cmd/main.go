@@ -61,7 +61,7 @@ func main() {
 		msg := fmt.Sprintf("Gagal koneksi database: %v", err)
 		_ = beeep.Alert("SIMDOKPOL Error", msg, "")
 		// Log fatal agar aplikasi berhenti
-		log.Fatalf(msg)
+		log.Fatalf("Gagal koneksi database: %v", err)
 	}
 
 	// 3. Setup Layers (Dependency Injection)
@@ -81,6 +81,7 @@ func main() {
 	backupService := services.NewBackupService(db, cfg, configService, auditService)
 	licenseService := services.NewLicenseService(licenseRepo, configService, auditService)
 	userService := services.NewUserService(userRepo, auditService, cfg)
+	dataMigrationService := services.NewDataMigrationService(db, auditService, configService)
 	
 	// Dapatkan path executable untuk keperluan logging/backup path fallback
 	exePath, _ := os.Executable()
@@ -99,7 +100,7 @@ func main() {
 	userController := controllers.NewUserController(userService)
 	docController := controllers.NewLostDocumentController(docService)
 	dashboardController := controllers.NewDashboardController(dashboardService)
-	configController := controllers.NewConfigController(configService, userService, backupService)
+	configController := controllers.NewConfigController(configService, userService, backupService, dataMigrationService)
 	auditController := controllers.NewAuditLogController(auditService)
 	backupController := controllers.NewBackupController(backupService)
 	settingsController := controllers.NewSettingsController(configService, auditService)
