@@ -3,11 +3,11 @@ package controllers
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
+	"errors" // Library ini dipakai di test FindByID
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"simdokpol/internal/dto" // Pastikan import DTO
+	"simdokpol/internal/dto"
 	"simdokpol/internal/mocks"
 	"simdokpol/internal/models"
 	"simdokpol/internal/services"
@@ -33,7 +33,7 @@ func setupDocTestRouter(mockDocService *mocks.LostDocumentService, authInjector 
 		router.Use(authInjector)
 	}
 
-	// Rute dokumen standar (memerlukan auth biasa)
+	// Rute dokumen standar
 	docRoutes := router.Group("/api")
 	{
 		docRoutes.POST("/documents", docController.Create)
@@ -47,7 +47,7 @@ func setupDocTestRouter(mockDocService *mocks.LostDocumentService, authInjector 
 	return router
 }
 
-// --- Helper Data (SAMA SEPERTI SEBELUMNYA) ---
+// --- Helper Data ---
 var (
 	adminUser = &models.User{ID: 1, NamaLengkap: "Admin", Peran: models.RoleSuperAdmin}
 	opOwner   = &models.User{ID: 2, NamaLengkap: "Operator Pemilik", Peran: models.RoleOperator}
@@ -56,7 +56,7 @@ var (
 	mockDoc = &models.LostDocument{
 		ID:         101,
 		NomorSurat: "SKH/101/XI/TUK.7.2.1/2025",
-		OperatorID: opOwner.ID, // Dimiliki oleh user ID 2
+		OperatorID: opOwner.ID,
 		Resident:   models.Resident{NamaLengkap: "BUDI SANTOSO"},
 	}
 
@@ -79,16 +79,11 @@ var (
 		},
 	}
 	
-	// JSON Response Expectation (SAMA SEPERTI SEBELUMNYA)
 	expectedDocJSON = `{"id":101, "nomor_surat":"SKH/101/XI/TUK.7.2.1/2025", "tanggal_laporan":"0001-01-01T00:00:00Z", "status":"", "lokasi_hilang":"", "resident_id":0, "resident":{"id":0, "nik":"", "nama_lengkap":"BUDI SANTOSO", "tempat_lahir":"", "tanggal_lahir":"0001-01-01T00:00:00Z", "jenis_kelamin":"", "agama":"", "pekerjaan":"", "alamat":"", "created_at":"0001-01-01T00:00:00Z", "updated_at":"0001-01-01T00:00:00Z"}, "lost_items":null, "petugas_pelapor_id":0, "petugas_pelapor":{"id":0, "nama_lengkap":"", "nrp":"", "pangkat":"", "peran":"", "jabatan":"", "regu":"", "created_at":"0001-01-01T00:00:00Z", "updated_at":"0001-01-01T00:00:00Z"}, "pejabat_persetuju_id":null, "pejabat_persetuju":{"id":0, "nama_lengkap":"", "nrp":"", "pangkat":"", "peran":"", "jabatan":"", "regu":"", "created_at":"0001-01-01T00:00:00Z", "updated_at":"0001-01-01T00:00:00Z"}, "operator_id":2, "operator":{"id":0, "nama_lengkap":"", "nrp":"", "pangkat":"", "peran":"", "jabatan":"", "regu":"", "created_at":"0001-01-01T00:00:00Z", "updated_at":"0001-01-01T00:00:00Z"}, "last_updated_by_id":null, "last_updated_by":{"id":0, "nama_lengkap":"", "nrp":"", "pangkat":"", "peran":"", "jabatan":"", "regu":"", "created_at":"0001-01-01T00:00:00Z", "updated_at":"0001-01-01T00:00:00Z"}, "tanggal_persetujuan":null, "created_at":"0001-01-01T00:00:00Z", "updated_at":"0001-01-01T00:00:00Z"}`
 )
 
-// ... (Test Create, FindByID, Update, Delete SAMA SEPERTI SEBELUMNYA, COPY DARI FILE LAMA) ...
-// ... Agar singkat, saya hanya menyertakan bagian yang DIPERBAIKI (FindAll) ...
-
 func TestLostDocumentController_Create(t *testing.T) {
-    // Copy dari file lama
-    testCases := []struct {
+	testCases := []struct {
 		name               string
 		userInContext      *models.User
 		requestBody        interface{}
@@ -163,11 +158,7 @@ func TestLostDocumentController_Create(t *testing.T) {
 	}
 }
 
-// Copy juga Test FindByID, Update, Delete dari file lama...
-// ...
-
 func TestLostDocumentController_FindByID_Authorization(t *testing.T) {
-	// Copy dari file lama (tidak berubah)
 	testCases := []struct {
 		name               string
 		userInContext      *models.User
@@ -186,8 +177,17 @@ func TestLostDocumentController_FindByID_Authorization(t *testing.T) {
 			expectedStatusCode: http.StatusOK,
 			expectedBody:       expectedDocJSON,
 		},
-        // ... Copy sisa test case dari file lama ...
-        {
+		{
+			name:          "Success - Operator can access own document",
+			userInContext: opOwner,
+			docID:         "101",
+			mockSetup: func(mockSvc *mocks.LostDocumentService) {
+				mockSvc.On("FindByID", uint(101), opOwner.ID).Return(mockDoc, nil).Once()
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedBody:       expectedDocJSON,
+		},
+		{
 			name:          "Failure - Operator cannot access other's document",
 			userInContext: opOther,
 			docID:         "101",
@@ -197,9 +197,20 @@ func TestLostDocumentController_FindByID_Authorization(t *testing.T) {
 			expectedStatusCode: http.StatusForbidden,
 			expectedBody:       `{"error":"Akses ditolak: Anda tidak memiliki izin untuk melihat dokumen ini."}`,
 		},
-    }
-    
-    for _, tc := range testCases {
+		{
+			name:          "Failure - Document Not Found",
+			userInContext: adminUser,
+			docID:         "999",
+			mockSetup: func(mockSvc *mocks.LostDocumentService) {
+				// DI SINI LIBRARY "errors" DIGUNAKAN
+				mockSvc.On("FindByID", uint(999), adminUser.ID).Return(nil, errors.New("data tidak ditemukan")).Once()
+			},
+			expectedStatusCode: http.StatusNotFound,
+			expectedBody:       `{"error":"Dokumen tidak ditemukan"}`,
+		},
+	}
+
+	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			mockDocService := new(mocks.LostDocumentService)
 			authInjector := func(c *gin.Context) {
@@ -216,32 +227,17 @@ func TestLostDocumentController_FindByID_Authorization(t *testing.T) {
 
 			router.ServeHTTP(recorder, req)
 
-			if tc.expectedStatusCode != 0 {
-                assert.Equal(t, tc.expectedStatusCode, recorder.Code)
-            }
+			assert.Equal(t, tc.expectedStatusCode, recorder.Code)
+			assert.JSONEq(t, tc.expectedBody, recorder.Body.String())
 			mockDocService.AssertExpectations(t)
 		})
 	}
 }
 
-func TestLostDocumentController_Update_Authorization(t *testing.T) {
-    // Copy dari file lama (tidak berubah)
-    // ...
-    t.Skip("Skipping for brevity, use old code")
-}
-
-func TestLostDocumentController_Delete_Authorization(t *testing.T) {
-    // Copy dari file lama (tidak berubah)
-    // ...
-    t.Skip("Skipping for brevity, use old code")
-}
-
-
-// --- PERBAIKAN UTAMA DI SINI ---
 func TestLostDocumentController_FindAll(t *testing.T) {
 	mockDocs := []models.LostDocument{*mockDoc}
 	
-	// --- UPDATE EXPECTED RESPONSE UNTUK DATATABLES ---
+	// Setup response untuk DataTables (Paging)
 	mockResponse := &dto.DataTableResponse{
 		Draw:            1,
 		RecordsTotal:    1,
@@ -261,10 +257,9 @@ func TestLostDocumentController_FindAll(t *testing.T) {
 			userInContext: adminUser,
 			query:         "?status=active&draw=1&start=0&length=10",
 			mockSetup: func(mockSvc *mocks.LostDocumentService) {
-				// Expect GetDocumentsPaged, BUKAN FindAll
-				// Matcher untuk dto.DataTableRequest
+				// MOCKING PAGING
 				mockSvc.On("GetDocumentsPaged", mock.MatchedBy(func(req dto.DataTableRequest) bool {
-					return req.Draw == 1 // Validasi simple
+					return req.Draw == 1
 				}), "active").Return(mockResponse, nil).Once()
 			},
 			expectedStatusCode: http.StatusOK,
@@ -288,7 +283,6 @@ func TestLostDocumentController_FindAll(t *testing.T) {
 
 			assert.Equal(t, tc.expectedStatusCode, recorder.Code)
 			if tc.expectedStatusCode == http.StatusOK {
-				// Validasi format JSON DataTables
 				assert.Contains(t, recorder.Body.String(), `"draw":1`)
 				assert.Contains(t, recorder.Body.String(), "SKH/101/XI/TUK.7.2.1/2025")
 			}
@@ -297,7 +291,6 @@ func TestLostDocumentController_FindAll(t *testing.T) {
 	}
 }
 
-// Test Search Global (Tetap Menggunakan SearchGlobal Service - Tidak Berubah)
 func TestLostDocumentController_SearchGlobal(t *testing.T) {
 	mockDocs := []models.LostDocument{*mockDoc}
 
@@ -338,6 +331,101 @@ func TestLostDocumentController_SearchGlobal(t *testing.T) {
 			if tc.expectedStatusCode == http.StatusOK {
 				assert.Contains(t, recorder.Body.String(), "SKH/101/XI/TUK.7.2.1/2025")
 			}
+			mockDocService.AssertExpectations(t)
+		})
+	}
+}
+
+func TestLostDocumentController_Update(t *testing.T) {
+	testCases := []struct {
+		name               string
+		userInContext      *models.User
+		docID              string
+		requestBody        interface{}
+		mockSetup          func(*mocks.LostDocumentService)
+		expectedStatusCode int
+		expectedBody       string
+	}{
+		{
+			name:          "Success - Update Document",
+			userInContext: opOwner,
+			docID:         "101",
+			requestBody:   validDocRequest,
+			mockSetup: func(mockSvc *mocks.LostDocumentService) {
+				mockSvc.On("UpdateLostDocument", uint(101),
+					mock.AnythingOfType("models.Resident"),
+					mock.AnythingOfType("[]models.LostItem"),
+					mock.AnythingOfType("string"),
+					mock.AnythingOfType("uint"),
+					mock.AnythingOfType("uint"),
+					opOwner.ID,
+				).Return(mockDoc, nil).Once()
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedBody:       expectedDocJSON,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockDocService := new(mocks.LostDocumentService)
+			authInjector := func(c *gin.Context) {
+				c.Set("currentUser", tc.userInContext); c.Set("userID", tc.userInContext.ID); c.Next()
+			}
+			router := setupDocTestRouter(mockDocService, authInjector)
+			tc.mockSetup(mockDocService)
+
+			jsonBody, err := json.Marshal(tc.requestBody)
+			assert.NoError(t, err)
+
+			req, _ := http.NewRequest(http.MethodPut, fmt.Sprintf("/api/documents/%s", tc.docID), bytes.NewBuffer(jsonBody))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Accept", "application/json")
+			recorder := httptest.NewRecorder()
+
+			router.ServeHTTP(recorder, req)
+
+			assert.Equal(t, tc.expectedStatusCode, recorder.Code)
+			mockDocService.AssertExpectations(t)
+		})
+	}
+}
+
+func TestLostDocumentController_Delete(t *testing.T) {
+	testCases := []struct {
+		name               string
+		userInContext      *models.User
+		docID              string
+		mockSetup          func(*mocks.LostDocumentService)
+		expectedStatusCode int
+	}{
+		{
+			name:          "Success - Delete Document",
+			userInContext: opOwner,
+			docID:         "101",
+			mockSetup: func(mockSvc *mocks.LostDocumentService) {
+				mockSvc.On("DeleteLostDocument", uint(101), opOwner.ID).Return(nil).Once()
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockDocService := new(mocks.LostDocumentService)
+			authInjector := func(c *gin.Context) {
+				c.Set("currentUser", tc.userInContext); c.Set("userID", tc.userInContext.ID); c.Next()
+			}
+			router := setupDocTestRouter(mockDocService, authInjector)
+			tc.mockSetup(mockDocService)
+
+			req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("/api/documents/%s", tc.docID), nil)
+			req.Header.Set("Accept", "application/json")
+			recorder := httptest.NewRecorder()
+
+			router.ServeHTTP(recorder, req)
+
+			assert.Equal(t, tc.expectedStatusCode, recorder.Code)
 			mockDocService.AssertExpectations(t)
 		})
 	}
