@@ -1,13 +1,11 @@
 package services
 
 import (
-	"simdokpol/internal/dto" // <-- IMPORT BARU
+	"simdokpol/internal/dto"
 	"simdokpol/internal/models"
 	"simdokpol/internal/repositories"
 	"time"
 )
-
-// Struct DTO dipindahkan ke package dto
 
 type DashboardService interface {
 	GetDashboardStats() (*dto.DashboardStatsDTO, error)
@@ -32,15 +30,12 @@ func NewDashboardService(docRepo repositories.LostDocumentRepository, userRepo r
 
 func (s *dashboardService) GetExpiringDocumentsForUser(userID uint, notificationWindowDays int) ([]models.LostDocument, error) {
 	appConfig, err := s.configService.GetConfig()
-	if err != nil {
-		return nil, err
-	}
-	loc, err := s.configService.GetLocation()
-	if err != nil {
-		loc = time.UTC
-	}
-	now := time.Now().In(loc)
+	if err != nil { appConfig = &dto.AppConfig{ArchiveDurationDays: 15} } // Default
 
+	loc, err := s.configService.GetLocation()
+	if err != nil { loc = time.UTC }
+	
+	now := time.Now().In(loc)
 	archiveDuration := time.Duration(appConfig.ArchiveDurationDays) * 24 * time.Hour
 	notificationWindow := time.Duration(notificationWindowDays) * 24 * time.Hour
 
@@ -52,57 +47,43 @@ func (s *dashboardService) GetExpiringDocumentsForUser(userID uint, notification
 
 func (s *dashboardService) GetDashboardStats() (*dto.DashboardStatsDTO, error) {
 	loc, err := s.configService.GetLocation()
-	if err != nil {
-		loc = time.UTC
-	}
+	if err != nil { loc = time.UTC }
 	now := time.Now().In(loc)
 
 	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
 	endOfDay := startOfDay.AddDate(0, 0, 1).Add(-time.Nanosecond)
-	docsToday, err := s.docRepo.CountByDateRange(startOfDay, endOfDay)
-	if err != nil {
-		return nil, err
-	}
+	docsToday, _ := s.docRepo.CountByDateRange(startOfDay, endOfDay)
 
 	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, loc)
 	endOfMonth := startOfMonth.AddDate(0, 1, 0).Add(-time.Nanosecond)
-	docsMonthly, err := s.docRepo.CountByDateRange(startOfMonth, endOfMonth)
-	if err != nil {
-		return nil, err
-	}
+	docsMonthly, _ := s.docRepo.CountByDateRange(startOfMonth, endOfMonth)
 
 	startOfYear := time.Date(now.Year(), 1, 1, 0, 0, 0, 0, loc)
 	endOfYear := startOfYear.AddDate(1, 0, 0).Add(-time.Nanosecond)
-	docsYearly, err := s.docRepo.CountByDateRange(startOfYear, endOfYear)
-	if err != nil {
-		return nil, err
-	}
+	docsYearly, _ := s.docRepo.CountByDateRange(startOfYear, endOfYear)
 
-	activeUsers, err := s.userRepo.CountAll()
-	if err != nil {
-		return nil, err
-	}
+	activeUsers, _ := s.userRepo.CountAll()
 
-	stats := &dto.DashboardStatsDTO{
+	return &dto.DashboardStatsDTO{
 		DocsMonthly: docsMonthly,
 		DocsYearly:  docsYearly,
 		DocsToday:   docsToday,
 		ActiveUsers: activeUsers,
-	}
-
-	return stats, nil
+	}, nil
 }
 
 func (s *dashboardService) GetMonthlyIssuanceChartData() (*dto.ChartDataDTO, error) {
 	loc, err := s.configService.GetLocation()
-	if err != nil {
-		loc = time.UTC
-	}
+	if err != nil { loc = time.UTC }
 	currentYear := time.Now().In(loc).Year()
 
 	counts, err := s.docRepo.GetMonthlyIssuanceForYear(currentYear)
+	// Jika error (misal DB kosong), return data kosong biar frontend gak 500
 	if err != nil {
-		return nil, err
+		return &dto.ChartDataDTO{
+			Labels: []string{"Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"},
+			Data:   make([]int, 12),
+		}, nil
 	}
 
 	labels := []string{"Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"}
@@ -120,7 +101,8 @@ func (s *dashboardService) GetMonthlyIssuanceChartData() (*dto.ChartDataDTO, err
 func (s *dashboardService) GetItemCompositionPieChartData() (*dto.PieChartDataDTO, error) {
 	stats, err := s.docRepo.GetItemCompositionStats()
 	if err != nil {
-		return nil, err
+		// Return empty safe data
+		return &dto.PieChartDataDTO{Labels: []string{}, Data: []int{}, BackgroundColors: []string{}}, nil
 	}
 
 	var labels []string
@@ -143,7 +125,10 @@ func (s *dashboardService) GetItemCompositionPieChartData() (*dto.PieChartDataDT
 		data = append(data, othersCount)
 	}
 
-	finalColors := colors[:len(labels)]
+	finalColors := colors
+	if len(labels) < len(colors) {
+		finalColors = colors[:len(labels)]
+	}
 
 	return &dto.PieChartDataDTO{
 		Labels:           labels,

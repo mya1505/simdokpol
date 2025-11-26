@@ -39,38 +39,28 @@ func (s *dataMigrationService) MigrateDataTo(target dto.DBTestRequest, actorID u
 		return fmt.Errorf("gagal koneksi ke target database: %w", err)
 	}
 	
-	// Tutup koneksi target nanti (walaupun GORM manage pool, good practice clean up jika bisa)
-	// sqlDB, _ := targetDB.DB(); defer sqlDB.Close() 
-
 	// 2. Auto Migrate Target (Buat Tabel)
 	log.Println("MIGRASI: Membuat skema tabel di target...")
 	err = targetDB.AutoMigrate(
-		&models.Configuration{},
-		&models.User{},
-		&models.Resident{},
-		&models.LostDocument{},
-		&models.LostItem{},
-		&models.AuditLog{},
-		&models.ItemTemplate{},
-		&models.License{},
+		&models.Configuration{}, &models.User{}, &models.Resident{},
+		&models.LostDocument{}, &models.LostItem{}, &models.AuditLog{},
+		&models.ItemTemplate{}, &models.License{},
 	)
 	if err != nil {
 		return fmt.Errorf("gagal membuat tabel di target: %w", err)
 	}
 
 	// 3. Mulai Transaksi Migrasi Data
-	// Urutan PENTING untuk menghindari Foreign Key Error
-	// Config -> License -> Template -> User -> Resident -> Document -> Item -> Audit
-	
-	// Matikan FK Check sementara (Kalo bisa, tergantung driver)
-	if target.DBDialect == "mysql" {
+	// FIX QF1003: Gunakan switch case
+	switch target.DBDialect {
+	case "mysql":
 		targetDB.Exec("SET FOREIGN_KEY_CHECKS = 0")
 		defer targetDB.Exec("SET FOREIGN_KEY_CHECKS = 1")
-	} else if target.DBDialect == "sqlite" {
+	case "sqlite":
 		targetDB.Exec("PRAGMA foreign_keys = OFF")
 		defer targetDB.Exec("PRAGMA foreign_keys = ON")
 	}
-	// Postgres agak ribet disable global FK, jadi kita andalkan urutan yang benar.
+	// Postgres tidak perlu disable global FK untuk urutan insert ini
 
 	log.Println("MIGRASI: Memindahkan data Configuration...")
 	if err := s.copyTable(s.currentDB, targetDB, &models.Configuration{}); err != nil { return err }
@@ -96,23 +86,18 @@ func (s *dataMigrationService) MigrateDataTo(target dto.DBTestRequest, actorID u
 	log.Println("MIGRASI: Memindahkan data AuditLog...")
 	if err := s.copyTable(s.currentDB, targetDB, &models.AuditLog{}); err != nil { return err }
 
-	// Catat aktivitas di DB LAMA (sebelum pindah)
 	s.auditService.LogActivity(actorID, "MIGRASI DATABASE", fmt.Sprintf("Data berhasil disalin ke database baru (%s)", target.DBDialect))
 
 	return nil
 }
 
-// Helper generic untuk copy data per tabel dengan batching
 func (s *dataMigrationService) copyTable(src, dest *gorm.DB, model interface{}) error {
-	// Batch size 100 biar RAM gak meledak
 	return src.Model(model).FindInBatches(model, 100, func(tx *gorm.DB, batch int) error {
-		// Gunakan Clauses OnConflict DoNothing agar jika di-run ulang tidak error duplikat
 		return dest.Clauses(clause.OnConflict{DoNothing: true}).Create(tx.Statement.Dest).Error
 	}).Error
 }
 
 func (s *dataMigrationService) openTargetConnection(req dto.DBTestRequest) (*gorm.DB, error) {
-	// Logic koneksi ini mirip db_test_service, tapi mengembalikan instance DB
 	var dsn string
 	var dialector gorm.Dialector
 
@@ -128,7 +113,7 @@ func (s *dataMigrationService) openTargetConnection(req dto.DBTestRequest) (*gor
 			req.DBHost, req.DBUser, req.DBPass, req.DBName, req.DBPort, sslMode)
 		dialector = postgres.Open(dsn)
 	case "sqlite":
-		dsn = req.DBName // Untuk SQLite request, DBName biasanya path file
+		dsn = req.DBName 
 		if dsn == "" { dsn = "migrated_simdokpol.db?_foreign_keys=on" }
 		dialector = sqlite.Open(dsn)
 	default:
