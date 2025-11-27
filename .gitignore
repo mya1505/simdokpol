@@ -33,4 +33,5 @@ tmp/
 Thumbs.db
 .idea/
 .vscode/
+.git.old
 coverage.out
