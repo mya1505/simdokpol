@@ -1,6 +1,5 @@
 package dto
 
-// AppConfig adalah Data Transfer Object untuk konfigurasi aplikasi.
 type AppConfig struct {
 	IsSetupComplete     bool   `json:"is_setup_complete"`
 	KopBaris1           string `json:"kop_baris_1"`
@@ -14,10 +13,12 @@ type AppConfig struct {
 	BackupPath          string `json:"backup_path"`
 	ArchiveDurationDays int    `json:"archive_duration_days"`
 	
-	// --- PENTING: Field ini wajib ada biar settingan HTTPS kebaca ---
-	EnableHTTPS         bool   `json:"enable_https"` 
-	// --------------------------------------------------------------
+	// --- FITUR BARU: TIMEOUTS ---
+	SessionTimeout      int    `json:"session_timeout"` // Max durasi login (Jam)
+	IdleTimeout         int    `json:"idle_timeout"`    // Durasi diam (Menit)
+	// ----------------------------
 
+	EnableHTTPS         bool   `json:"enable_https"` 
 	DBDialect           string `json:"db_dialect"`
 	DBHost              string `json:"db_host"`
 	DBPort              string `json:"db_port"`

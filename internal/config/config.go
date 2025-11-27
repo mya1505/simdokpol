@@ -20,54 +20,59 @@ type Config struct {
 }
 
 func LoadConfig() *Config {
-	// 1. Load .env dari AppData (Konsisten!)
+	// 1. Load .env dari AppData (Prioritas Utama)
 	appDataDir := utils.GetAppDataDir()
 	envPath := filepath.Join(appDataDir, ".env")
-	
-	// Coba load, ignore error kalau belum ada (first run)
 	_ = godotenv.Load(envPath)
+	// Fallback ke lokal (untuk dev)
+	_ = godotenv.Load()
 
-	// 2. Setup JWT
+	// 2. Setup Security
 	secretStr := os.Getenv("JWT_SECRET_KEY")
 	if secretStr == "" {
-		secretStr = "default-insecure-secret-change-me"
+		secretStr = "default-insecure-secret-change-me-immediately"
 	}
 
-	// 3. Cost Bcrypt
 	costStr := os.Getenv("BCRYPT_COST")
 	cost, _ := strconv.Atoi(costStr)
 	if cost < bcrypt.MinCost { cost = 10 }
 	
-	// 4. Database Logic (CRITICAL FIX)
+	// 3. Database Logic (Path Fix)
 	dialect := strings.ToLower(os.Getenv("DB_DIALECT"))
 	if dialect == "" { dialect = "sqlite" }
 
 	dsn := os.Getenv("DB_DSN")
-	
-	// JIKA SQLITE: Paksa Absolute Path ke AppData jika DSN masih relatif
 	if dialect == "sqlite" {
-		if dsn == "" {
-			// Default DSN
+		if dsn == "" || dsn == "simdokpol.db?_foreign_keys=on" {
 			dsn = filepath.Join(appDataDir, "simdokpol.db?_foreign_keys=on")
 		} else if !filepath.IsAbs(strings.Split(dsn, "?")[0]) {
-			// Jika user set "simdokpol.db", kita ubah jadi "C:\Users\Name\AppData\...\simdokpol.db"
 			cleanDSN := strings.TrimPrefix(dsn, "file:")
-			// Ambil filename saja (ignore query params)
 			parts := strings.Split(cleanDSN, "?")
 			fname := filepath.Base(parts[0])
-			
-			// Rebuild DSN dengan path absolut
 			dsn = filepath.Join(appDataDir, fname)
-			if len(parts) > 1 {
-				dsn += "?" + parts[1]
-			}
+			if len(parts) > 1 { dsn += "?" + parts[1] }
 		}
 	}
+
+	// 4. Parse Settings Lain (Fallback Default)
+	archiveDays, _ := strconv.Atoi(os.Getenv("archive_duration_days"))
+	if archiveDays == 0 { archiveDays = 15 }
+
+	// Session Timeout (Default 8 Jam)
+	sessionTimeout, _ := strconv.Atoi(os.Getenv("SESSION_TIMEOUT"))
+	if sessionTimeout == 0 { sessionTimeout = 480 }
+
+	// Idle Timeout (Default 15 Menit)
+	idleTimeout, _ := strconv.Atoi(os.Getenv("IDLE_TIMEOUT"))
+	if idleTimeout == 0 { idleTimeout = 15 }
+
+	// HTTPS Status
+	enableHTTPS := os.Getenv("ENABLE_HTTPS") == "true"
 
 	return &Config{
 		AppConfig: &dto.AppConfig{
 			DBDialect:           dialect,
-			DBDSN:               dsn, // <-- DSN YANG SUDAH DIPERBAIKI
+			DBDSN:               dsn,
 			DBHost:              os.Getenv("DB_HOST"),
 			DBPort:              os.Getenv("DB_PORT"),
 			DBUser:              os.Getenv("DB_USER"),
@@ -75,7 +80,6 @@ func LoadConfig() *Config {
 			DBSSLMode:           os.Getenv("DB_SSLMODE"),
 			IsSetupComplete:     os.Getenv("is_setup_complete") == "true",
 			
-			// Load settings lainnya...
 			KopBaris1:           os.Getenv("kop_baris_1"),
 			KopBaris2:           os.Getenv("kop_baris_2"),
 			KopBaris3:           os.Getenv("kop_baris_3"),
@@ -84,7 +88,13 @@ func LoadConfig() *Config {
 			FormatNomorSurat:    os.Getenv("format_nomor_surat"),
 			NomorSuratTerakhir:  os.Getenv("nomor_surat_terakhir"),
 			ZonaWaktu:           os.Getenv("zona_waktu"),
-			ArchiveDurationDays: 15, // Default
+			BackupPath:          os.Getenv("backup_path"),
+			
+			// Field Baru
+			ArchiveDurationDays: archiveDays,
+			EnableHTTPS:         enableHTTPS,
+			SessionTimeout:      sessionTimeout,
+			IdleTimeout:         idleTimeout,
 		},
 		JWTSecretKey: []byte(secretStr),
 		BcryptCost:   cost,

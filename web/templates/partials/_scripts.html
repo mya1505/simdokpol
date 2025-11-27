@@ -5,12 +5,12 @@
 
 <style>
     .modal-changelog-header { background: #4e73df; color: white; border-bottom: none; }
-    .modal-changelog-header .close { color: white; opacity: 0.8; }
+    .modal-changelog-header .close { color: white; text-shadow: none; opacity: 0.8; }
     .modal-changelog-header .close:hover { opacity: 1; }
     .changelog-paper {
         font-family: 'Nunito', sans-serif; font-size: 0.95rem; line-height: 1.7;
         color: #2d3748; background-color: #ffffff; border: 1px solid #e3e6f0;
-        border-radius: 0.5rem; padding: 1.5rem; box-shadow: inset 0 2px 4px 0 rgba(0,0,0,0.06);
+        border-radius: 0.5rem; padding: 1.5rem; box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
         white-space: pre-wrap; word-wrap: break-word; max-height: 60vh; overflow-y: auto;
     }
     .version-badge { background-color: rgba(255, 255, 255, 0.2); padding: 0.2rem 0.6rem; border-radius: 0.25rem; font-size: 0.85rem; margin-left: 10px; }
@@ -26,7 +26,7 @@
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
             </div>
             <div class="modal-body bg-light">
-                <p class="text-muted small mb-3 ml-1">Daftar perubahan dan perbaikan pada versi ini:</p>
+                <p class="text-muted small mb-3 ml-1">Berikut daftar perubahan pada versi ini:</p>
                 <div class="changelog-paper">{{ .AppChangelog }}</div>
             </div>
             <div class="modal-footer bg-light border-top-0">
@@ -54,14 +54,15 @@ $(document).ready(function() {
     $('#logout-btn').on('click', function(e) {
         e.preventDefault();
         $.ajax({
-            url: '/api/logout', type: 'POST',
+            url: '/api/logout',
+            type: 'POST',
             success: function() { window.location.href = '/login'; },
             error: function() { Swal.fire('Error', 'Gagal logout.', 'error'); }
         });
     });
 
-    // 2. GLOBAL PASSWORD PEEK HANDLER
-    // Script ini otomatis mencari input di sebelah icon mata dan mengubah tipe-nya
+    // 2. Global Password Peek (Intip Password)
+    // Berfungsi otomatis untuk semua input yang punya sibling .password-peek
     $('body').on('click', '.password-peek', function() {
         let $input = $(this).siblings('input');
         if ($input.length > 0) {
@@ -70,8 +71,71 @@ $(document).ready(function() {
             $(this).toggleClass('fa-eye fa-eye-slash');
         }
     });
+
+    // 3. SMART AUTO LOGOUT SYSTEM (Idle Detection)
+    let idleTime = 0;
+    let idleLimit = 15; // Default 15 menit (akan ditimpa config server)
+    
+    // Ambil config limit dari server saat halaman dimuat
+    // Endpoint ini public (authorized)
+    $.ajax({
+        url: '/api/config/limits',
+        method: 'GET',
+        success: function(resp) {
+            if(resp.idle_timeout) {
+                idleLimit = parseInt(resp.idle_timeout);
+                console.log(`Auto Logout Active: Idle Limit = ${idleLimit} menit`);
+                
+                // Mulai Timer: Cek setiap 1 menit (60000 ms)
+                setInterval(timerIncrement, 60000);
+            }
+        }
+    });
+
+    // Reset timer kalau ada aktivitas user
+    $(this).mousemove(function (e) { idleTime = 0; });
+    $(this).keypress(function (e) { idleTime = 0; });
+    $(this).click(function (e) { idleTime = 0; });
+    $(this).scroll(function (e) { idleTime = 0; });
+
+    function timerIncrement() {
+        idleTime = idleTime + 1;
+        
+        // Jika waktu diam melebihi batas
+        if (idleTime >= idleLimit) {
+            // Tampilkan peringatan dan logout
+            doAutoLogout();
+        }
+    }
+
+    function doAutoLogout() {
+        // Mencegah loop alert
+        idleTime = 0; 
+        
+        Swal.fire({
+            title: 'Sesi Berakhir',
+            text: "Anda telah logout otomatis karena tidak ada aktivitas untuk menjaga keamanan.",
+            icon: 'warning',
+            timer: 5000,
+            timerProgressBar: true,
+            showConfirmButton: false,
+            allowOutsideClick: false,
+            allowEscapeKey: false
+        }).then(() => {
+            // Call Logout API
+            $.ajax({
+                url: '/api/logout', 
+                type: 'POST', 
+                complete: function() { 
+                    window.location.href = '/login'; 
+                } 
+            });
+        });
+    }
 });
 </script>
+
 {{template "_updateScript.html" .}}
+
 </body>
 </html>

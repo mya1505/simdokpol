@@ -2,18 +2,22 @@ package controllers
 
 import (
 	"net/http"
-	"os" // <-- FIX B-07: Import os
+	"os"
 	"simdokpol/internal/services"
 
 	"github.com/gin-gonic/gin"
 )
 
 type AuthController struct {
-	service services.AuthService
+	service       services.AuthService
+	configService services.ConfigService // Injected
 }
 
-func NewAuthController(service services.AuthService) *AuthController {
-	return &AuthController{service: service}
+func NewAuthController(service services.AuthService, configService services.ConfigService) *AuthController {
+	return &AuthController{
+		service:       service,
+		configService: configService,
+	}
 }
 
 type LoginRequest struct {
@@ -21,16 +25,6 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required" example:"password123"`
 }
 
-// @Summary Login Pengguna
-// @Description Melakukan otentikasi pengguna berdasarkan NRP dan kata sandi, lalu mengembalikan token JWT dalam HttpOnly cookie.
-// @Tags Authentication
-// @Accept json
-// @Produce json
-// @Param login body LoginRequest true "Data Login Pengguna"
-// @Success 200 {object} map[string]string "Contoh: {\"message\": \"Login berhasil\"}"
-// @Failure 400 {object} map[string]string "Contoh: {\"error\": \"NRP dan Kata Sandi diperlukan\"}"
-// @Failure 401 {object} map[string]string "Contoh: {\"error\": \"NRP atau kata sandi salah\"}"
-// @Router /login [post]
 func (c *AuthController) Login(ctx *gin.Context) {
 	var req LoginRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -44,20 +38,22 @@ func (c *AuthController) Login(ctx *gin.Context) {
 		return
 	}
 
-	// FIX B-07: Cek Environment
-	// Jika APP_ENV=production, cookie harus Secure (HTTPS only)
-	isProduction := os.Getenv("APP_ENV") == "production"
+	// --- LOGIC BARU ---
+	config, _ := c.configService.GetConfig()
+	timeoutSeconds := 28800 // Default 8 jam
+	if config != nil && config.SessionTimeout > 0 {
+		timeoutSeconds = config.SessionTimeout * 60
+	}
+	// ------------------
 
-	// parameter: name, value, maxAge, path, domain, secure, httpOnly
-	ctx.SetCookie("token", token, 3600*24, "/", "", isProduction, true)
+	isProduction := os.Getenv("APP_ENV") == "production"
+	ctx.SetCookie("token", token, timeoutSeconds, "/", "", isProduction, true)
 
 	APIResponse(ctx, http.StatusOK, "Login berhasil", nil)
 }
 
 func (c *AuthController) Logout(ctx *gin.Context) {
-	// FIX B-07: Konsistensi Secure flag saat logout
 	isProduction := os.Getenv("APP_ENV") == "production"
 	ctx.SetCookie("token", "", -1, "/", "", isProduction, true)
-	
 	APIResponse(ctx, http.StatusOK, "Logout berhasil", nil)
 }

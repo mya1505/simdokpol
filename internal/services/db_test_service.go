@@ -25,14 +25,14 @@ func NewDBTestService() DBTestService {
 }
 
 func isSafeHost(host string) error {
-	// Blokir Multicast saja, izinkan LAN/Private IP
+	// Logic security (IP check) - Disederhanakan untuk mengizinkan semua IP
 	ips, err := net.LookupIP(host)
 	if err != nil {
 		return fmt.Errorf("gagal resolve host: %v", err)
 	}
 	for _, ip := range ips {
 		if ip.IsLinkLocalMulticast() {
-			return fmt.Errorf("koneksi ke multicast tidak diizinkan")
+			return fmt.Errorf("koneksi multicast tidak diizinkan")
 		}
 	}
 	return nil
@@ -50,18 +50,40 @@ func (s *dbTestService) TestConnection(req dto.DBTestRequest) error {
 
 	switch req.DBDialect {
 	case "mysql":
-		dsn = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-			req.DBUser, req.DBPass, req.DBHost, req.DBPort, req.DBName)
+		// ✅ PERBAIKAN: Gunakan switch statement untuk SSL mode
+		var tlsOption string
+		switch req.DBSSLMode {
+		case "require":
+			tlsOption = "skip-verify"
+		case "verify-full":
+			tlsOption = "true"
+		default:
+			tlsOption = "false"
+		}
+
+		dsn = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local&tls=%s",
+			req.DBUser, req.DBPass, req.DBHost, req.DBPort, req.DBName, tlsOption)
+		
 		gormDialector = gormmysql.Open(dsn)
+
 	case "postgres":
-		sslMode := req.DBSSLMode
-		if sslMode == "" { sslMode = "disable" }
+		// ✅ PERBAIKAN: Juga gunakan switch untuk konsistensi
+		var sslMode string
+		switch req.DBSSLMode {
+		case "require", "verify-ca", "verify-full":
+			sslMode = req.DBSSLMode
+		default:
+			sslMode = "disable"
+		}
+		
 		dsn = fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=Asia/Jakarta",
 			req.DBHost, req.DBUser, req.DBPass, req.DBName, req.DBPort, sslMode)
 		gormDialector = gormpostgres.Open(dsn)
+		
 	case "sqlite":
 		dsn = "simdokpol.db?_foreign_keys=on"
 		gormDialector = gormsqlite.Open(dsn)
+		
 	default:
 		return fmt.Errorf("dialek database '%s' tidak didukung", req.DBDialect)
 	}
@@ -74,10 +96,17 @@ func (s *dbTestService) TestConnection(req dto.DBTestRequest) error {
 	}
 
 	sqlDB, err := db.DB()
-	if err != nil { return fmt.Errorf("gagal instance DB: %w", err) }
+	if err != nil {
+		return fmt.Errorf("gagal instance sql.DB: %w", err)
+	}
+	defer sqlDB.Close()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := sqlDB.PingContext(ctx); err != nil { return fmt.Errorf("gagal Ping DB: %w", err) }
-	_ = sqlDB.Close()
+
+	if err := sqlDB.PingContext(ctx); err != nil {
+		return fmt.Errorf("gagal Ping DB: %w", err)
+	}
+	
 	return nil
 }

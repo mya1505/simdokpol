@@ -18,42 +18,51 @@ type AuthService interface {
 }
 
 type authService struct {
-	userRepo repositories.UserRepository
+	userRepo      repositories.UserRepository
+	configService ConfigService // Injected
 }
 
-func NewAuthService(userRepo repositories.UserRepository) AuthService {
-	return &authService{userRepo: userRepo}
+func NewAuthService(userRepo repositories.UserRepository, configService ConfigService) AuthService {
+	return &authService{
+		userRepo:      userRepo,
+		configService: configService,
+	}
 }
 
 func (s *authService) Login(nrp string, password string) (string, error) {
-	// 1. Cari pengguna berdasarkan NRP, termasuk yang non-aktif
 	user, err := s.userRepo.FindByNRP(nrp)
 	if err != nil {
-		// Jika tidak ditemukan sama sekali, kembalikan error biasa
 		if err == gorm.ErrRecordNotFound {
 			return "", errors.New("NRP atau kata sandi salah")
 		}
 		return "", err
 	}
 
-	// 2. Periksa apakah akun tersebut non-aktif (soft deleted)
 	if user.DeletedAt.Valid {
-		// --- PERBAIKAN LINTER DI SINI ---
 		return "", errors.New("akun Anda tidak aktif. Silakan hubungi Super Admin")
 	}
 
-	// 3. Jika aktif, lanjutkan verifikasi kata sandi
 	err = bcrypt.CompareHashAndPassword([]byte(user.KataSandi), []byte(password))
 	if err != nil {
 		return "", errors.New("NRP atau kata sandi salah")
 	}
 
-	// 4. Buat token jika semua verifikasi berhasil
+	// --- LOGIC TIMEOUT DINAMIS ---
+	config, _ := s.configService.GetConfig()
+	timeoutMinutes := 480 // Default 8 Jam
+	if config != nil && config.SessionTimeout > 0 {
+		timeoutMinutes = config.SessionTimeout
+	}
+	
+	expirationTime := time.Now().Add(time.Duration(timeoutMinutes) * time.Minute)
+	// -----------------------------
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"userID": user.ID,
 		"role":   user.Peran,
-		"exp":    time.Now().Add(time.Hour * 24).Unix(),
+		"exp":    expirationTime.Unix(),
 	})
+	
 	tokenString, err := token.SignedString(JWTSecretKey)
 	if err != nil {
 		return "", err

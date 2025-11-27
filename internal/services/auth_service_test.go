@@ -2,12 +2,13 @@ package services
 
 import (
 	"errors"
+	"simdokpol/internal/dto" // <-- Import DTO
 	"simdokpol/internal/mocks"
 	"simdokpol/internal/models"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert" // <-- PERBAIKAN TYPO "github.comcom"
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -32,6 +33,9 @@ func TestAuthService_Login(t *testing.T) {
 		Peran:     models.RoleOperator,
 		DeletedAt: gorm.DeletedAt{Time: time.Now(), Valid: true},
 	}
+	
+	// Dummy Config
+	mockAppConfig := &dto.AppConfig{SessionTimeout: 60}
 
 	JWTSecretKey = []byte("test-secret")
 
@@ -39,7 +43,7 @@ func TestAuthService_Login(t *testing.T) {
 		name          string
 		nrp           string
 		password      string
-		setupMock     func(mockRepo *mocks.UserRepository)
+		setupMock     func(mockRepo *mocks.UserRepository, mockConfig *mocks.ConfigService) // <-- Update Signature
 		expectToken   bool
 		expectedError string
 	}{
@@ -47,8 +51,9 @@ func TestAuthService_Login(t *testing.T) {
 			name:        "Login Berhasil",
 			nrp:         "12345",
 			password:    "password123",
-			setupMock: func(mockRepo *mocks.UserRepository) {
+			setupMock: func(mockRepo *mocks.UserRepository, mockConfig *mocks.ConfigService) {
 				mockRepo.On("FindByNRP", "12345").Return(mockUser, nil)
+				mockConfig.On("GetConfig").Return(mockAppConfig, nil) // <-- Mock Config
 			},
 			expectToken:   true,
 			expectedError: "",
@@ -57,7 +62,7 @@ func TestAuthService_Login(t *testing.T) {
 			name:        "Gagal - Kata Sandi Salah",
 			nrp:         "12345",
 			password:    "password-salah",
-			setupMock: func(mockRepo *mocks.UserRepository) {
+			setupMock: func(mockRepo *mocks.UserRepository, mockConfig *mocks.ConfigService) {
 				mockRepo.On("FindByNRP", "12345").Return(mockUser, nil)
 			},
 			expectToken:   false,
@@ -67,7 +72,7 @@ func TestAuthService_Login(t *testing.T) {
 			name:        "Gagal - Pengguna Tidak Ditemukan",
 			nrp:         "00000",
 			password:    "password123",
-			setupMock: func(mockRepo *mocks.UserRepository) {
+			setupMock: func(mockRepo *mocks.UserRepository, mockConfig *mocks.ConfigService) {
 				mockRepo.On("FindByNRP", "00000").Return(nil, gorm.ErrRecordNotFound)
 			},
 			expectToken:   false,
@@ -77,18 +82,17 @@ func TestAuthService_Login(t *testing.T) {
 			name:        "Gagal - Akun Tidak Aktif",
 			nrp:         "54321",
 			password:    "password123",
-			setupMock: func(mockRepo *mocks.UserRepository) {
+			setupMock: func(mockRepo *mocks.UserRepository, mockConfig *mocks.ConfigService) {
 				mockRepo.On("FindByNRP", "54321").Return(mockInactiveUser, nil)
 			},
 			expectToken:   false,
-			// --- PERBAIKAN LINTER MISMATCH DI SINI ---
 			expectedError: "akun Anda tidak aktif. Silakan hubungi Super Admin",
 		},
 		{
 			name:        "Gagal - Error Database Lainnya",
 			nrp:         "12345",
 			password:    "password123",
-			setupMock: func(mockRepo *mocks.UserRepository) {
+			setupMock: func(mockRepo *mocks.UserRepository, mockConfig *mocks.ConfigService) {
 				mockRepo.On("FindByNRP", "12345").Return(nil, errors.New("koneksi database error"))
 			},
 			expectToken:   false,
@@ -99,8 +103,12 @@ func TestAuthService_Login(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			mockUserRepo := new(mocks.UserRepository)
-			tc.setupMock(mockUserRepo)
-			authService := NewAuthService(mockUserRepo)
+			mockConfigSvc := new(mocks.ConfigService) // <-- Init Mock Config
+			
+			tc.setupMock(mockUserRepo, mockConfigSvc)
+			
+			// Inject 2 dependency
+			authService := NewAuthService(mockUserRepo, mockConfigSvc) 
 			token, err := authService.Login(tc.nrp, tc.password)
 
 			if tc.expectToken {
@@ -113,6 +121,7 @@ func TestAuthService_Login(t *testing.T) {
 			}
 			
 			mockUserRepo.AssertExpectations(t)
+			mockConfigSvc.AssertExpectations(t)
 		})
 	}
 }

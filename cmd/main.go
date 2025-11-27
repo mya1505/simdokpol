@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -29,8 +30,8 @@ import (
 	"github.com/getlantern/systray"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/gzip"
-	"github.com/joho/godotenv"
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
@@ -48,7 +49,6 @@ func main() {
 	setupEnvironment()
 	setupLogging()
 	
-	// --- DEBUGGING PATH ---
 	appData := utils.GetAppDataDir()
 	log.Println("==========================================")
 	log.Printf("🚀 SIMDOKPOL STARTUP - v%s", version)
@@ -59,16 +59,16 @@ func main() {
 
 	db, err := setupDatabase(cfg)
 	if err != nil {
-		msg := fmt.Sprintf("Gagal koneksi database: %v", err)
+		msg := fmt.Sprintf("FATAL: Gagal koneksi database: %v", err)
 		_ = beeep.Alert("SIMDOKPOL Error", msg, "")
-		log.Fatal(msg)
+		log.Fatal(msg) // ✅ PERBAIKAN: gunakan log.Fatal bukan log.Fatalf
 	}
 
 	if cfg.DBDialect == "sqlite" {
 		seedDefaultTemplates(db)
 	}
 
-	// --- SETUP DEPENDENCY (Repo & Service) ---
+	// --- REPOSITORIES ---
 	userRepo := repositories.NewUserRepository(db)
 	docRepo := repositories.NewLostDocumentRepository(db)
 	residentRepo := repositories.NewResidentRepository(db)
@@ -77,11 +77,16 @@ func main() {
 	licenseRepo := repositories.NewLicenseRepository(db)
 	itemTemplateRepo := repositories.NewItemTemplateRepository(db)
 
+	// --- SERVICES ---
 	auditService := services.NewAuditLogService(auditRepo)
 	configService := services.NewConfigService(configRepo)
 	backupService := services.NewBackupService(db, cfg, configService, auditService)
 	licenseService := services.NewLicenseService(licenseRepo, configService, auditService)
 	userService := services.NewUserService(userRepo, auditService, cfg)
+	
+	// FIX: Inject ConfigService ke Auth (untuk timeout session)
+	authService := services.NewAuthService(userRepo, configService)
+	
 	migrationService := services.NewDataMigrationService(db, auditService, configService)
 
 	exePath, _ := os.Executable()
@@ -93,9 +98,11 @@ func main() {
 	itemTemplateService := services.NewItemTemplateService(itemTemplateRepo)
 	dbTestService := services.NewDBTestService()
 	updateService := services.NewUpdateService()
-	authService := services.NewAuthService(userRepo)
 
-	authController := controllers.NewAuthController(authService)
+	// --- CONTROLLERS ---
+	// FIX: Inject ConfigService ke AuthController (untuk cookie max age)
+	authController := controllers.NewAuthController(authService, configService)
+	
 	userController := controllers.NewUserController(userService)
 	docController := controllers.NewLostDocumentController(docService)
 	dashboardController := controllers.NewDashboardController(dashboardService)
@@ -145,6 +152,10 @@ func main() {
 	authorized.GET("/", func(c *gin.Context) {
 		c.HTML(200, "dashboard.html", gin.H{"Title": "Beranda", "CurrentUser": c.MustGet("currentUser"), "Config": mustGetConfig(configService)})
 	})
+	
+	// FIX: Route Limit Config (Public untuk Frontend)
+	authorized.GET("/api/config/limits", configController.GetLimits)
+
 	authorized.GET("/api/stats", dashboardController.GetStats)
 	authorized.GET("/api/stats/monthly-issuance", dashboardController.GetMonthlyChart)
 	authorized.GET("/api/stats/item-composition", dashboardController.GetItemCompositionChart)
@@ -274,24 +285,25 @@ func main() {
 
 	srv := &http.Server{Addr: ":" + port, Handler: r}
 
-	// --- HTTPS LOGIC START ---
 	isHTTPS := os.Getenv("ENABLE_HTTPS") == "true"
 	log.Printf("🔍 Konfigurasi HTTPS: %v", isHTTPS)
 	
-	// FIX: Selalu panggil EnsureCertificates untuk debugging
-	// Biar kita tau filenya beneran kebuat atau enggak
-	certFile, keyFile, errCert := utils.EnsureCertificates()
-	if errCert != nil {
-		log.Printf("⚠️  ERROR CERT: Gagal membuat sertifikat: %v", errCert)
-		isHTTPS = false // Fallback
-	} else {
-		log.Printf("✅ Cert Path: %s", certFile)
-		log.Printf("✅ Key Path : %s", keyFile)
+	var certFile, keyFile string
+	var errHTTPS error
+
+	if isHTTPS {
+		certFile, keyFile, errHTTPS = utils.EnsureCertificates()
+		if errHTTPS != nil {
+			log.Printf("⚠️ ERROR CERT: Gagal membuat sertifikat: %v", errHTTPS)
+			isHTTPS = false
+		} else {
+			log.Printf("✅ Cert Path: %s", certFile)
+		}
 	}
 
 	go func() {
 		if isHTTPS {
-			log.Printf("🔒 Server berjalan di port %s (HTTPS Secure)", port)
+			log.Printf("🔒 Server berjalan di port %s (HTTPS Enabled)", port)
 			if err := srv.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
 				log.Fatalf("ListenTLS error: %s\n", err)
 			}
@@ -302,7 +314,6 @@ func main() {
 			}
 		}
 	}()
-	// --- HTTPS LOGIC END ---
 
 	quitChan := make(chan os.Signal, 1)
 	signal.Notify(quitChan, syscall.SIGINT, syscall.SIGTERM)
@@ -317,7 +328,6 @@ func main() {
 	})
 }
 
-// ... (Sisa helper functions sama seperti sebelumnya) ...
 func setupDatabase(cfg *config.Config) (*gorm.DB, error) {
 	var db *gorm.DB
 	var err error
@@ -325,16 +335,27 @@ func setupDatabase(cfg *config.Config) (*gorm.DB, error) {
 
 	switch cfg.DBDialect {
 	case "mysql":
-		dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local", cfg.DBUser, cfg.DBPass, cfg.DBHost, cfg.DBPort, cfg.DBName)
+		// FIX: Support SSL di MySQL
+		tlsOption := "false"
+		if cfg.DBSSLMode == "require" {
+			tlsOption = "skip-verify"
+		}
+		if cfg.DBSSLMode == "verify-full" {
+			tlsOption = "true"
+		}
+		
+		dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local&tls=%s", 
+			cfg.DBUser, cfg.DBPass, cfg.DBHost, cfg.DBPort, cfg.DBName, tlsOption)
 		db, err = gorm.Open(mysql.Open(dsn), gormConfig)
 	case "postgres":
 		sslMode := cfg.DBSSLMode
 		if sslMode == "" {
 			sslMode = "disable"
 		}
-		dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=Asia/Jakarta", cfg.DBHost, cfg.DBUser, cfg.DBPass, cfg.DBName, cfg.DBPort, sslMode)
+		dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=Asia/Jakarta", 
+			cfg.DBHost, cfg.DBUser, cfg.DBPass, cfg.DBName, cfg.DBPort, sslMode)
 		db, err = gorm.Open(postgres.Open(dsn), gormConfig)
-	default: // sqlite
+	default: 
 		db, err = gorm.Open(sqlite.Open(cfg.DBDSN), gormConfig)
 		if err == nil {
 			db.Exec("PRAGMA foreign_keys = ON")
@@ -344,7 +365,12 @@ func setupDatabase(cfg *config.Config) (*gorm.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	sqlDB, _ := db.DB()
+	
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, err
+	}
+	
 	sqlDB.SetMaxIdleConns(10)
 	sqlDB.SetMaxOpenConns(100)
 	sqlDB.SetConnMaxLifetime(time.Hour)
@@ -365,58 +391,89 @@ func seedDefaultTemplates(db *gorm.DB) {
 	if count > 0 {
 		return
 	}
+	
 	log.Println("🔹 Seeding default templates...")
 	templates := []models.ItemTemplate{
 		{
-			NamaBarang: "KTP", Urutan: 1, IsActive: true,
+			NamaBarang: "KTP", 
+			Urutan: 1, 
+			IsActive: true,
 			FieldsConfig: models.JSONFieldArray{
 				{Label: "NIK", Type: "text", DataLabel: "NIK", RequiredLength: 16, IsNumeric: true},
 			},
 		},
 		{
-			NamaBarang: "SIM", Urutan: 2, IsActive: true,
+			NamaBarang: "SIM", 
+			Urutan: 2, 
+			IsActive: true, 
 			FieldsConfig: models.JSONFieldArray{
-				{Label: "Golongan SIM", Type: "select", DataLabel: "Gol", Options: []string{"A", "C", "B I", "B II", "D"}},
+				{Label: "Golongan", Type: "select", DataLabel: "Gol", Options: []string{"A", "C", "B I", "B II", "D"}},
 				{Label: "Nomor SIM", Type: "text", DataLabel: "No. SIM", MinLength: 12, IsNumeric: true},
 			},
 		},
 		{
-			NamaBarang: "STNK", Urutan: 3, IsActive: true,
-			FieldsConfig: models.JSONFieldArray{
-				{Label: "Nomor Polisi", Type: "text", DataLabel: "No. Pol", MaxLength: 10, IsUppercase: true},
-				{Label: "Nomor Rangka", Type: "text", DataLabel: "No. Rangka", RequiredLength: 17, IsUppercase: true},
-				{Label: "Nomor Mesin", Type: "text", DataLabel: "No. Mesin", MaxLength: 15, IsUppercase: true},
-			},
+			NamaBarang: "STNK", 
+			Urutan: 3, 
+			IsActive: true, 
+			FieldsConfig: models.JSONFieldArray{},
 		},
 		{
-			NamaBarang: "BPKB", Urutan: 4, IsActive: true,
-			FieldsConfig: models.JSONFieldArray{
-				{Label: "Nomor BPKB", Type: "text", DataLabel: "No. BPKB", RequiredLength: 9, IsUppercase: true},
-				{Label: "Atas Nama", Type: "text", DataLabel: "a.n.", IsTitlecase: true},
-			},
+			NamaBarang: "BPKB", 
+			Urutan: 4, 
+			IsActive: true, 
+			FieldsConfig: models.JSONFieldArray{},
 		},
 		{
-			NamaBarang: "ATM", Urutan: 5, IsActive: true,
-			FieldsConfig: models.JSONFieldArray{
-				{Label: "Nama Bank", Type: "select", DataLabel: "Bank", Options: []string{"BRI", "BCA", "Mandiri", "BNI", "Lainnya"}},
-				{Label: "Nomor Rekening", Type: "text", DataLabel: "No. Rek", MaxLength: 20, IsNumeric: true},
-			},
+			NamaBarang: "ATM", 
+			Urutan: 5, 
+			IsActive: true, 
+			FieldsConfig: models.JSONFieldArray{},
 		},
-		{NamaBarang: "LAINNYA", Urutan: 99, IsActive: true, FieldsConfig: models.JSONFieldArray{}},
+		{
+			NamaBarang: "LAINNYA", 
+			Urutan: 99, 
+			IsActive: true, 
+			FieldsConfig: models.JSONFieldArray{},
+		},
 	}
-	db.Create(&templates)
+	
+	if err := db.Create(&templates).Error; err != nil {
+		log.Printf("⚠️ Gagal seeding templates: %v", err)
+	} else {
+		log.Println("✅ Default templates berhasil di-seed")
+	}
 }
 
 func setupEnvironment() {
 	envPath := filepath.Join(utils.GetAppDataDir(), ".env")
-	_ = godotenv.Load(envPath)
-	_ = godotenv.Load()
+	if err := godotenv.Load(envPath); err != nil {
+		log.Printf("⚠️ Tidak bisa load .env dari AppData: %v", err)
+	}
+	
+	// Fallback ke .env di current directory
+	if err := godotenv.Load(); err != nil {
+		log.Printf("⚠️ Tidak bisa load .env dari current directory: %v", err)
+	}
 }
 
 func setupLogging() {
 	logPath := filepath.Join(utils.GetAppDataDir(), "logs", "simdokpol.log")
-	_ = os.MkdirAll(filepath.Dir(logPath), 0755)
-	log.SetOutput(&lumberjack.Logger{Filename: logPath, MaxSize: 10, MaxBackups: 3, MaxAge: 28, Compress: true})
+	if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
+		log.Printf("⚠️ Gagal buat directory logs: %v", err)
+	}
+	
+	fileLogger := &lumberjack.Logger{
+		Filename:   logPath,
+		MaxSize:    10, // MB
+		MaxBackups: 3,
+		MaxAge:     28, // days
+		Compress:   true,
+	}
+	
+	// Dual Log (File + Terminal)
+	mw := io.MultiWriter(os.Stdout, fileLogger)
+	log.SetOutput(mw)
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 }
 
 func onReady(isHTTPS bool) {
@@ -427,7 +484,7 @@ func onReady(isHTTPS bool) {
 		systray.SetTitle("SIMDOKPOL")
 	}
 	systray.SetTooltip("SIMDOKPOL Berjalan")
-
+	
 	mOpen := systray.AddMenuItem("Buka Aplikasi", "Buka di Browser")
 	mVhost := systray.AddMenuItem("Setup Domain (simdokpol.local)", "Konfigurasi Virtual Host")
 	systray.AddSeparator()
@@ -444,16 +501,18 @@ func onReady(isHTTPS bool) {
 		if port == "" {
 			port = "8080"
 		}
+		
 		vhost := utils.NewVHostSetup()
 		isVhost, _ := vhost.IsSetup()
-		
 		url := fmt.Sprintf("%s://localhost:%s", protocol, port)
+		
 		if isVhost {
 			url = vhost.GetURL(port)
 			if isHTTPS {
 				url = strings.Replace(url, "http://", "https://", 1)
 			}
 		}
+		
 		openBrowser(url)
 	}()
 
@@ -466,13 +525,15 @@ func onReady(isHTTPS bool) {
 					port = "8080"
 				}
 				openBrowser(fmt.Sprintf("%s://localhost:%s", protocol, port))
+				
 			case <-mVhost.ClickedCh:
 				vhost := utils.NewVHostSetup()
 				if err := vhost.Setup(); err != nil {
-					_ = beeep.Alert("Gagal", "Butuh hak akses Administrator.", "")
+					_ = beeep.Alert("Gagal", "Butuh Administrator.", "")
 				} else {
 					_ = beeep.Notify("Sukses", "Domain dikonfigurasi!", "")
 				}
+				
 			case <-mQuit.ClickedCh:
 				systray.Quit()
 			}
@@ -489,10 +550,16 @@ func openBrowser(url string) {
 		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
 	case "darwin":
 		err = exec.Command("open", url).Start()
+	default:
+		err = fmt.Errorf("sistem operasi tidak didukung: %s", runtime.GOOS)
 	}
+	
 	if err != nil {
 		log.Printf("Gagal buka browser: %v", err)
 	}
 }
 
-func mustGetConfig(s services.ConfigService) *dto.AppConfig { c, _ := s.GetConfig(); return c }
+func mustGetConfig(s services.ConfigService) *dto.AppConfig {
+	c, _ := s.GetConfig()
+	return c
+}
