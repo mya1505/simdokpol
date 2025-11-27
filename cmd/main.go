@@ -47,7 +47,13 @@ var (
 func main() {
 	setupEnvironment()
 	setupLogging()
-	log.Println("=== MEMULAI SIMDOKPOL ===")
+	
+	// --- DEBUGGING PATH ---
+	appData := utils.GetAppDataDir()
+	log.Println("==========================================")
+	log.Printf("🚀 SIMDOKPOL STARTUP - v%s", version)
+	log.Printf("📂 App Data Dir: %s", appData)
+	log.Println("==========================================")
 
 	cfg := config.LoadConfig()
 
@@ -62,7 +68,7 @@ func main() {
 		seedDefaultTemplates(db)
 	}
 
-	// --- WIRING Dependency Injection ---
+	// --- SETUP DEPENDENCY (Repo & Service) ---
 	userRepo := repositories.NewUserRepository(db)
 	docRepo := repositories.NewLostDocumentRepository(db)
 	residentRepo := repositories.NewResidentRepository(db)
@@ -76,7 +82,7 @@ func main() {
 	backupService := services.NewBackupService(db, cfg, configService, auditService)
 	licenseService := services.NewLicenseService(licenseRepo, configService, auditService)
 	userService := services.NewUserService(userRepo, auditService, cfg)
-	migrationService := services.NewDataMigrationService(db, auditService, configService) // Penting
+	migrationService := services.NewDataMigrationService(db, auditService, configService)
 
 	exePath, _ := os.Executable()
 	exeDir := filepath.Dir(exePath)
@@ -270,16 +276,17 @@ func main() {
 
 	// --- HTTPS LOGIC START ---
 	isHTTPS := os.Getenv("ENABLE_HTTPS") == "true"
-	var certFile, keyFile string
-	var errHTTPS error
-
-	// Cek dulu sertifikatnya bisa dibuat/diakses nggak
-	if isHTTPS {
-		certFile, keyFile, errHTTPS = utils.EnsureCertificates()
-		if errHTTPS != nil {
-			log.Printf("⚠️ WARNING: Gagal setup HTTPS (%v). Fallback ke HTTP.", errHTTPS)
-			isHTTPS = false // Auto Fallback
-		}
+	log.Printf("🔍 Konfigurasi HTTPS: %v", isHTTPS)
+	
+	// FIX: Selalu panggil EnsureCertificates untuk debugging
+	// Biar kita tau filenya beneran kebuat atau enggak
+	certFile, keyFile, errCert := utils.EnsureCertificates()
+	if errCert != nil {
+		log.Printf("⚠️  ERROR CERT: Gagal membuat sertifikat: %v", errCert)
+		isHTTPS = false // Fallback
+	} else {
+		log.Printf("✅ Cert Path: %s", certFile)
+		log.Printf("✅ Key Path : %s", keyFile)
 	}
 
 	go func() {
@@ -310,6 +317,7 @@ func main() {
 	})
 }
 
+// ... (Sisa helper functions sama seperti sebelumnya) ...
 func setupDatabase(cfg *config.Config) (*gorm.DB, error) {
 	var db *gorm.DB
 	var err error
@@ -438,7 +446,7 @@ func onReady(isHTTPS bool) {
 		}
 		vhost := utils.NewVHostSetup()
 		isVhost, _ := vhost.IsSetup()
-
+		
 		url := fmt.Sprintf("%s://localhost:%s", protocol, port)
 		if isVhost {
 			url = vhost.GetURL(port)
