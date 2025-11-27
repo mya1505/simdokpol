@@ -1,4 +1,4 @@
-# Berkas biner dan hasil kompilasi
+# --- Binary & Build Results ---
 *.exe
 *.exe~
 *.dll
@@ -6,18 +6,31 @@
 *.dylib
 simdokpol
 
-# Berkas basis data lokal
+# --- Build Output Directory (PENTING) ---
+build/
+release/
+dist/
+
+# --- Local Database ---
 *.db
 *.db-journal
+*.sqlite
+*.sqlite3
 
-# Berkas log dan environment
+# --- Logs & Environment ---
 *.log
 .env
+.env.local
 
-# Direktori dependensi Go
+# --- Go Dependencies ---
 vendor/
-# TAPI, JANGAN abaikan folder vendor untuk aset frontend kita
+# KECUALI folder vendor frontend yang kita butuhin
 !web/static/vendor/
 
-# Direktori temporary Air
+# --- Temporary Files ---
 tmp/
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+coverage.out
