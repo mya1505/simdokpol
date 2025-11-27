@@ -17,7 +17,7 @@ import (
 
 	"simdokpol/internal/config"
 	"simdokpol/internal/controllers"
-	"simdokpol/internal/dto" // Tambahkan ini
+	"simdokpol/internal/dto"
 	"simdokpol/internal/middleware"
 	"simdokpol/internal/models"
 	"simdokpol/internal/repositories"
@@ -30,7 +30,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv" // Tambahkan ini
+	"github.com/joho/godotenv"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
@@ -58,7 +58,10 @@ func main() {
 		log.Fatal(msg)
 	}
 
-	// --- WIRING (Dependency Injection) ---
+	if cfg.DBDialect == "sqlite" {
+		seedDefaultTemplates(db)
+	}
+
 	userRepo := repositories.NewUserRepository(db)
 	docRepo := repositories.NewLostDocumentRepository(db)
 	residentRepo := repositories.NewResidentRepository(db)
@@ -119,7 +122,6 @@ func main() {
 		c.Next()
 	})
 
-	// --- ROUTES ---
 	r.GET("/login", func(c *gin.Context) { c.HTML(200, "login.html", gin.H{"Title": "Login"}) })
 	r.POST("/api/login", middleware.LoginRateLimiter.GetLimiterMiddleware(), authController.Login)
 	r.POST("/api/logout", authController.Logout)
@@ -182,6 +184,10 @@ func main() {
 	authorized.GET("/search", func(c *gin.Context) {
 		c.HTML(200, "search_results.html", gin.H{"Title": "Hasil Pencarian", "CurrentUser": c.MustGet("currentUser")})
 	})
+
+	// --- FIX BUG 1: Route ini dipindah ke sini (Authorized) agar Operator bisa akses ---
+	authorized.GET("/api/item-templates/active", itemTemplateController.FindAllActive)
+	// ---------------------------------------------------------------------------------
 
 	authorized.GET("/profile", func(c *gin.Context) {
 		c.HTML(200, "profile.html", gin.H{"Title": "Profil Saya", "CurrentUser": c.MustGet("currentUser")})
@@ -250,7 +256,7 @@ func main() {
 		c.HTML(200, "item_template_form.html", gin.H{"Title": "Edit Template", "CurrentUser": c.MustGet("currentUser"), "IsEdit": true, "TemplateID": c.Param("id")})
 	})
 	pro.GET("/api/item-templates", itemTemplateController.FindAll)
-	pro.GET("/api/item-templates/active", itemTemplateController.FindAllActive)
+	// FindAllActive sudah dipindah ke atas
 	pro.GET("/api/item-templates/:id", itemTemplateController.FindByID)
 	pro.POST("/api/item-templates", itemTemplateController.Create)
 	pro.PUT("/api/item-templates/:id", itemTemplateController.Update)
@@ -299,7 +305,7 @@ func setupDatabase(cfg *config.Config) (*gorm.DB, error) {
 		}
 		dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=Asia/Jakarta", cfg.DBHost, cfg.DBUser, cfg.DBPass, cfg.DBName, cfg.DBPort, sslMode)
 		db, err = gorm.Open(postgres.Open(dsn), gormConfig)
-	default: // sqlite
+	default:
 		db, err = gorm.Open(sqlite.Open(cfg.DBDSN), gormConfig)
 		if err == nil {
 			db.Exec("PRAGMA foreign_keys = ON")
@@ -319,7 +325,6 @@ func setupDatabase(cfg *config.Config) (*gorm.DB, error) {
 		if err != nil {
 			return nil, fmt.Errorf("migrasi gagal: %w", err)
 		}
-		// Panggil seed template
 		seedDefaultTemplates(db)
 	}
 	return db, nil

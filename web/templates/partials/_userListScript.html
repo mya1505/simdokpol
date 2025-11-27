@@ -10,27 +10,52 @@ $(document).ready(function() {
 
         usersTable = $('#usersTable').DataTable({
             "processing": true,
-            "serverSide": false,
+            "serverSide": true, // <-- AKTIFKAN SERVER SIDE
             "ajax": {
-                "url": `/api/users?status=${status}`,
+                "url": "/api/users", // URL API
                 "type": "GET",
-                "dataSrc": ""
+                "data": function(d) {
+                    // Kirim parameter status filter tambahan
+                    d.status = status;
+                },
+                "error": function(xhr, error, code) {
+                    console.error("DataTables Error:", error);
+                    $('#usersTable tbody').html('<tr><td colspan="8" class="text-center text-danger">Gagal memuat data dari server.</td></tr>');
+                    $("#usersTable_processing").css("display", "none");
+                }
             },
             "columns": [
-                { "data": null, "render": (data, type, row, meta) => meta.row + 1 },
-                { "data": "nama_lengkap" },
-                { "data": "nrp" },
-                { "data": "pangkat" },
-                { "data": "jabatan" },
-                { "data": "regu", "render": (data) => data || '-' },
-                { "data": "peran", "render": (data) => `<span class="badge badge-info">${data}</span>` },
+                { 
+                    "data": null, 
+                    "orderable": false,
+                    "render": function (data, type, row, meta) {
+                        // Index Server-Side
+                        return meta.row + meta.settings._iDisplayStart + 1;
+                    }
+                },
+                { "data": "nama_lengkap", "name": "nama_lengkap" },
+                { "data": "nrp", "name": "nrp" },
+                { "data": "pangkat", "name": "pangkat" },
+                { "data": "jabatan", "name": "jabatan" },
+                { "data": "regu", "render": (data) => data || '-', "orderable": false },
+                { 
+                    "data": "peran", 
+                    "name": "peran",
+                    "render": function(data) {
+                        let badgeClass = data === 'SUPER_ADMIN' ? 'badge-danger' : 'badge-info';
+                        return `<span class="badge ${badgeClass}">${data}</span>`;
+                    }
+                },
                 { 
                     "data": "id",
+                    "orderable": false,
                     "render": function(data, type, row) {
-                        // --- PERUBAHAN: Membungkus caption dengan span ---
                         let editButton = `<a href="/users/${data}/edit" class="btn btn-warning btn-sm" title="Edit"><i class="fas fa-edit"></i><span class="btn-caption">Edit</span></a>`;
                         let actionButton;
 
+                        // Cegah nonaktifkan diri sendiri (Basic check di frontend)
+                        // Backend juga harus handle ini sebenarnya
+                        
                         if (status === 'active') {
                             actionButton = `<button type="button" class="btn btn-danger btn-sm deactivate-user-btn" data-id="${data}" data-name="${row.nama_lengkap}" title="Nonaktifkan"><i class="fas fa-user-slash"></i><span class="btn-caption">Nonaktifkan</span></button>`;
                         } else {
@@ -41,21 +66,23 @@ $(document).ready(function() {
                 }
             ],
             "language": { "url": "/static/vendor/datatables/Indonesian.json" },
-            // --- PERUBAHAN: Menghapus pengaturan lebar kolom ---
-            "columnDefs": [ 
-                { "orderable": false, "targets": [0, 7] }
-            ],
+            "order": [[ 1, "asc" ]], // Default sort by Nama Lengkap
+            "pageLength": 10,
+            "lengthMenu": [[10, 25, 50, 100], [10, 25, 50, 100]]
         });
     }
 
+    // Handler Tab Filter (Active/Inactive)
     $('a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
         let target = $(e.target).attr("href");
         currentStatusFilter = (target === '#active') ? 'active' : 'inactive';
         loadUsersTable(currentStatusFilter);
     });
 
+    // Init Table
     loadUsersTable(currentStatusFilter);
 
+    // Handler Deactivate
     $('#usersTable tbody').on('click', '.deactivate-user-btn', function() {
         const userId = $(this).data('id');
         const userName = $(this).data('name');
@@ -75,16 +102,18 @@ $(document).ready(function() {
                     method: 'DELETE',
                     success: function(response) {
                         Swal.fire('Berhasil!', 'Pengguna telah dinonaktifkan.', 'success');
-                        loadUsersTable(currentStatusFilter);
+                        usersTable.ajax.reload(null, false); // Reload tanpa reset paging
                     },
                     error: function(jqXHR) {
-                        Swal.fire('Gagal', 'Gagal menonaktifkan pengguna.', 'error');
+                        const msg = jqXHR.responseJSON ? jqXHR.responseJSON.error : 'Gagal.';
+                        Swal.fire('Gagal', msg, 'error');
                     }
                 });
             }
         });
     });
 
+    // Handler Activate
     $('#usersTable tbody').on('click', '.activate-user-btn', function() {
         const userId = $(this).data('id');
         const userName = $(this).data('name');
@@ -104,10 +133,11 @@ $(document).ready(function() {
                     method: 'POST',
                     success: function(response) {
                         Swal.fire('Berhasil!', 'Pengguna telah diaktifkan kembali.', 'success');
-                        loadUsersTable(currentStatusFilter);
+                        usersTable.ajax.reload(null, false);
                     },
                     error: function(jqXHR) {
-                        Swal.fire('Gagal', 'Gagal mengaktifkan pengguna.', 'error');
+                         const msg = jqXHR.responseJSON ? jqXHR.responseJSON.error : 'Gagal.';
+                         Swal.fire('Gagal', msg, 'error');
                     }
                 });
             }

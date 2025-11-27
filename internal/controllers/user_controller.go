@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"simdokpol/internal/dto"
 	"simdokpol/internal/models"
 	"simdokpol/internal/services"
 	"strconv"
@@ -238,15 +239,32 @@ func (c *UserController) Activate(ctx *gin.Context) {
 // @Failure 500 {object} map[string]string "Error: Gagal mengambil data pengguna"
 // @Security BearerAuth
 // @Router /users [get]
+// @Summary Mendapatkan Semua Pengguna (Server-Side Paging)
+// @Router /users [get]
 func (c *UserController) FindAll(ctx *gin.Context) {
+	var req dto.DataTableRequest
+	// Bind query params dari DataTables
+	if err := ctx.ShouldBindQuery(&req); err != nil {
+		// Defaults
+		req.Draw = 1
+		req.Start = 0
+		req.Length = 10
+	}
+
 	statusFilter := ctx.DefaultQuery("status", "active")
-	users, err := c.userService.FindAll(statusFilter)
+
+	// Panggil Service Paging
+	response, err := c.userService.GetUsersPaged(req, statusFilter)
 	if err != nil {
-		log.Printf("ERROR: Gagal mengambil data semua pengguna: %v", err)
-		APIError(ctx, http.StatusInternalServerError, "Gagal mengambil data pengguna.")
+		log.Printf("ERROR: Gagal mengambil data pengguna: %v", err)
+		// Return JSON error yang valid untuk DataTables
+		ctx.JSON(http.StatusInternalServerError, dto.DataTableResponse{
+			Error: "Gagal memuat data: " + err.Error(),
+		})
 		return
 	}
-	ctx.JSON(http.StatusOK, users)
+
+	ctx.JSON(http.StatusOK, response)
 }
 
 func (c *UserController) FindByID(ctx *gin.Context) {

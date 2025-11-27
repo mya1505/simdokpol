@@ -1,13 +1,16 @@
 package repositories
 
 import (
+	"fmt"
+	"simdokpol/internal/dto"
 	"simdokpol/internal/models"
 	"gorm.io/gorm"
 )
 
 type UserRepository interface {
 	Create(user *models.User) error
-	FindAll(statusFilter string) ([]models.User, error)
+	// Update: Method lama FindAll diganti/dilengkapi dengan Paged
+	FindAllPaged(req dto.DataTableRequest, statusFilter string) ([]models.User, int64, int64, error)
 	FindByID(id uint) (*models.User, error)
 	FindByNRP(nrp string) (*models.User, error)
 	FindOperators() ([]models.User, error)
@@ -29,15 +32,45 @@ func (r *userRepository) Create(user *models.User) error {
 	return r.db.Create(user).Error
 }
 
-func (r *userRepository) FindAll(statusFilter string) ([]models.User, error) {
+// --- IMPLEMENTASI SERVER-SIDE PAGING ---
+func (r *userRepository) FindAllPaged(req dto.DataTableRequest, statusFilter string) ([]models.User, int64, int64, error) {
 	var users []models.User
-	db := r.db.Order("nama_lengkap asc")
+	var total, filtered int64
+
+	// 1. Base Query (Filter Status Aktif/Non-Aktif)
+	db := r.db.Model(&models.User{})
 	if statusFilter == "inactive" {
 		db = db.Unscoped().Where("deleted_at IS NOT NULL")
+	} else {
+		// Default GORM sudah filter deleted_at IS NULL, tapi kita eksplisit biar jelas
+		db = db.Where("deleted_at IS NULL")
 	}
-	err := db.Find(&users).Error
-	return users, err
+
+	// Hitung Total (Sebelum Search)
+	db.Count(&total)
+
+	// 2. Filter Pencarian Global (NRP, Nama, Jabatan, Pangkat)
+	if req.Search != "" {
+		search := fmt.Sprintf("%%%s%%", req.Search)
+		db = db.Where(
+			"nama_lengkap LIKE ? OR nrp LIKE ? OR jabatan LIKE ? OR pangkat LIKE ?", 
+			search, search, search, search,
+		)
+	}
+	
+	// Hitung Total Setelah Filter
+	db.Count(&filtered)
+
+	// 3. Paging & Ordering
+	// Default sort by nama_lengkap asc kalau user gak klik sort
+	err := db.Order("nama_lengkap asc").
+		Limit(req.Length).
+		Offset(req.Start).
+		Find(&users).Error
+
+	return users, total, filtered, err
 }
+// ----------------------------------------
 
 func (r *userRepository) FindByID(id uint) (*models.User, error) {
 	var user models.User
@@ -49,7 +82,6 @@ func (r *userRepository) FindByID(id uint) (*models.User, error) {
 
 func (r *userRepository) FindByNRP(nrp string) (*models.User, error) {
 	var user models.User
-	// Gunakan Unscoped() agar bisa menemukan pengguna yang sudah di-soft delete
 	if err := r.db.Unscoped().Where("nrp = ?", nrp).First(&user).Error; err != nil {
 		return nil, err
 	}

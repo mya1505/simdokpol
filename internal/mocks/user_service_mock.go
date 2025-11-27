@@ -2,6 +2,7 @@
 package mocks
 
 import (
+	"simdokpol/internal/dto" // <-- Pastikan import DTO
 	"simdokpol/internal/models"
 
 	"github.com/stretchr/testify/mock"
@@ -12,13 +13,11 @@ type UserService struct {
 	mock.Mock
 }
 
-// Create mock
 func (m *UserService) Create(user *models.User, actorID uint) error {
 	args := m.Called(user, actorID)
 	return args.Error(0)
 }
 
-// UpdateProfile mock
 func (m *UserService) UpdateProfile(userID uint, user *models.User) (*models.User, error) {
 	args := m.Called(userID, user)
 	if u := args.Get(0); u != nil {
@@ -29,8 +28,6 @@ func (m *UserService) UpdateProfile(userID uint, user *models.User) (*models.Use
 	return nil, args.Error(1)
 }
 
-// --- METHOD YANG HILANG DITAMBAHKAN DI BAWAH ---
-
 func (m *UserService) FindAll(statusFilter string) ([]models.User, error) {
 	args := m.Called(statusFilter)
 	if u := args.Get(0); u != nil {
@@ -40,6 +37,16 @@ func (m *UserService) FindAll(statusFilter string) ([]models.User, error) {
 	}
 	return nil, args.Error(1)
 }
+
+// --- METHOD BARU (FIX ERROR) ---
+func (m *UserService) GetUsersPaged(req dto.DataTableRequest, statusFilter string) (*dto.DataTableResponse, error) {
+	args := m.Called(req, statusFilter)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*dto.DataTableResponse), args.Error(1)
+}
+// -------------------------------
 
 func (m *UserService) FindByID(id uint) (*models.User, error) {
 	args := m.Called(id)

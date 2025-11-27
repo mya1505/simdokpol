@@ -10,28 +10,29 @@ import (
 	"strings"
 )
 
-// PASTIKAN KEY INI SAMA PERSIS DENGAN DI license_service.go
-const appSecretKey = "GANTI_STRING_INI_DENGAN_KATA_SANDI_RAHASIA_YANG_PANJANG_DAN_RUMIT_12345"
+// FIX: Gunakan 'var' agar bisa di-inject via -ldflags di Makefile
+var appSecretKey = "DEFAULT_DEV_KEY_JANGAN_DIPAKAI"
 
 func main() {
 	reader := bufio.NewReader(os.Stdin)
 
 	fmt.Println(strings.Repeat("=", 50))
-	fmt.Println("SIMDOKPOL KEY GENERATOR (HMAC)")
+	fmt.Println("   SIMDOKPOL KEY GENERATOR (CLI)")
 	fmt.Println(strings.Repeat("=", 50))
 
 	// 1. Minta Input HWID
-	fmt.Print("Masukkan Hardware ID dari User (misal: A1B2-C3D4-...): ")
+	fmt.Print("👉 Masukkan Hardware ID User: ")
 	hwid, _ := reader.ReadString('\n')
 	hwid = strings.TrimSpace(hwid)
 
 	if hwid == "" {
-		fmt.Println("Error: Hardware ID tidak boleh kosong.")
+		fmt.Println("❌ Error: Hardware ID tidak boleh kosong.")
+		fmt.Println("   Tekan Enter untuk keluar...")
+		reader.ReadString('\n')
 		return
 	}
 
-	// 2. Generate Key
-	// Logic harus sama persis dengan generateSignature di license_service.go
+	// 2. Generate Key (Logic Sama Persis dengan App Utama)
 	h := hmac.New(sha256.New, []byte(appSecretKey))
 	h.Write([]byte(hwid))
 	hash := h.Sum(nil)
@@ -51,9 +52,13 @@ func main() {
 	finalKey := formattedKey.String()
 
 	fmt.Println("\n" + strings.Repeat("-", 50))
-	fmt.Println("SERIAL KEY GENERATED:")
+	fmt.Println("✅ SERIAL KEY VALID:")
 	fmt.Println(strings.Repeat("-", 50))
 	fmt.Printf("HWID Target : %s\n", hwid)
 	fmt.Printf("Serial Key  : %s\n", finalKey)
 	fmt.Println(strings.Repeat("=", 50))
+    
+    // Pause biar window gak langsung nutup di Windows
+    fmt.Println("\nTekan Enter untuk keluar...")
+    reader.ReadString('\n')
 }

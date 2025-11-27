@@ -7,6 +7,9 @@ $(document).ready(function() {
     const currentUserRegu = $form.data('current-user-regu').toString();
     const currentUserJabatan = $form.data('current-user-jabatan');
 
+    // FIX BUG 2: Ambil Peran dari atribut HTML
+    const currentUserPeran = $form.data('current-user-peran');
+
     // --- PERUBAHAN: Variabel global untuk menyimpan template ---
     let itemTemplates = {}; // Format: { "KTP": { fields_config: [...] }, "SIM": { ... } }
     // --- AKHIR PERUBAHAN ---
@@ -39,7 +42,7 @@ $(document).ready(function() {
             const requiredLength = $input.data('required-length');
             const minLength = $input.data('min-length');
             const label = $input.data('label') || 'Field';
-            const regexPattern = $input.data('regex'); // <-- Validasi regex baru
+            const regexPattern = $input.data('regex'); 
 
             // 1. Cek Required Length (Panjang Pasti)
             if (requiredLength && val.length > 0 && val.length !== parseInt(requiredLength)) {
@@ -83,22 +86,19 @@ $(document).ready(function() {
     
     // 1. Ambil Template dari API
     $.ajax({
-        url: '/api/item-templates/active', // API yang kita buat di Tahap 1
+        url: '/api/item-templates/active', 
         method: 'GET',
         success: function(templates) {
             const $itemTypeSelect = $('#modal_item_type');
             $itemTypeSelect.empty().append(new Option('Pilih Jenis Barang...', ''));
             
             templates.forEach(template => {
-                if (template.nama_barang === 'LAINNYA') return; // Tangani 'LAINNYA' secara khusus
-                
-                // Simpan template di variabel global
+                if (template.nama_barang === 'LAINNYA') return; 
                 itemTemplates[template.nama_barang] = template; 
                 $itemTypeSelect.append(new Option(template.nama_barang, template.nama_barang));
             });
             
-            // Selalu tambahkan 'LAINNYA' di akhir
-            itemTemplates['LAINNYA'] = { fields_config: [] }; // Template 'LAINNYA' kosong
+            itemTemplates['LAINNYA'] = { fields_config: [] }; 
             $itemTypeSelect.append(new Option('Lainnya...', 'LAINNYA'));
         },
         error: function() {
@@ -213,10 +213,7 @@ $(document).ready(function() {
         $('#dynamic-fields-container').empty();
         clearInputErrors();
     });
-    // --- AKHIR PERUBAHAN BESAR ---
 
-
-    // --- SISA KODE (AJAX PETUGAS, LOAD DATA, SUBMIT FORM) TIDAK BERUBAH ---
     
     function addItemToTable(name, description) {
         var tableBody = $('#lost-items-table tbody');
@@ -276,18 +273,28 @@ $(document).ready(function() {
         }
     }
     
+    // --- FIX BUG 2: LOGIKA DROPDOWN DENGAN SUPER ADMIN BYPASS ---
     function applyDropdownLogic() {
+        // 1. Jika Super Admin, buka semua akses dropdown
+        if (currentUserPeran === 'SUPER_ADMIN') {
+            $penerimaSelect.prop('disabled', false);
+            $penanggungJawabSelect.prop('disabled', false);
+            return;
+        }
+
+        // 2. Logika Operator Biasa (Auto-Lock diri sendiri)
         if (currentUserJabatan.includes('ANGGOTA JAGA')) {
-            $penerimaSelect.prop('disabled', true);
+            $penerimaSelect.prop('disabled', true); // Kunci diri sendiri
             $penanggungJawabSelect.prop('disabled', false);
         } else if (currentUserJabatan.includes('KANIT SPKT')) {
-            $penanggungJawabSelect.prop('disabled', true);
+            $penanggungJawabSelect.prop('disabled', true); // Kunci diri sendiri
             $penerimaSelect.prop('disabled', false);
         } else {
             $penerimaSelect.prop('disabled', false);
             $penanggungJawabSelect.prop('disabled', false);
         }
     }
+    // -----------------------------------------------------------
 
     function populateForm(data) {
         $('#nama_lengkap').val(data.resident.nama_lengkap);

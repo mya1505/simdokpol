@@ -1,6 +1,7 @@
 package mocks
 
 import (
+	"simdokpol/internal/dto" // <-- Pastikan import DTO
 	"simdokpol/internal/models"
 	"github.com/stretchr/testify/mock"
 )
@@ -33,6 +34,23 @@ func (_m *UserRepository) FindAll(statusFilter string) ([]models.User, error) {
 	}
 	return r0, r1
 }
+
+// --- METHOD BARU (FIX ERROR) ---
+func (_m *UserRepository) FindAllPaged(req dto.DataTableRequest, statusFilter string) ([]models.User, int64, int64, error) {
+	ret := _m.Called(req, statusFilter)
+	
+	var r0 []models.User
+	if rf, ok := ret.Get(0).(func(dto.DataTableRequest, string) []models.User); ok {
+		r0 = rf(req, statusFilter)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]models.User)
+		}
+	}
+	
+	return r0, ret.Get(1).(int64), ret.Get(2).(int64), ret.Error(3)
+}
+// -------------------------------
 
 func (_m *UserRepository) FindByID(id uint) (*models.User, error) {
 	ret := _m.Called(id)
