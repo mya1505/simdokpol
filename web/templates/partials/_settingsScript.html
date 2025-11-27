@@ -6,13 +6,13 @@ $(document).ready(function () {
         $(this).val($(this).val().toLowerCase().replace(/\b\w/g, s => s.toUpperCase())); 
     });
 
-    // --- LOAD DATA AWAL (ISI SEMUA FORM) ---
+    // --- LOAD DATA AWAL ---
     function loadSettings() {
         $.ajax({
             url: "/api/settings",
             method: "GET",
             success: function (s) {
-                // FORM UMUM
+                // UMUM
                 $("#kop_baris_1").val(s.kop_baris_1);
                 $("#kop_baris_2").val(s.kop_baris_2);
                 $("#kop_baris_3").val(s.kop_baris_3);
@@ -22,8 +22,9 @@ $(document).ready(function () {
                 $("#nomor_surat_terakhir").val(s.nomor_surat_terakhir);
                 $("#zona_waktu").val(s.zona_waktu);
                 $("#archive_duration_days").val(s.archive_duration_days);
+                $("#enable_https").prop('checked', s.enable_https); // HTTPS
                 
-                // FORM DATABASE
+                // DATABASE
                 $("#db_dialect").val(s.db_dialect || 'sqlite');
                 $("#db_dsn").val(s.db_dsn);
                 $("#db_host").val(s.db_host);
@@ -32,7 +33,7 @@ $(document).ready(function () {
                 $("#db_user").val(s.db_user);
                 $("#db_sslmode").val(s.db_sslmode || 'disable');
                 
-                // FORM BACKUP
+                // BACKUP
                 $("#backup_path").val(s.backup_path);
 
                 toggleDBSettings(s.db_dialect || 'sqlite');
@@ -61,9 +62,10 @@ $(document).ready(function () {
     }
     $('#db_dialect').change(function() { toggleDBSettings($(this).val()); });
 
-    // --- SUBMIT FORM: UMUM ---
+    // --- SUBMIT UMUM ---
     $('#general-form').submit(function(e) {
         e.preventDefault();
+        const isHttps = $("#enable_https").is(":checked");
         submitPartialConfig({
             kop_baris_1: $("#kop_baris_1").val(),
             kop_baris_2: $("#kop_baris_2").val(),
@@ -73,11 +75,12 @@ $(document).ready(function () {
             format_nomor_surat: $("#format_nomor_surat").val(),
             nomor_surat_terakhir: $("#nomor_surat_terakhir").val(),
             zona_waktu: $("#zona_waktu").val(),
-            archive_duration_days: $("#archive_duration_days").val()
-        }, "Pengaturan Umum berhasil disimpan.");
+            archive_duration_days: $("#archive_duration_days").val(),
+            enable_https: isHttps ? "true" : "false"
+        }, "Pengaturan Umum & Keamanan disimpan. Restart aplikasi jika mengubah HTTPS.");
     });
 
-    // --- SUBMIT FORM: DATABASE ---
+    // --- SUBMIT DATABASE ---
     $('#database-form').submit(function(e) {
         e.preventDefault();
         let data = {
@@ -94,7 +97,6 @@ $(document).ready(function () {
         submitPartialConfig(data, "Konfigurasi Database disimpan. Restart aplikasi untuk menerapkan.");
     });
 
-    // Helper Submit
     function submitPartialConfig(data, successMsg) {
         $.ajax({
             url: "/api/settings",
@@ -106,7 +108,7 @@ $(document).ready(function () {
         });
     }
 
-    // --- TEST KONEKSI DB ---
+    // --- TEST KONEKSI ---
     $('#test-db-btn').click(function() {
         let btn = $(this); btn.prop('disabled', true).text('Menguji...');
         let payload = {
@@ -124,29 +126,6 @@ $(document).ready(function () {
             success: function() { Swal.fire("Sukses", "Koneksi OK!", "success"); },
             error: function() { Swal.fire("Gagal", "Koneksi ditolak.", "error"); },
             complete: function() { btn.prop('disabled', false).html('<i class="fas fa-plug mr-1"></i> Tes Koneksi'); }
-        });
-    });
-
-    // --- LOGIKA RESTORE ---
-    $("#restore-form").submit(function(e) {
-        e.preventDefault();
-        let fd = new FormData(this);
-        
-        Swal.fire({
-            title: 'Restore Database?',
-            text: "Data saat ini akan ditimpa. Lanjutkan?",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: 'Ya, Restore'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                $.ajax({
-                    url: "/api/restore", method: "POST",
-                    data: fd, processData: false, contentType: false,
-                    success: function() { Swal.fire("Sukses", "Restore berhasil. Refresh halaman.", "success").then(()=>location.reload()); },
-                    error: function() { Swal.fire("Gagal", "File backup tidak valid.", "error"); }
-                });
-            }
         });
     });
 

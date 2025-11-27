@@ -29,8 +29,8 @@ import (
 	"github.com/getlantern/systray"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/gzip"
-	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"github.com/gin-gonic/gin"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
@@ -62,6 +62,7 @@ func main() {
 		seedDefaultTemplates(db)
 	}
 
+	// --- WIRING Dependency Injection ---
 	userRepo := repositories.NewUserRepository(db)
 	docRepo := repositories.NewLostDocumentRepository(db)
 	residentRepo := repositories.NewResidentRepository(db)
@@ -75,6 +76,7 @@ func main() {
 	backupService := services.NewBackupService(db, cfg, configService, auditService)
 	licenseService := services.NewLicenseService(licenseRepo, configService, auditService)
 	userService := services.NewUserService(userRepo, auditService, cfg)
+	migrationService := services.NewDataMigrationService(db, auditService, configService) // Penting
 
 	exePath, _ := os.Executable()
 	exeDir := filepath.Dir(exePath)
@@ -86,7 +88,6 @@ func main() {
 	dbTestService := services.NewDBTestService()
 	updateService := services.NewUpdateService()
 	authService := services.NewAuthService(userRepo)
-	migrationService := services.NewDataMigrationService(db, auditService, configService)
 
 	authController := controllers.NewAuthController(authService)
 	userController := controllers.NewUserController(userService)
@@ -122,6 +123,7 @@ func main() {
 		c.Next()
 	})
 
+	// --- ROUTES ---
 	r.GET("/login", func(c *gin.Context) { c.HTML(200, "login.html", gin.H{"Title": "Login"}) })
 	r.POST("/api/login", middleware.LoginRateLimiter.GetLimiterMiddleware(), authController.Login)
 	r.POST("/api/logout", authController.Logout)
@@ -135,7 +137,7 @@ func main() {
 	authorized.Use(middleware.AuthMiddleware(userRepo))
 
 	authorized.GET("/", func(c *gin.Context) {
-		c.HTML(200, "dashboard.html", gin.H{"Title": "Dasbor", "CurrentUser": c.MustGet("currentUser"), "Config": mustGetConfig(configService)})
+		c.HTML(200, "dashboard.html", gin.H{"Title": "Beranda", "CurrentUser": c.MustGet("currentUser"), "Config": mustGetConfig(configService)})
 	})
 	authorized.GET("/api/stats", dashboardController.GetStats)
 	authorized.GET("/api/stats/monthly-issuance", dashboardController.GetMonthlyChart)
@@ -185,9 +187,7 @@ func main() {
 		c.HTML(200, "search_results.html", gin.H{"Title": "Hasil Pencarian", "CurrentUser": c.MustGet("currentUser")})
 	})
 
-	// --- FIX BUG 1: Route ini dipindah ke sini (Authorized) agar Operator bisa akses ---
 	authorized.GET("/api/item-templates/active", itemTemplateController.FindAllActive)
-	// ---------------------------------------------------------------------------------
 
 	authorized.GET("/profile", func(c *gin.Context) {
 		c.HTML(200, "profile.html", gin.H{"Title": "Profil Saya", "CurrentUser": c.MustGet("currentUser")})
@@ -256,7 +256,6 @@ func main() {
 		c.HTML(200, "item_template_form.html", gin.H{"Title": "Edit Template", "CurrentUser": c.MustGet("currentUser"), "IsEdit": true, "TemplateID": c.Param("id")})
 	})
 	pro.GET("/api/item-templates", itemTemplateController.FindAll)
-	// FindAllActive sudah dipindah ke atas
 	pro.GET("/api/item-templates/:id", itemTemplateController.FindByID)
 	pro.POST("/api/item-templates", itemTemplateController.Create)
 	pro.PUT("/api/item-templates/:id", itemTemplateController.Update)
@@ -269,18 +268,40 @@ func main() {
 
 	srv := &http.Server{Addr: ":" + port, Handler: r}
 
+	// --- HTTPS LOGIC START ---
+	isHTTPS := os.Getenv("ENABLE_HTTPS") == "true"
+	var certFile, keyFile string
+	var errHTTPS error
+
+	// Cek dulu sertifikatnya bisa dibuat/diakses nggak
+	if isHTTPS {
+		certFile, keyFile, errHTTPS = utils.EnsureCertificates()
+		if errHTTPS != nil {
+			log.Printf("⚠️ WARNING: Gagal setup HTTPS (%v). Fallback ke HTTP.", errHTTPS)
+			isHTTPS = false // Auto Fallback
+		}
+	}
+
 	go func() {
-		log.Printf("Server running on port %s", port)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("listen: %s\n", err)
+		if isHTTPS {
+			log.Printf("🔒 Server berjalan di port %s (HTTPS Secure)", port)
+			if err := srv.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("ListenTLS error: %s\n", err)
+			}
+		} else {
+			log.Printf("🌐 Server berjalan di port %s (HTTP Standar)", port)
+			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("listen: %s\n", err)
+			}
 		}
 	}()
+	// --- HTTPS LOGIC END ---
 
 	quitChan := make(chan os.Signal, 1)
 	signal.Notify(quitChan, syscall.SIGINT, syscall.SIGTERM)
 	go func() { <-quitChan; systray.Quit() }()
 
-	systray.Run(onReady, func() {
+	systray.Run(func() { onReady(isHTTPS) }, func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(ctx); err != nil {
@@ -305,7 +326,7 @@ func setupDatabase(cfg *config.Config) (*gorm.DB, error) {
 		}
 		dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=Asia/Jakarta", cfg.DBHost, cfg.DBUser, cfg.DBPass, cfg.DBName, cfg.DBPort, sslMode)
 		db, err = gorm.Open(postgres.Open(dsn), gormConfig)
-	default:
+	default: // sqlite
 		db, err = gorm.Open(sqlite.Open(cfg.DBDSN), gormConfig)
 		if err == nil {
 			db.Exec("PRAGMA foreign_keys = ON")
@@ -336,7 +357,6 @@ func seedDefaultTemplates(db *gorm.DB) {
 	if count > 0 {
 		return
 	}
-
 	log.Println("🔹 Seeding default templates...")
 	templates := []models.ItemTemplate{
 		{
@@ -376,7 +396,6 @@ func seedDefaultTemplates(db *gorm.DB) {
 		},
 		{NamaBarang: "LAINNYA", Urutan: 99, IsActive: true, FieldsConfig: models.JSONFieldArray{}},
 	}
-
 	db.Create(&templates)
 }
 
@@ -392,7 +411,7 @@ func setupLogging() {
 	log.SetOutput(&lumberjack.Logger{Filename: logPath, MaxSize: 10, MaxBackups: 3, MaxAge: 28, Compress: true})
 }
 
-func onReady() {
+func onReady(isHTTPS bool) {
 	iconData := web.GetIconBytes()
 	if len(iconData) > 0 {
 		systray.SetIcon(iconData)
@@ -406,6 +425,11 @@ func onReady() {
 	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("Keluar", "Hentikan Server")
 
+	protocol := "http"
+	if isHTTPS {
+		protocol = "https"
+	}
+
 	go func() {
 		time.Sleep(1 * time.Second)
 		port := os.Getenv("PORT")
@@ -414,11 +438,15 @@ func onReady() {
 		}
 		vhost := utils.NewVHostSetup()
 		isVhost, _ := vhost.IsSetup()
+
+		url := fmt.Sprintf("%s://localhost:%s", protocol, port)
 		if isVhost {
-			openBrowser(vhost.GetURL(port))
-		} else {
-			openBrowser(fmt.Sprintf("http://localhost:%s", port))
+			url = vhost.GetURL(port)
+			if isHTTPS {
+				url = strings.Replace(url, "http://", "https://", 1)
+			}
 		}
+		openBrowser(url)
 	}()
 
 	go func() {
@@ -429,7 +457,7 @@ func onReady() {
 				if port == "" {
 					port = "8080"
 				}
-				openBrowser(fmt.Sprintf("http://localhost:%s", port))
+				openBrowser(fmt.Sprintf("%s://localhost:%s", protocol, port))
 			case <-mVhost.ClickedCh:
 				vhost := utils.NewVHostSetup()
 				if err := vhost.Setup(); err != nil {

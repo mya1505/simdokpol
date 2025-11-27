@@ -60,18 +60,15 @@ $(document).ready(function() {
         });
     });
 
-    // 2. GLOBAL PASSWORD PEEK HANDLER (FIX BUG 5)
-    // Script ini akan jalan di SEMUA halaman yang punya class .password-peek
+    // 2. GLOBAL PASSWORD PEEK HANDLER
+    // Script ini otomatis mencari input di sebelah icon mata dan mengubah tipe-nya
     $('body').on('click', '.password-peek', function() {
-        // Cari input sibling dalam parent yang sama (password-wrapper)
         let $input = $(this).siblings('input');
-        
-        // Toggle Tipe Input
-        let type = $input.attr('type') === 'password' ? 'text' : 'password';
-        $input.attr('type', type);
-        
-        // Toggle Icon
-        $(this).toggleClass('fa-eye fa-eye-slash');
+        if ($input.length > 0) {
+            let type = $input.attr('type') === 'password' ? 'text' : 'password';
+            $input.attr('type', type);
+            $(this).toggleClass('fa-eye fa-eye-slash');
+        }
     });
 });
 </script>
