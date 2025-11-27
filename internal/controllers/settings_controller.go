@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"simdokpol/internal/models"
 	"simdokpol/internal/services"
+	"simdokpol/internal/utils" // <-- Import Utils
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -25,8 +27,8 @@ func NewSettingsController(configService services.ConfigService, auditService se
 func (c *SettingsController) GetSettings(ctx *gin.Context) {
 	config, err := c.configService.GetConfig()
 	if err != nil {
-		log.Printf("ERROR: GetSettings: %v", err)
-		APIError(ctx, http.StatusInternalServerError, "Gagal mengambil pengaturan.")
+		log.Printf("ERROR: Gagal mengambil data pengaturan: %v", err)
+		APIError(ctx, http.StatusInternalServerError, "Gagal mengambil data pengaturan.")
 		return
 	}
 	ctx.JSON(http.StatusOK, config)
@@ -39,18 +41,22 @@ func (c *SettingsController) UpdateSettings(ctx *gin.Context) {
 		return
 	}
 
-	// Security Check: Path Traversal
-	if path, ok := settings["backup_path"]; ok && strings.Contains(path, "..") {
-		APIError(ctx, http.StatusBadRequest, "Path Backup tidak aman.")
-		return
+	// Validasi keamanan
+	if path, exists := settings["backup_path"]; exists {
+		if strings.Contains(path, "..") {
+			APIError(ctx, http.StatusBadRequest, "Path tidak valid.")
+			return
+		}
 	}
-	if path, ok := settings["db_dsn"]; ok && strings.Contains(path, "..") {
-		APIError(ctx, http.StatusBadRequest, "Path Database tidak aman.")
-		return
+	if path, exists := settings["db_dsn"]; exists {
+		if strings.Contains(path, "..") {
+			APIError(ctx, http.StatusBadRequest, "Path DSN SQLite tidak valid.")
+			return
+		}
 	}
 
-	// Bersihkan password kosong (jangan di-overwrite)
-	if pass, ok := settings["db_pass"]; ok && pass == "" {
+	// Bersihkan password kosong
+	if pass, exists := settings["db_pass"]; exists && pass == "" {
 		delete(settings, "db_pass")
 	}
 
@@ -59,14 +65,48 @@ func (c *SettingsController) UpdateSettings(ctx *gin.Context) {
 		settings["db_sslmode"] = "disable"
 	}
 
+	// --- LOGIC DETEKSI RESTART ---
+	// Cek apakah perubahan memerlukan restart aplikasi
+	restartRequired := false
+	criticalKeys := []string{"db_dialect", "db_host", "db_port", "db_name", "db_user", "db_pass", "db_dsn", "db_sslmode", "enable_https"}
+	
+	for _, key := range criticalKeys {
+		if _, exists := settings[key]; exists {
+			restartRequired = true
+			break
+		}
+	}
+	// -----------------------------
+
 	if err := c.configService.SaveConfig(settings); err != nil {
-		log.Printf("ERROR: UpdateSettings: %v", err)
+		log.Printf("ERROR: Gagal menyimpan pengaturan: %v", err)
 		APIError(ctx, http.StatusInternalServerError, "Gagal menyimpan pengaturan.")
 		return
 	}
 
 	actorID := ctx.GetUint("userID")
-	c.auditService.LogActivity(actorID, models.AuditSettingsUpdated, "Pengaturan sistem diperbarui.")
+	logDetail := "Pengaturan sistem telah diperbarui."
+	if restartRequired {
+		logDetail += " (Restarting System...)"
+	}
+	c.auditService.LogActivity(actorID, models.AuditSettingsUpdated, logDetail)
 
-	APIResponse(ctx, http.StatusOK, "Pengaturan berhasil disimpan.", nil)
+	// --- AUTO RESTART SEQUENCE ---
+	if restartRequired {
+		go func() {
+			// Tunggu 2 detik agar response JSON terkirim ke frontend dulu
+			time.Sleep(2 * time.Second)
+			log.Println("Melakukan restart otomatis karena perubahan konfigurasi...")
+			if err := utils.RestartApp(); err != nil {
+				log.Printf("GAGAL RESTART: %v", err)
+			}
+		}()
+	}
+	// -----------------------------
+
+	// Kirim respon dengan flag restart_required
+	ctx.JSON(http.StatusOK, gin.H{
+		"message":          "Pengaturan berhasil disimpan.",
+		"restart_required": restartRequired,
+	})
 }

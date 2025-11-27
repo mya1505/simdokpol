@@ -6,13 +6,12 @@ $(document).ready(function () {
         $(this).val($(this).val().toLowerCase().replace(/\b\w/g, s => s.toUpperCase())); 
     });
 
-    // --- LOAD DATA AWAL ---
+    // --- LOAD SETTINGS ---
     function loadSettings() {
         $.ajax({
-            url: "/api/settings",
-            method: "GET",
+            url: "/api/settings", method: "GET",
             success: function (s) {
-                // UMUM
+                // Form Umum
                 $("#kop_baris_1").val(s.kop_baris_1);
                 $("#kop_baris_2").val(s.kop_baris_2);
                 $("#kop_baris_3").val(s.kop_baris_3);
@@ -22,9 +21,9 @@ $(document).ready(function () {
                 $("#nomor_surat_terakhir").val(s.nomor_surat_terakhir);
                 $("#zona_waktu").val(s.zona_waktu);
                 $("#archive_duration_days").val(s.archive_duration_days);
-                $("#enable_https").prop('checked', s.enable_https); // HTTPS
-                
-                // DATABASE
+                $("#enable_https").prop('checked', s.enable_https); // Load HTTPS
+
+                // Form Database
                 $("#db_dialect").val(s.db_dialect || 'sqlite');
                 $("#db_dsn").val(s.db_dsn);
                 $("#db_host").val(s.db_host);
@@ -32,8 +31,8 @@ $(document).ready(function () {
                 $("#db_name").val(s.db_name);
                 $("#db_user").val(s.db_user);
                 $("#db_sslmode").val(s.db_sslmode || 'disable');
-                
-                // BACKUP
+
+                // Form Backup
                 $("#backup_path").val(s.backup_path);
 
                 toggleDBSettings(s.db_dialect || 'sqlite');
@@ -43,14 +42,17 @@ $(document).ready(function () {
     }
     loadSettings();
 
-    // --- TOGGLE TAMPILAN DB ---
+    // --- TOGGLE DB UI ---
     function toggleDBSettings(dialect) {
         if (dialect === 'sqlite') {
             $('#sqlite-settings').slideDown();
             $('#server-db-settings').slideUp();
+            $('#backup-btn, #restore-btn, #restore-file').prop('disabled', false);
         } else {
             $('#sqlite-settings').slideUp();
             $('#server-db-settings').slideDown();
+            $('#backup-btn, #restore-btn, #restore-file').prop('disabled', true);
+            
             if (dialect === 'mysql') {
                 $('#db_port').attr('placeholder', '3306');
                 $('#settings-pg-ssl-group').hide();
@@ -62,7 +64,54 @@ $(document).ready(function () {
     }
     $('#db_dialect').change(function() { toggleDBSettings($(this).val()); });
 
-    // --- SUBMIT UMUM ---
+    // --- FUNGSI UTAMA: SUBMIT DENGAN AUTO RESTART ---
+    function submitPartialConfig(data, customSuccessMsg) {
+        // Tampilkan loading awal
+        Swal.fire({
+            title: 'Menyimpan...',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        $.ajax({
+            url: "/api/settings",
+            method: "PUT",
+            contentType: "application/json",
+            data: JSON.stringify(data),
+            success: function(response) {
+                // CEK APAKAH BUTUH RESTART?
+                if (response.restart_required) {
+                    let timerInterval;
+                    Swal.fire({
+                        title: 'Restart Diperlukan',
+                        html: 'Konfigurasi berhasil disimpan.<br>Aplikasi sedang <b>dimulai ulang</b> otomatis.<br>Mohon tunggu...',
+                        icon: 'info',
+                        timer: 5000, // Tunggu 5 detik (estimasi restart app)
+                        timerProgressBar: true,
+                        allowOutsideClick: false,
+                        didOpen: () => {
+                            Swal.showLoading();
+                        },
+                        willClose: () => {
+                            clearInterval(timerInterval);
+                        }
+                    }).then((result) => {
+                        // Setelah timer habis, reload halaman
+                        // Jika HTTPS aktif, browser akan otomatis redirect ke https:// jika setting server benar
+                        window.location.reload();
+                    });
+                } else {
+                    // Jika perubahan biasa (misal ganti nama kantor), cukup notifikasi sukses
+                    Swal.fire("Sukses", customSuccessMsg || "Pengaturan berhasil disimpan.", "success");
+                }
+            },
+            error: function(xhr) { 
+                Swal.fire("Gagal", "Terjadi kesalahan saat menyimpan.", "error"); 
+            }
+        });
+    }
+
+    // --- SUBMIT HANDLER: UMUM ---
     $('#general-form').submit(function(e) {
         e.preventDefault();
         const isHttps = $("#enable_https").is(":checked");
@@ -77,10 +126,10 @@ $(document).ready(function () {
             zona_waktu: $("#zona_waktu").val(),
             archive_duration_days: $("#archive_duration_days").val(),
             enable_https: isHttps ? "true" : "false"
-        }, "Pengaturan Umum & Keamanan disimpan. Restart aplikasi jika mengubah HTTPS.");
+        }, "Pengaturan Umum disimpan.");
     });
 
-    // --- SUBMIT DATABASE ---
+    // --- SUBMIT HANDLER: DATABASE ---
     $('#database-form').submit(function(e) {
         e.preventDefault();
         let data = {
@@ -94,85 +143,57 @@ $(document).ready(function () {
         };
         if(data.db_pass === "") delete data.db_pass;
 
-        submitPartialConfig(data, "Konfigurasi Database disimpan. Restart aplikasi untuk menerapkan.");
+        submitPartialConfig(data);
     });
 
-    function submitPartialConfig(data, successMsg) {
-        $.ajax({
-            url: "/api/settings",
-            method: "PUT",
-            contentType: "application/json",
-            data: JSON.stringify(data),
-            success: function() { Swal.fire("Sukses", successMsg, "success"); },
-            error: function() { Swal.fire("Gagal", "Terjadi kesalahan.", "error"); }
-        });
-    }
-
-    // --- TEST KONEKSI ---
+    // --- TEST KONEKSI DB ---
     $('#test-db-btn').click(function() {
         let btn = $(this); btn.prop('disabled', true).text('Menguji...');
         let payload = {
-            db_dialect: $("#db_dialect").val(),
-            db_host: $("#db_host").val(),
-            db_port: $("#db_port").val(),
-            db_name: $("#db_name").val(),
-            db_user: $("#db_user").val(),
-            db_pass: $("#db_pass").val(),
+            db_dialect: $("#db_dialect").val(), db_host: $("#db_host").val(),
+            db_port: $("#db_port").val(), db_name: $("#db_name").val(),
+            db_user: $("#db_user").val(), db_pass: $("#db_pass").val(),
             db_sslmode: $("#db_sslmode").val()
         };
-        $.ajax({
-            url: "/api/db/test", method: "POST",
-            contentType: "application/json", data: JSON.stringify(payload),
+        $.ajax({ url: "/api/db/test", method: "POST", contentType: "application/json", data: JSON.stringify(payload),
             success: function() { Swal.fire("Sukses", "Koneksi OK!", "success"); },
             error: function() { Swal.fire("Gagal", "Koneksi ditolak.", "error"); },
             complete: function() { btn.prop('disabled', false).html('<i class="fas fa-plug mr-1"></i> Tes Koneksi'); }
         });
     });
 
-    // --- LOGIKA MIGRASI ---
+    // --- BACKUP & RESTORE & MIGRATION (LOGIC LAMA TETAP ADA) ---
+    $("#backup-btn").click(function() { window.location.href = "/api/backups"; });
+    
+    $("#restore-form").submit(function(e) {
+         e.preventDefault();
+         let fd = new FormData(this);
+         Swal.fire({ title: "Restore?", text: "Data akan ditimpa. Lanjutkan?", icon: "warning", showCancelButton: true, confirmButtonText: "Ya" }).then(r => {
+             if(r.isConfirmed) $.ajax({ url: "/api/restore", method: "POST", data: fd, processData: false, contentType: false, success: function() { Swal.fire("Sukses", "Restore berhasil.", "success").then(()=>location.reload()); }, error: function() { Swal.fire("Gagal", "File rusak.", "error"); } });
+         });
+    });
+
     $('#mig_dialect').change(function() {
-        if($(this).val() === 'postgres') {
-            $('#mig_port').val('5432');
-            $('#mig-ssl-wrap').show();
-        } else {
-            $('#mig_port').val('3306');
-            $('#mig-ssl-wrap').hide();
-        }
+        if($(this).val() === 'postgres') { $('#mig_port').val('5432'); $('#mig-ssl-wrap').show(); } else { $('#mig_port').val('3306'); $('#mig-ssl-wrap').hide(); }
     });
 
     $('#migration-form').submit(function(e) {
         e.preventDefault();
         let target = {
-            db_dialect: $('#mig_dialect').val(),
-            db_host: $('#mig_host').val(),
-            db_port: $('#mig_port').val(),
-            db_name: $('#mig_name').val(),
-            db_user: $('#mig_user').val(),
-            db_pass: $('#mig_pass').val(),
+            db_dialect: $('#mig_dialect').val(), db_host: $('#mig_host').val(),
+            db_port: $('#mig_port').val(), db_name: $('#mig_name').val(),
+            db_user: $('#mig_user').val(), db_pass: $('#mig_pass').val(),
             db_sslmode: $('#mig_sslmode').val()
         };
-
         Swal.fire({
-            title: 'Mulai Migrasi?',
-            text: "Data akan disalin ke database target. Proses ini tidak bisa dibatalkan.",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: 'Ya, Salin Data',
-            showLoaderOnConfirm: true,
+            title: 'Mulai Migrasi?', text: "Data akan disalin ke database target.", icon: 'warning', showCancelButton: true, confirmButtonText: 'Ya, Migrasi', showLoaderOnConfirm: true,
             preConfirm: () => {
                 return fetch("/api/settings/migrate", {
-                    method: "POST",
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(target)
-                }).then(async r => {
-                    if(!r.ok) throw new Error((await r.json()).error);
-                    return r.json();
-                }).catch(err => Swal.showValidationMessage(err));
+                    method: "POST", headers: {'Content-Type': 'application/json'}, body: JSON.stringify(target)
+                }).then(async r => { if(!r.ok) throw new Error((await r.json()).error); return r.json(); }).catch(err => Swal.showValidationMessage(err));
             }
         }).then((result) => {
-            if (result.isConfirmed) {
-                Swal.fire("Sukses", "Migrasi berhasil! Anda sekarang dapat mengubah koneksi DB utama ke server baru.", "success");
-            }
+            if (result.isConfirmed) Swal.fire("Sukses", "Migrasi berhasil!", "success");
         });
     });
 });
