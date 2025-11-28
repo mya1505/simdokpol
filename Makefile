@@ -15,7 +15,7 @@ ICON_PATH := web/static/img/icon.ico
 # 1. Ambil tag terakhir (cth: v1.2.0)
 CURRENT_TAG := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "v1.0.0")
 # 2. Increment Patch (v1.2.0 -> v1.2.1)
-VERSION_FULL := $(shell echo $(CURRENT_TAG) | awk -F. -v OFS=. '{$NF+=1; print}')
+VERSION_FULL := $(shell echo $(CURRENT_TAG) | awk -F. -v OFS=. '{$$NF+=1; print}')
 # 3. Bersihkan prefix 'v' (1.2.1)
 VERSION_RAW := $(patsubst v%,%,$(VERSION_FULL))
 # 4. Pecah jadi Major, Minor, Patch
@@ -40,7 +40,7 @@ YELLOW := \033[33m
 RED := \033[31m
 RESET := \033[0m
 
-.PHONY: all package menu windows linux tools changelog clean icon-gen
+.PHONY: all package menu windows linux tools changelog clean icon-gen deps check-windows-deps check-linux-deps
 
 # ====================================================================================
 # 🎮 MENU
@@ -77,28 +77,27 @@ release: clean deps changelog windows linux tools
 	@echo "$(YELLOW)📦 Membungkus Paket Rilis...$(RESET)"
 	@mkdir -p $(RELEASE_DIR)
 	
-	@zip -j $(RELEASE_DIR)/$(APP_NAME)-windows-portable-$(VERSION_FULL).zip \
-		$(BUILD_DIR)/windows/$(APP_NAME).exe \
-		$(BUILD_DIR)/CHANGELOG.txt README.md LICENSE
+	@cd $(BUILD_DIR)/windows && zip -r ../../$(RELEASE_DIR)/$(APP_NAME)-windows-portable-$(VERSION_FULL).zip $(APP_NAME).exe
+	@cd $(BUILD_DIR) && zip -j ../$(RELEASE_DIR)/$(APP_NAME)-windows-portable-$(VERSION_FULL).zip CHANGELOG.txt
+	@zip -j $(RELEASE_DIR)/$(APP_NAME)-windows-portable-$(VERSION_FULL).zip README.md LICENSE
 	
-	@tar -czf $(RELEASE_DIR)/$(APP_NAME)-linux-portable-$(VERSION_FULL).tar.gz \
-		-C $(BUILD_DIR)/linux $(APP_NAME) \
-		-C ../.. README.md LICENSE $(BUILD_DIR)/CHANGELOG.txt
+	@cd $(BUILD_DIR)/linux && tar -czf ../../$(RELEASE_DIR)/$(APP_NAME)-linux-portable-$(VERSION_FULL).tar.gz $(APP_NAME)
+	@cd $(BUILD_DIR) && tar -rf ../$(RELEASE_DIR)/$(APP_NAME)-linux-portable-$(VERSION_FULL).tar.gz CHANGELOG.txt
+	@tar -rf $(RELEASE_DIR)/$(APP_NAME)-linux-portable-$(VERSION_FULL).tar.gz README.md LICENSE
+	@gzip -f $(RELEASE_DIR)/$(APP_NAME)-linux-portable-$(VERSION_FULL).tar
 
-	@zip -j $(RELEASE_DIR)/AdminTools-$(VERSION_FULL).zip $(BUILD_DIR)/tools/windows/*.exe
+	@cd $(BUILD_DIR)/tools/windows && zip -r ../../../$(RELEASE_DIR)/AdminTools-$(VERSION_FULL).zip *.exe
 	
 	@echo "$(GREEN)✅ RELEASE SELESAI! Cek folder '$(RELEASE_DIR)/'$(RESET)"
 
 # --- 🖼️ ICON & METADATA GENERATOR (DINAMIS) ---
 icon-gen:
 	@echo "$(YELLOW)🖼️  Generating Dynamic Windows Metadata...$(RESET)"
-	@# 1. Install tool jika belum ada
 	@if ! command -v goversioninfo >/dev/null 2>&1; then \
 		echo "   Installing goversioninfo..."; \
 		go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest; \
 	fi
 	
-	@# 2. Bikin file versioninfo.json secara otomatis (OVERWRITE)
 	@echo '{' > versioninfo.json
 	@echo '    "FixedFileInfo": {' >> versioninfo.json
 	@echo '        "FileVersion": {' >> versioninfo.json
@@ -114,7 +113,7 @@ icon-gen:
 	@echo '            "Build": 0' >> versioninfo.json
 	@echo '        },' >> versioninfo.json
 	@echo '        "FileFlagsMask": "3f",' >> versioninfo.json
-	@echo '        "FileFlags ": "00",' >> versioninfo.json
+	@echo '        "FileFlags": "00",' >> versioninfo.json
 	@echo '        "FileOS": "040004",' >> versioninfo.json
 	@echo '        "FileType": "01",' >> versioninfo.json
 	@echo '        "FileSubType": "00"' >> versioninfo.json
@@ -140,10 +139,8 @@ icon-gen:
 	@echo '    "ManifestPath": ""' >> versioninfo.json
 	@echo '}' >> versioninfo.json
 	
-	@# 3. Generate .syso dari JSON yang baru dibuat
 	@goversioninfo -o $(RESOURCE_SYSO)
-	@# Hapus file JSON sementara biar bersih
-	@rm versioninfo.json
+	@rm -f versioninfo.json
 	@echo "   Metadata injected: v$(VERSION_RAW)"
 
 # --- 🏗️ BUILD TARGETS ---
@@ -182,7 +179,9 @@ changelog:
 	@echo "$(YELLOW)📝 Generating Changelog...$(RESET)"
 	@mkdir -p $(BUILD_DIR)
 	@echo "CHANGELOG - $(APP_NAME) $(VERSION_FULL)" > $(BUILD_DIR)/CHANGELOG.txt
-	@git log $(PREV_VERSION)..HEAD --pretty=format:"- %s" >> $(BUILD_DIR)/CHANGELOG.txt || echo "- Update" >> $(BUILD_DIR)/CHANGELOG.txt
+	@echo "" >> $(BUILD_DIR)/CHANGELOG.txt
+	@git log $(PREV_VERSION)..HEAD --pretty=format:"- %s" >> $(BUILD_DIR)/CHANGELOG.txt 2>/dev/null || echo "- Initial release" >> $(BUILD_DIR)/CHANGELOG.txt
+	@echo "" >> $(BUILD_DIR)/CHANGELOG.txt
 
 # --- DEPS CHECK ---
 deps:
@@ -191,15 +190,17 @@ deps:
 
 check-windows-deps:
 	@if ! command -v x86_64-w64-mingw32-gcc >/dev/null 2>&1; then \
-		echo "$(RED)MinGW not found. Installing...$(RESET)"; \
+		echo "$(RED)❌ MinGW not found. Installing...$(RESET)"; \
 		sudo apt-get update && sudo apt-get install -y gcc-mingw-w64; \
 	fi
 
 check-linux-deps:
 	@if ! dpkg -s libgtk-3-dev >/dev/null 2>&1; then \
-		echo "$(RED)GTK3 not found. Installing...$(RESET)"; \
+		echo "$(RED)❌ GTK3 not found. Installing...$(RESET)"; \
 		sudo apt-get install -y libgtk-3-dev libayatana-appindicator3-dev; \
 	fi
 
 clean:
+	@echo "$(YELLOW)🧹 Cleaning build artifacts...$(RESET)"
 	@rm -rf $(BUILD_DIR) $(RELEASE_DIR) $(RESOURCE_SYSO) versioninfo.json
+	@echo "$(GREEN)✅ Clean complete!$(RESET)"
