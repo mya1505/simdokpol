@@ -2,7 +2,6 @@ package services
 
 import (
 	"fmt"
-	"log"
 	"simdokpol/internal/dto"
 	"simdokpol/internal/models"
 
