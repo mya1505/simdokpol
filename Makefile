@@ -1,126 +1,205 @@
 # ====================================================================================
-# SIMDOKPOL - INTERACTIVE BUILD SYSTEM 🎮
-# Fitur: Auto-Versioning, Interactive Menu, Cross-Platform, Auto-Dependency
+# SIMDOKPOL - ULTIMATE BUILD SYSTEM (DYNAMIC VERSION) 🚀
+# Fitur: Auto-Version from Git, Auto-Generate JSON Metadata, Cross-Platform
 # ====================================================================================
 
+# --- ⚙️ KONFIGURASI ---
 APP_NAME := simdokpol
 BUILD_DIR := build
+RELEASE_DIR := release
 MAIN_FILE := cmd/main.go
+RESOURCE_SYSO := cmd/resource.syso
+ICON_PATH := web/static/img/icon.ico
 
-# --- 🤖 AUTO DETECT & INCREMENT VERSION ---
-# 1. Ambil tag terakhir dari git (jika error/kosong, default v1.0.0)
+# --- 🤖 AUTO VERSIONING LOGIC ---
+# 1. Ambil tag terakhir (cth: v1.2.0)
 CURRENT_TAG := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "v1.0.0")
+# 2. Increment Patch (v1.2.0 -> v1.2.1)
+VERSION_FULL := $(shell echo $(CURRENT_TAG) | awk -F. -v OFS=. '{$NF+=1; print}')
+# 3. Bersihkan prefix 'v' (1.2.1)
+VERSION_RAW := $(patsubst v%,%,$(VERSION_FULL))
+# 4. Pecah jadi Major, Minor, Patch
+VER_MAJOR := $(word 1,$(subst ., ,$(VERSION_RAW)))
+VER_MINOR := $(word 2,$(subst ., ,$(VERSION_RAW)))
+VER_PATCH := $(word 3,$(subst ., ,$(VERSION_RAW)))
 
-# 2. Logic Increment (Split by '.', ambil angka terakhir, tambah 1)
-# Contoh: v1.0.0 -> v1.0.1 | v1.1.5 -> v1.1.6
-VERSION := $(shell echo $(CURRENT_TAG) | awk -F. -v OFS=. '{$NF+=1; print}')
+PREV_VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "HEAD")
 
 # --- 🔐 SECRET KEY ---
-APP_SECRET_KEY ?= 7333333bcdd58fa770265c4f8b661e802de3fe697fb375a77d2095762a904506
+APP_SECRET_KEY ?= RAHASIA_DAPUR_POLSEK_BAHODOPI_JANGAN_DISEBAR_12345
 
 # --- LDFLAGS ---
-LDFLAGS := -w -s \
-	-X 'main.version=$(VERSION)' \
-	-X 'simdokpol/internal/services.AppSecretKeyString=$(APP_SECRET_KEY)' \
-	-X 'main.appSecretKey=$(APP_SECRET_KEY)'
+LDFLAGS_COMMON := -w -s -X 'main.version=$(VERSION_FULL)'
+LDFLAGS_APP    := $(LDFLAGS_COMMON) -X 'simdokpol/internal/services.AppSecretKeyString=$(APP_SECRET_KEY)'
+LDFLAGS_TOOL   := $(LDFLAGS_COMMON) -X 'main.appSecretKey=$(APP_SECRET_KEY)'
 
-# Warna Terminal (Biar Keren)
+# Warna
 CYAN := \033[36m
 GREEN := \033[32m
 YELLOW := \033[33m
 RED := \033[31m
 RESET := \033[0m
 
-.PHONY: all package menu windows linux tools deps
+.PHONY: all package menu windows linux tools changelog clean icon-gen
 
 # ====================================================================================
-# 🎮 INTERACTIVE MENU (DEFAULT TARGET)
+# 🎮 MENU
 # ====================================================================================
 package:
 	@clear
 	@echo "$(CYAN)==================================================$(RESET)"
-	@echo "$(CYAN)   👮 SIMDOKPOL BUILD MANAGER v2.0   $(RESET)"
+	@echo "$(CYAN)   👮 SIMDOKPOL BUILDER v6.0 (Dynamic Edition)   $(RESET)"
 	@echo "$(CYAN)==================================================$(RESET)"
-	@echo "🔹 Versi Terakhir di Git : $(YELLOW)$(CURRENT_TAG)$(RESET)"
-	@echo "🔹 Versi Build Sekarang  : $(GREEN)$(VERSION)$(RESET) (Auto-Increment)"
+	@echo "🏷️  Versi Git Terakhir : $(YELLOW)$(CURRENT_TAG)$(RESET)"
+	@echo "🚀 Versi Build Ini    : $(GREEN)$(VERSION_FULL)$(RESET)"
+	@echo "🔢 Metadata Windows   : $(VER_MAJOR).$(VER_MINOR).$(VER_PATCH).0"
 	@echo "$(CYAN)--------------------------------------------------$(RESET)"
-	@echo "Pilih Target Build:"
-	@echo "  [1] 🪟  Windows (x64 .exe)"
-	@echo "  [2] 🐧  Linux (x64 Binary)"
-	@echo "  [3] 🛠️   Admin Tools (Keygen & License Mgr)"
-	@echo "  [4] 📦  Build SEMUANYA (Full Package)"
-	@echo "  [5] 🔖  Push Tag Baru ($(VERSION)) ke Git"
+	@echo "Pilih Target:"
+	@echo "  [1] 🚀  RELEASE FULL (Win+Lin+Tools+Zip)"
+	@echo "  [2] 🪟  Windows Only (.exe + Metadata)"
+	@echo "  [3] 🐧  Linux Only"
+	@echo "  [4] 🛠️   Admin Tools"
+	@echo "  [5] 📝  Generate Changelog"
 	@echo "  [0] ❌  Keluar"
 	@echo "$(CYAN)--------------------------------------------------$(RESET)"
-	@read -p "👉 Masukkan Nomor: " choice; \
-	if [ "$$choice" = "1" ]; then $(MAKE) windows; \
-	elif [ "$$choice" = "2" ]; then $(MAKE) linux; \
-	elif [ "$$choice" = "3" ]; then $(MAKE) tools; \
-	elif [ "$$choice" = "4" ]; then $(MAKE) all; \
-	elif [ "$$choice" = "5" ]; then $(MAKE) git-tag; \
-	else echo "$(RED)Dibatalkan.$(RESET)"; exit 0; fi
+	@read -p "👉 Pilih: " c; \
+	case $$c in \
+		1) $(MAKE) release ;; \
+		2) $(MAKE) windows ;; \
+		3) $(MAKE) linux ;; \
+		4) $(MAKE) tools ;; \
+		5) $(MAKE) changelog ;; \
+		*) echo "$(RED)Bye!$(RESET)" ;; \
+	esac
 
-# ====================================================================================
-# 🏗️ BUILD TARGETS
-# ====================================================================================
+# --- RELEASE PIPELINE ---
+release: clean deps changelog windows linux tools
+	@echo "$(YELLOW)📦 Membungkus Paket Rilis...$(RESET)"
+	@mkdir -p $(RELEASE_DIR)
+	
+	@zip -j $(RELEASE_DIR)/$(APP_NAME)-windows-portable-$(VERSION_FULL).zip \
+		$(BUILD_DIR)/windows/$(APP_NAME).exe \
+		$(BUILD_DIR)/CHANGELOG.txt README.md LICENSE
+	
+	@tar -czf $(RELEASE_DIR)/$(APP_NAME)-linux-portable-$(VERSION_FULL).tar.gz \
+		-C $(BUILD_DIR)/linux $(APP_NAME) \
+		-C ../.. README.md LICENSE $(BUILD_DIR)/CHANGELOG.txt
 
-# Build All
-all: windows linux tools
-	@echo "$(GREEN)🎉 SEMUA BUILD SELESAI! Cek folder $(BUILD_DIR)/$(RESET)"
+	@zip -j $(RELEASE_DIR)/AdminTools-$(VERSION_FULL).zip $(BUILD_DIR)/tools/windows/*.exe
+	
+	@echo "$(GREEN)✅ RELEASE SELESAI! Cek folder '$(RELEASE_DIR)/'$(RESET)"
 
-# --- WINDOWS ---
-windows: check-windows-deps
-	@echo "$(YELLOW)🔨 Membangun Windows x64 (v$(VERSION))...$(RESET)"
+# --- 🖼️ ICON & METADATA GENERATOR (DINAMIS) ---
+icon-gen:
+	@echo "$(YELLOW)🖼️  Generating Dynamic Windows Metadata...$(RESET)"
+	@# 1. Install tool jika belum ada
+	@if ! command -v goversioninfo >/dev/null 2>&1; then \
+		echo "   Installing goversioninfo..."; \
+		go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest; \
+	fi
+	
+	@# 2. Bikin file versioninfo.json secara otomatis (OVERWRITE)
+	@echo '{' > versioninfo.json
+	@echo '    "FixedFileInfo": {' >> versioninfo.json
+	@echo '        "FileVersion": {' >> versioninfo.json
+	@echo '            "Major": $(VER_MAJOR),' >> versioninfo.json
+	@echo '            "Minor": $(VER_MINOR),' >> versioninfo.json
+	@echo '            "Patch": $(VER_PATCH),' >> versioninfo.json
+	@echo '            "Build": 0' >> versioninfo.json
+	@echo '        },' >> versioninfo.json
+	@echo '        "ProductVersion": {' >> versioninfo.json
+	@echo '            "Major": $(VER_MAJOR),' >> versioninfo.json
+	@echo '            "Minor": $(VER_MINOR),' >> versioninfo.json
+	@echo '            "Patch": $(VER_PATCH),' >> versioninfo.json
+	@echo '            "Build": 0' >> versioninfo.json
+	@echo '        },' >> versioninfo.json
+	@echo '        "FileFlagsMask": "3f",' >> versioninfo.json
+	@echo '        "FileFlags ": "00",' >> versioninfo.json
+	@echo '        "FileOS": "040004",' >> versioninfo.json
+	@echo '        "FileType": "01",' >> versioninfo.json
+	@echo '        "FileSubType": "00"' >> versioninfo.json
+	@echo '    },' >> versioninfo.json
+	@echo '    "StringFileInfo": {' >> versioninfo.json
+	@echo '        "Comments": "Sistem Informasi Manajemen Dokumen Kepolisian",' >> versioninfo.json
+	@echo '        "CompanyName": "MYA",' >> versioninfo.json
+	@echo '        "FileDescription": "Aplikasi SIMDOKPOL Desktop",' >> versioninfo.json
+	@echo '        "FileVersion": "$(VERSION_RAW)",' >> versioninfo.json
+	@echo '        "InternalName": "$(APP_NAME)",' >> versioninfo.json
+	@echo '        "LegalCopyright": "Copyright (c) 2025 Muhammad Yusuf Abdurrohman",' >> versioninfo.json
+	@echo '        "OriginalFilename": "$(APP_NAME).exe",' >> versioninfo.json
+	@echo '        "ProductName": "SIMDOKPOL",' >> versioninfo.json
+	@echo '        "ProductVersion": "$(VERSION_FULL)"' >> versioninfo.json
+	@echo '    },' >> versioninfo.json
+	@echo '    "VarFileInfo": {' >> versioninfo.json
+	@echo '        "Translation": {' >> versioninfo.json
+	@echo '            "LangID": "0409",' >> versioninfo.json
+	@echo '            "CharsetID": "04B0"' >> versioninfo.json
+	@echo '        }' >> versioninfo.json
+	@echo '    },' >> versioninfo.json
+	@echo '    "IconPath": "$(ICON_PATH)",' >> versioninfo.json
+	@echo '    "ManifestPath": ""' >> versioninfo.json
+	@echo '}' >> versioninfo.json
+	
+	@# 3. Generate .syso dari JSON yang baru dibuat
+	@goversioninfo -o $(RESOURCE_SYSO)
+	@# Hapus file JSON sementara biar bersih
+	@rm versioninfo.json
+	@echo "   Metadata injected: v$(VERSION_RAW)"
+
+# --- 🏗️ BUILD TARGETS ---
+
+windows: check-windows-deps icon-gen
+	@echo "$(CYAN)🔨 Building Windows App...$(RESET)"
 	@mkdir -p $(BUILD_DIR)/windows
 	@CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc GOOS=windows GOARCH=amd64 \
-	go build -ldflags "$(LDFLAGS) -H=windowsgui" -o $(BUILD_DIR)/windows/$(APP_NAME).exe $(MAIN_FILE)
-	@cp README.md $(BUILD_DIR)/windows/
-	@echo "$(GREEN)✅ Windows Build Selesai: $(BUILD_DIR)/windows/$(APP_NAME).exe$(RESET)"
+	go build -ldflags "$(LDFLAGS_APP) -H=windowsgui" -tags sqlite_omit_load_extension \
+	-o $(BUILD_DIR)/windows/$(APP_NAME).exe $(MAIN_FILE)
+	@rm -f $(RESOURCE_SYSO)
+	@echo "$(GREEN)✅ Windows OK.$(RESET)"
 
-# --- LINUX ---
 linux: check-linux-deps
-	@echo "$(YELLOW)🔨 Membangun Linux x64 (v$(VERSION))...$(RESET)"
+	@echo "$(CYAN)🔨 Building Linux App...$(RESET)"
 	@mkdir -p $(BUILD_DIR)/linux
+	@rm -f $(RESOURCE_SYSO)
 	@CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
-	go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/linux/$(APP_NAME) $(MAIN_FILE)
+	go build -ldflags "$(LDFLAGS_APP)" \
+	-o $(BUILD_DIR)/linux/$(APP_NAME) $(MAIN_FILE)
 	@chmod +x $(BUILD_DIR)/linux/$(APP_NAME)
-	@cp README.md $(BUILD_DIR)/linux/
-	@echo "$(GREEN)✅ Linux Build Selesai: $(BUILD_DIR)/linux/$(APP_NAME)$(RESET)"
+	@echo "$(GREEN)✅ Linux OK.$(RESET)"
 
-# --- ADMIN TOOLS ---
 tools: check-windows-deps
-	@echo "$(YELLOW)🔨 Membangun Admin Tools (v$(VERSION))...$(RESET)"
-	@mkdir -p $(BUILD_DIR)/tools
-	@# GUI
+	@echo "$(CYAN)🔨 Building Admin Tools...$(RESET)"
+	@mkdir -p $(BUILD_DIR)/tools/windows
 	@CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc GOOS=windows GOARCH=amd64 \
-	go build -ldflags "$(LDFLAGS) -H=windowsgui" -o $(BUILD_DIR)/tools/LicenseManager.exe cmd/license-manager/main.go
-	@# CLI
+	go build -ldflags "$(LDFLAGS_TOOL) -H=windowsgui" \
+	-o $(BUILD_DIR)/tools/windows/LicenseManager.exe cmd/license-manager/main.go
 	@CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc GOOS=windows GOARCH=amd64 \
-	go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/tools/SignerCLI.exe cmd/signer/main.go
-	@echo "$(GREEN)✅ Tools Selesai di $(BUILD_DIR)/tools/$(RESET)"
+	go build -ldflags "$(LDFLAGS_TOOL)" \
+	-o $(BUILD_DIR)/tools/windows/SignerCLI.exe cmd/signer/main.go
+	@echo "$(GREEN)✅ Tools OK.$(RESET)"
 
-# --- GIT TAGGING ---
-git-tag:
-	@echo "$(YELLOW)🔖 Membuat Tag Git Baru: $(VERSION)...$(RESET)"
-	@git tag $(VERSION)
-	@git push origin $(VERSION)
-	@echo "$(GREEN)✅ Tag $(VERSION) berhasil dipush! CI/CD GitHub akan berjalan otomatis.$(RESET)"
+changelog:
+	@echo "$(YELLOW)📝 Generating Changelog...$(RESET)"
+	@mkdir -p $(BUILD_DIR)
+	@echo "CHANGELOG - $(APP_NAME) $(VERSION_FULL)" > $(BUILD_DIR)/CHANGELOG.txt
+	@git log $(PREV_VERSION)..HEAD --pretty=format:"- %s" >> $(BUILD_DIR)/CHANGELOG.txt || echo "- Update" >> $(BUILD_DIR)/CHANGELOG.txt
 
-# ====================================================================================
-# 📦 DEPENDENCY CHECKER
-# ====================================================================================
-check-linux-deps:
-	@if ! dpkg -s libgtk-3-dev >/dev/null 2>&1; then \
-		echo "$(RED)📦 Library GTK3 belum ada. Menginstall...$(RESET)"; \
-		sudo apt-get update && sudo apt-get install -y libgtk-3-dev libayatana-appindicator3-dev; \
-	fi
+# --- DEPS CHECK ---
+deps:
+	@echo "$(YELLOW)🔍 Checking Dependencies...$(RESET)"
+	@go mod tidy
 
 check-windows-deps:
 	@if ! command -v x86_64-w64-mingw32-gcc >/dev/null 2>&1; then \
-		echo "$(RED)📦 Compiler MinGW belum ada. Menginstall...$(RESET)"; \
+		echo "$(RED)MinGW not found. Installing...$(RESET)"; \
 		sudo apt-get update && sudo apt-get install -y gcc-mingw-w64; \
 	fi
 
+check-linux-deps:
+	@if ! dpkg -s libgtk-3-dev >/dev/null 2>&1; then \
+		echo "$(RED)GTK3 not found. Installing...$(RESET)"; \
+		sudo apt-get install -y libgtk-3-dev libayatana-appindicator3-dev; \
+	fi
+
 clean:
-	@rm -rf $(BUILD_DIR)
-	@echo "$(YELLOW)🧹 Folder build dibersihkan.$(RESET)"
+	@rm -rf $(BUILD_DIR) $(RELEASE_DIR) $(RESOURCE_SYSO) versioninfo.json
