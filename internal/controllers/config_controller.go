@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"simdokpol/internal/dto"
