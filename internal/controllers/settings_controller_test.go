@@ -9,7 +9,7 @@ import (
 	"simdokpol/internal/middleware"
 	"simdokpol/internal/mocks"
 	"simdokpol/internal/models"
-	"sync" // <-- IMPORT BARU
+	"sync"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -17,7 +17,6 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// setupSettingsTestRouter membuat instance Gin untuk testing SettingsController
 func setupSettingsTestRouter(mockConfigSvc *mocks.ConfigService, mockAuditSvc *mocks.AuditLogService, authInjector gin.HandlerFunc) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 
@@ -47,7 +46,6 @@ func setupSettingsTestRouter(mockConfigSvc *mocks.ConfigService, mockAuditSvc *m
 
 var adminUserForSettings = &models.User{ID: 1, NamaLengkap: "Admin", Peran: models.RoleSuperAdmin}
 
-// Test GET /api/settings
 func TestSettingsController_GetSettings(t *testing.T) {
 	mockConfig := &dto.AppConfig{
 		NamaKantor: "POLSEK BAHODOPI",
@@ -78,7 +76,6 @@ func TestSettingsController_GetSettings(t *testing.T) {
 	mockConfigSvc.AssertExpectations(t)
 }
 
-// Test PUT /api/settings
 func TestSettingsController_UpdateSettings(t *testing.T) {
 	mockSettingsUpdate := map[string]string{
 		"nama_kantor": "POLSEK BARU",
@@ -96,10 +93,8 @@ func TestSettingsController_UpdateSettings(t *testing.T) {
 
 	router := setupSettingsTestRouter(mockConfigSvc, mockAuditSvc, authInjector)
 	
-	// --- PERBAIKAN: Set WaitGroup untuk AuditService ---
 	var wg sync.WaitGroup
 	mockAuditSvc.On("SetWaitGroup", &wg).Once()
-	// --- AKHIR PERBAIKAN ---
 
 	mockConfigSvc.On("SaveConfig", mockSettingsUpdate).Return(nil).Once()
 	mockAuditSvc.On("LogActivity", adminUserForSettings.ID, models.AuditSettingsUpdated, mock.AnythingOfType("string")).Once()
@@ -110,16 +105,20 @@ func TestSettingsController_UpdateSettings(t *testing.T) {
 	req.Header.Set("Accept", "application/json")
 	recorder := httptest.NewRecorder()
 
-	// --- PERBAIKAN: Panggil SetWaitGroup sebelum ServeHTTP ---
 	mockAuditSvc.SetWaitGroup(&wg)
-	// --- AKHIR PERBAIKAN ---
 
 	router.ServeHTTP(recorder, req)
 	
-	wg.Wait() // <-- PERBAIKAN: Tunggu goroutine LogActivity selesai
+	wg.Wait()
 
 	assert.Equal(t, http.StatusOK, recorder.Code)
-	assert.JSONEq(t, `{"message":"Pengaturan berhasil disimpan"}`, recorder.Body.String())
+	
+	// --- PERBAIKAN UTAMA: Tambahkan 'restart_required: false' di ekspektasi ---
+	// Karena perubahan nama kantor bukan perubahan kritis, restart_required harus false
+	expectedJSON := `{"message":"Pengaturan berhasil disimpan.", "restart_required":false}`
+	assert.JSONEq(t, expectedJSON, recorder.Body.String())
+	// --- AKHIR PERBAIKAN ---
+
 	mockConfigSvc.AssertExpectations(t)
 	mockAuditSvc.AssertExpectations(t)
 }
