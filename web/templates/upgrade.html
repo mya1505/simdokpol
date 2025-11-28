@@ -1,0 +1,113 @@
+{{template "_header.html" .}}
+{{template "_sidebar.html" .}}
+
+<div id="content-wrapper" class="d-flex flex-column">
+    <div id="content">
+        {{template "_topbar.html" .}}
+        <div class="container-fluid">
+
+            <div class="text-center mb-5">
+                <h1 class="h2 text-gray-900 mb-2 font-weight-bold">Buka Potensi Penuh SIMDOKPOL 🚀</h1>
+                <p class="lead text-gray-600">Tingkatkan efisiensi unit Anda dengan fitur-fitur canggih versi Professional.</p>
+            </div>
+
+            <div class="row justify-content-center">
+                
+                <div class="col-lg-4 mb-4">
+                    <div class="card shadow mb-4 border-left-secondary h-100">
+                        <div class="card-header py-3 bg-light">
+                            <h5 class="m-0 font-weight-bold text-secondary text-center">Versi Gratis</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="text-center mb-4">
+                                <span class="h4 font-weight-bold">Rp 0</span>
+                                <span class="text-muted">/ selamanya</span>
+                            </div>
+                            <ul class="list-unstyled">
+                                <li class="mb-2"><i class="fas fa-check text-success mr-2"></i>Manajemen Dokumen (CRUD)</li>
+                                <li class="mb-2"><i class="fas fa-check text-success mr-2"></i>Cetak PDF Presisi</li>
+                                <li class="mb-2"><i class="fas fa-check text-success mr-2"></i>Database SQLite (Lokal)</li>
+                                <li class="mb-2"><i class="fas fa-check text-success mr-2"></i>Manajemen Pengguna Dasar</li>
+                                <li class="mb-2 text-muted"><i class="fas fa-times mr-2"></i>Koneksi MySQL / PostgreSQL</li>
+                                <li class="mb-2 text-muted"><i class="fas fa-times mr-2"></i>Laporan Statistik Agregat</li>
+                                <li class="mb-2 text-muted"><i class="fas fa-times mr-2"></i>Kustomisasi Template Barang</li>
+                                <li class="mb-2 text-muted"><i class="fas fa-times mr-2"></i>Migrasi Data Otomatis</li>
+                            </ul>
+                            <button class="btn btn-secondary btn-block disabled" disabled>Paket Saat Ini</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4 mb-4">
+                    <div class="card shadow-lg mb-4 border-bottom-primary transform-hover h-100">
+                        <div class="card-header py-3 bg-primary text-white">
+                            <h5 class="m-0 font-weight-bold text-center"><i class="fas fa-crown mr-2"></i>Versi Professional</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="text-center mb-4">
+                                <span class="badge badge-warning px-3 py-2">RECOMMENDED</span>
+                            </div>
+                            <ul class="list-unstyled font-weight-bold text-gray-700">
+                                <li class="mb-2"><i class="fas fa-check-circle text-primary mr-2"></i>SEMUA Fitur Gratis</li>
+                                <li class="mb-2"><i class="fas fa-check-circle text-primary mr-2"></i>Multi-Database (MySQL/Postgres)</li>
+                                <li class="mb-2"><i class="fas fa-check-circle text-primary mr-2"></i>HTTPS Secure Connection</li>
+                                <li class="mb-2"><i class="fas fa-check-circle text-primary mr-2"></i>Laporan Statistik PDF & Excel</li>
+                                <li class="mb-2"><i class="fas fa-check-circle text-primary mr-2"></i>Editor Template Formulir</li>
+                                <li class="mb-2"><i class="fas fa-check-circle text-primary mr-2"></i>Tools Migrasi & Backup Server</li>
+                            </ul>
+                            <a href="https://wa.me/6282300014685?text=Saya%20tertarik%20upgrade%20SIMDOKPOL%20Pro" target="_blank" class="btn btn-success btn-block font-weight-bold shadow">
+                                <i class="fab fa-whatsapp mr-2"></i> Hubungi Developer
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row justify-content-center mt-4">
+                <div class="col-lg-8">
+                    <div class="card shadow mb-4">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-primary">Sudah Punya Kunci Lisensi?</h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="license-status-text" class="text-center mb-3"></div>
+                            
+                            <div id="license-form-group">
+                                <div class="text-center mb-4">
+                                    <p>Salin <strong>Hardware ID</strong> ini dan kirimkan ke Admin untuk mendapatkan Serial Key:</p>
+                                    <div class="d-flex justify-content-center align-items-center bg-light p-2 rounded border d-inline-flex">
+                                        <code id="hardware-id-val" class="h5 mb-0 mr-3 text-primary">...</code>
+                                        <button class="btn btn-sm btn-outline-primary" onclick="navigator.clipboard.writeText($('#hardware-id-val').text())">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <form id="license-form" class="user">
+                                    <div class="form-group">
+                                        <input type="text" class="form-control form-control-user text-center" 
+                                               id="serial_key" placeholder="Masukkan Serial Key: XXXXX-XXXXX-XXXXX-XXXXX" 
+                                               style="font-family: monospace; letter-spacing: 2px; font-size: 1.1rem;" required>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary btn-user btn-block font-weight-bold">
+                                        <i class="fas fa-key mr-2"></i> Aktifkan Sekarang
+                                    </button>
+                                </form>
+                            </div>
+                            
+                            <div id="license-active-msg" style="display: none;" class="text-center">
+                                <h4 class="text-success"><i class="fas fa-check-circle"></i> Lisensi Pro Sudah Aktif!</h4>
+                                <p>Terima kasih telah mendukung pengembangan aplikasi ini.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+    {{template "_footer.html" .}}
+</div>
+
+{{template "_scripts.html" .}}
+{{template "_licenseScript.html" .}}

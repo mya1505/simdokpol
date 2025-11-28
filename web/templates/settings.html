@@ -1,507 +1,278 @@
-{{template "_header.html" .}} {{template "_sidebar.html" .}}
+{{template "_header.html" .}}
+{{template "_sidebar.html" .}}
 
 <div id="content-wrapper" class="d-flex flex-column">
-  <div id="content">
-    {{template "_topbar.html" .}}
-    <div class="container-fluid">
-      <h1 class="h3 mb-4 text-gray-800">Pengaturan Sistem</h1>
+    <div id="content">
+        {{template "_topbar.html" .}}
+        <div class="container-fluid">
 
-      <div class="card shadow mb-4">
-        <div class="card-header py-3">
-          <ul
-            class="nav nav-pills card-header-pills"
-            id="settingsTab"
-            role="tablist"
-          >
-            <li class="nav-item">
-              <a
-                class="nav-link active"
-                id="general-tab"
-                data-toggle="tab"
-                href="#general"
-                role="tab"
-              >
-                <i class="fas fa-file-alt mr-2"></i>Umum & Surat
-              </a>
-            </li>
-            <li class="nav-item">
-              <a
-                class="nav-link"
-                id="database-tab"
-                data-toggle="tab"
-                href="#database"
-                role="tab"
-              >
-                <i class="fas fa-database mr-2"></i>Database
-              </a>
-            </li>
-            <li class="nav-item">
-              <a
-                class="nav-link"
-                id="backup-tab"
-                data-toggle="tab"
-                href="#backup"
-                role="tab"
-              >
-                <i class="fas fa-hdd mr-2"></i>Backup & Restore
-              </a>
-            </li>
-            <li class="nav-item">
-              <a
-                class="nav-link"
-                id="migration-tab"
-                data-toggle="tab"
-                href="#migration"
-                role="tab"
-              >
-                <i class="fas fa-exchange-alt mr-2"></i>Migrasi Data
-              </a>
-            </li>
-          </ul>
-        </div>
+            <h1 class="h3 mb-4 text-gray-800">Pengaturan Sistem</h1>
 
-        <div class="card-body">
-          <div class="tab-content" id="settingsTabContent">
-            <div class="tab-pane fade show active" id="general" role="tabpanel">
-              <form id="general-form">
-                <h6 class="heading-small text-muted mb-4">
-                  Identitas Instansi (KOP Surat)
-                </h6>
-                <div class="pl-lg-4">
-                  <div class="row">
-                    <div class="col-lg-4">
-                      <div class="form-group">
-                        <label>Baris 1</label
-                        ><input
-                          type="text"
-                          id="kop_baris_1"
-                          class="form-control auto-uppercase"
-                        />
-                      </div>
-                    </div>
-                    <div class="col-lg-4">
-                      <div class="form-group">
-                        <label>Baris 2</label
-                        ><input
-                          type="text"
-                          id="kop_baris_2"
-                          class="form-control auto-uppercase"
-                        />
-                      </div>
-                    </div>
-                    <div class="col-lg-4">
-                      <div class="form-group">
-                        <label>Baris 3</label
-                        ><input
-                          type="text"
-                          id="kop_baris_3"
-                          class="form-control auto-uppercase"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div class="row">
-                    <div class="col-lg-6">
-                      <div class="form-group">
-                        <label>Nama Kantor</label
-                        ><input
-                          type="text"
-                          id="nama_kantor"
-                          class="form-control auto-titlecase"
-                        />
-                      </div>
-                    </div>
-                    <div class="col-lg-6">
-                      <div class="form-group">
-                        <label>Tempat Terbit</label
-                        ><input
-                          type="text"
-                          id="tempat_surat"
-                          class="form-control auto-titlecase"
-                        />
-                      </div>
-                    </div>
-                  </div>
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <ul class="nav nav-pills card-header-pills" id="settingsTab" role="tablist">
+                        <li class="nav-item">
+                            <a class="nav-link active" id="general-tab" data-toggle="tab" href="#general" role="tab">
+                                <i class="fas fa-file-alt mr-2"></i>Umum & Surat
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" id="database-tab" data-toggle="tab" href="#database" role="tab">
+                                <i class="fas fa-database mr-2"></i>Database
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" id="backup-tab" data-toggle="tab" href="#backup" role="tab">
+                                <i class="fas fa-hdd mr-2"></i>Backup & Restore
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" id="migration-tab" data-toggle="tab" href="#migration" role="tab">
+                                <i class="fas fa-exchange-alt mr-2"></i>Migrasi Data
+                            </a>
+                        </li>
+                    </ul>
                 </div>
-                <hr class="my-4" />
+                
+                <div class="card-body">
+                    <div class="tab-content" id="settingsTabContent">
+                        
+                        <div class="tab-pane fade show active" id="general" role="tabpanel">
+                            <form id="general-form">
+                                <h6 class="heading-small text-muted mb-4">Identitas Instansi (KOP Surat)</h6>
+                                <div class="pl-lg-4">
+                                    <div class="row">
+                                        <div class="col-lg-4">
+                                            <div class="form-group"><label class="form-control-label">Baris 1</label><input type="text" id="kop_baris_1" class="form-control auto-uppercase" placeholder="KEPOLISIAN NEGARA..."></div>
+                                        </div>
+                                        <div class="col-lg-4">
+                                            <div class="form-group"><label class="form-control-label">Baris 2</label><input type="text" id="kop_baris_2" class="form-control auto-uppercase" placeholder="DAERAH..."></div>
+                                        </div>
+                                        <div class="col-lg-4">
+                                            <div class="form-group"><label class="form-control-label">Baris 3</label><input type="text" id="kop_baris_3" class="form-control auto-uppercase" placeholder="RESOR..."></div>
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-lg-6">
+                                            <div class="form-group"><label class="form-control-label">Nama Kantor</label><input type="text" id="nama_kantor" class="form-control auto-titlecase"></div>
+                                        </div>
+                                        <div class="col-lg-6">
+                                            <div class="form-group"><label class="form-control-label">Tempat Terbit Surat</label><input type="text" id="tempat_surat" class="form-control auto-titlecase"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <hr class="my-4" />
+                                <h6 class="heading-small text-muted mb-4">Sistem & Keamanan</h6>
+                                <div class="pl-lg-4">
+                                    <div class="row">
+                                        <div class="col-lg-4">
+                                            <div class="form-group"><label class="form-control-label">Format Nomor Surat</label><input type="text" id="format_nomor_surat" class="form-control"></div>
+                                        </div>
+                                        <div class="col-lg-2">
+                                            <div class="form-group"><label class="form-control-label">No. Terakhir</label><input type="number" id="nomor_surat_terakhir" class="form-control bg-light" readonly title="Otomatis sinkron dengan data dokumen terakhir"></div>
+                                        </div>
+                                        <div class="col-lg-2">
+                                            <div class="form-group"><label class="form-control-label">Lama Arsip (Hari)</label><input type="number" id="archive_duration_days" class="form-control"></div>
+                                        </div>
+                                        <div class="col-lg-4">
+                                            <div class="form-group">
+                                                <label class="form-control-label">Zona Waktu</label>
+                                                <select id="zona_waktu" class="form-control">
+                                                    <option value="Asia/Jakarta">WIB (Jakarta)</option>
+                                                    <option value="Asia/Makassar">WITA (Makassar)</option>
+                                                    <option value="Asia/Jayapura">WIT (Jayapura)</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
 
-                <h6 class="heading-small text-muted mb-4">Sistem & Keamanan</h6>
-                <div class="pl-lg-4">
-                  <div class="row">
-                    <div class="col-lg-4">
-                      <div class="form-group">
-                        <label>Format Nomor</label
-                        ><input
-                          type="text"
-                          id="format_nomor_surat"
-                          class="form-control"
-                        />
-                      </div>
-                    </div>
-                    <div class="col-lg-2">
-                      <div class="form-group">
-                        <label>No. Terakhir</label
-                        ><input
-                          type="number"
-                          id="nomor_surat_terakhir"
-                          class="form-control"
-                        />
-                      </div>
-                    </div>
-                    <div class="col-lg-2">
-                      <div class="form-group">
-                        <label>Arsip (Hari)</label
-                        ><input
-                          type="number"
-                          id="archive_duration_days"
-                          class="form-control"
-                        />
-                      </div>
-                    </div>
-                    <div class="col-lg-4">
-                      <div class="form-group">
-                        <label>Zona Waktu</label>
-                        <select id="zona_waktu" class="form-control">
-                          <option value="Asia/Jakarta">WIB</option>
-                          <option value="Asia/Makassar">WITA</option>
-                          <option value="Asia/Jayapura">WIT</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
+                                    <div class="row">
+                                        <div class="col-lg-6">
+                                            <div class="form-group"><label class="form-control-label">Sesi Login (Menit)</label><input type="number" id="session_timeout" class="form-control"></div>
+                                        </div>
+                                        <div class="col-lg-6">
+                                            <div class="form-group"><label class="form-control-label">Idle Timeout (Menit)</label><input type="number" id="idle_timeout" class="form-control"></div>
+                                        </div>
+                                    </div>
 
-                  <div class="row">
-                    <div class="col-lg-6">
-                      <div class="form-group">
-                        <label class="font-weight-bold"
-                          >Sesi Login Maksimal (Menit)</label
-                        >
-                        <input
-                          type="number"
-                          id="session_timeout"
-                          class="form-control"
-                          placeholder="Default: 480 (8 Jam)"
-                        />
-                        <small class="text-muted"
-                          >Wajib login ulang setelah durasi ini.</small
-                        >
-                      </div>
-                    </div>
-                    <div class="col-lg-6">
-                      <div class="form-group">
-                        <label class="font-weight-bold"
-                          >Idle Timeout (Menit)</label
-                        >
-                        <input
-                          type="number"
-                          id="idle_timeout"
-                          class="form-control"
-                          placeholder="Default: 15"
-                        />
-                        <small class="text-muted"
-                          >Logout otomatis jika tidak ada aktivitas
-                          mouse/keyboard.</small
-                        >
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="row mt-3">
-                    <div class="col-12">
-                      <div class="alert alert-secondary">
-                        <div class="custom-control custom-switch">
-                          <input
-                            type="checkbox"
-                            class="custom-control-input"
-                            id="enable_https"
-                          />
-                          <label
-                            class="custom-control-label font-weight-bold text-primary"
-                            for="enable_https"
-                            >Aktifkan Mode HTTPS (Enkripsi SSL/TLS)</label
-                          >
+                                    <div class="row mt-2">
+                                        <div class="col-12">
+                                            <div class="alert alert-secondary">
+                                                <div class="custom-control custom-switch">
+                                                    <input type="checkbox" class="custom-control-input" id="enable_https">
+                                                    <label class="custom-control-label font-weight-bold text-primary" for="enable_https">
+                                                        Aktifkan Mode HTTPS (Enkripsi SSL/TLS)
+                                                        <span id="https-pro-badge" class="badge badge-warning ml-2 shadow-sm" style="display:none;"><i class="fas fa-lock mr-1"></i>PRO</span>
+                                                    </label>
+                                                </div>
+                                                <small class="d-block mt-2 text-muted">
+                                                    Mengenkripsi koneksi agar aman dari penyadapan di jaringan LAN. <br>
+                                                    <strong>Note:</strong> Browser akan menampilkan peringatan "Not Secure" karena sertifikat dibuat sendiri. Aplikasi akan restart otomatis.
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <hr>
+                                <button type="submit" class="btn btn-primary float-right px-5"><i class="fas fa-save mr-2"></i>Simpan Pengaturan Umum</button>
+                            </form>
                         </div>
-                        <small class="d-block mt-2 text-muted">
-                          Mengenkripsi koneksi agar aman dari penyadapan.
-                          Aplikasi akan restart otomatis.
-                        </small>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <hr />
-                <button type="submit" class="btn btn-primary float-right px-5">
-                  <i class="fas fa-save mr-2"></i>Simpan
-                </button>
-              </form>
-            </div>
 
-            <div class="tab-pane fade" id="database" role="tabpanel">
-              <form id="database-form">
-                <div class="alert alert-info border-left-info">
-                  <i class="fas fa-info-circle mr-2"></i> Perubahan koneksi
-                  database memerlukan <strong>Restart Aplikasi</strong> agar
-                  berlaku efektif.
-                </div>
-                <div class="form-group">
-                  <label class="font-weight-bold">Jenis Database</label>
-                  <select id="db_dialect" class="form-control form-control-lg">
-                    <option value="sqlite">SQLite (File Lokal)</option>
-                    <option value="mysql">MySQL (Server)</option>
-                    <option value="postgres">PostgreSQL (Cloud/Server)</option>
-                  </select>
-                </div>
+                        <div class="tab-pane fade" id="database" role="tabpanel">
+                            <form id="database-form">
+                                <div class="alert alert-info border-left-info">
+                                    <i class="fas fa-info-circle mr-2"></i> Perubahan koneksi database memerlukan <strong>Restart Aplikasi</strong>.
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label class="font-weight-bold">Jenis Database</label>
+                                    <select id="db_dialect" class="form-control form-control-lg">
+                                        <option value="sqlite">SQLite (File Lokal)</option>
+                                        <option value="mysql">MySQL (Server)</option>
+                                        <option value="postgres">PostgreSQL (Server/Cloud)</option>
+                                    </select>
+                                </div>
 
-                <div
-                  id="sqlite-settings"
-                  class="p-3 bg-light rounded border mb-3"
-                >
-                  <div class="form-group mb-0">
-                    <label>Path File Database (DSN)</label>
-                    <input
-                      type="text"
-                      class="form-control bg-white"
-                      id="db_dsn"
-                      readonly
-                    />
-                    <small class="text-muted"
-                      >Lokasi file otomatis dikelola sistem di folder
-                      AppData.</small
-                    >
-                  </div>
-                </div>
+                                <div id="sqlite-settings" class="p-3 bg-light rounded border mb-3">
+                                    <div class="form-group mb-0">
+                                        <label>Path File Database (Absolute)</label>
+                                        <input type="text" class="form-control bg-white" id="db_dsn" readonly>
+                                        <small class="text-muted">Dikelola otomatis oleh sistem di folder AppData.</small>
+                                    </div>
+                                </div>
 
-                <div
-                  id="server-db-settings"
-                  style="display: none"
-                  class="p-3 bg-light rounded border mb-3"
-                >
-                  <div class="form-row">
-                    <div class="form-group col-md-8">
-                      <label>Host / IP</label
-                      ><input type="text" class="form-control" id="db_host" />
-                    </div>
-                    <div class="form-group col-md-4">
-                      <label>Port</label
-                      ><input type="text" class="form-control" id="db_port" />
-                    </div>
-                  </div>
-                  <div class="form-row">
-                    <div class="form-group col-md-6">
-                      <label>Nama Database</label
-                      ><input type="text" class="form-control" id="db_name" />
-                    </div>
-                    <div class="form-group col-md-6">
-                      <label>Username</label
-                      ><input type="text" class="form-control" id="db_user" />
-                    </div>
-                  </div>
-
-                  <div class="form-group">
-                    <label>Password</label>
-                    <div class="password-wrapper">
-                      <input
-                        type="password"
-                        class="form-control"
-                        id="db_pass"
-                        placeholder="Isi hanya jika ingin mengubah password"
-                      />
-                      <i class="fas fa-eye password-peek"></i>
-                    </div>
-                  </div>
-
-                  <div
-                    class="form-group"
-                    id="settings-pg-ssl-group"
-                    style="display: none"
-                  >
-                    <label>SSL Mode</label>
-                    <select id="db_sslmode" class="form-control">
-                      <option value="disable">Disable (Lokal)</option>
-                      <option value="require">Require (Cloud)</option>
-                      <option value="verify-full">Verify Full</option>
-                    </select>
-                  </div>
-
-                  <button
-                    type="button"
-                    id="test-db-btn"
-                    class="btn btn-info btn-sm"
-                  >
-                    <i class="fas fa-plug mr-1"></i> Tes Koneksi
-                  </button>
-                </div>
-
-                <button type="submit" class="btn btn-primary float-right px-5">
-                  <i class="fas fa-save mr-2"></i>Simpan Konfigurasi DB
-                </button>
-              </form>
-            </div>
-
-            <div class="tab-pane fade" id="backup" role="tabpanel">
-              <div class="row mt-3">
-                <div class="col-lg-6 mb-4">
-                  <div class="card border-left-primary h-100">
-                    <div class="card-body">
-                      <h5 class="font-weight-bold text-primary mb-3">
-                        <i class="fas fa-download mr-2"></i>Backup Data
-                      </h5>
-                      <p class="text-gray-600 mb-4">
-                        Unduh salinan database (SQLite) saat ini untuk keamanan
-                        data Anda.
-                      </p>
-                      <div class="form-group">
-                        <label>Folder Backup Server</label>
-                        <input
-                          type="text"
-                          id="backup_path"
-                          class="form-control form-control-sm bg-light"
-                          readonly
-                        />
-                      </div>
-                      <form action="/api/backups" method="POST" target="_blank">
-                        <button type="submit" class="btn btn-primary btn-block">
-                          <i class="fas fa-file-download mr-2"></i>Download File
-                          .db
-                        </button>
-                      </form>
-                    </div>
-                  </div>
-                </div>
-                <div class="col-lg-6 mb-4">
-                  <div class="card border-left-danger h-100">
-                    <div class="card-body">
-                      <h5 class="font-weight-bold text-danger mb-3">
-                        <i class="fas fa-upload mr-2"></i>Restore Data
-                      </h5>
-                      <p class="text-gray-600 mb-4">
-                        Kembalikan data dari file backup.
-                        <strong>Peringatan: Data saat ini akan ditimpa!</strong>
-                      </p>
-                      <form id="restore-form">
-                        <div class="custom-file mb-3">
-                          <input
-                            type="file"
-                            class="custom-file-input"
-                            id="restore-file"
-                            accept=".db"
-                            required
-                          />
-                          <label class="custom-file-label"
-                            >Pilih file backup...</label
-                          >
+                                <div id="server-db-settings" style="display:none;" class="p-3 bg-light rounded border mb-3">
+                                    <div class="card-body p-0">
+                                        <h6 class="text-primary font-weight-bold mb-3">Kredensial Server</h6>
+                                        <div class="form-row">
+                                            <div class="form-group col-md-8"><label>Host / IP</label><input type="text" class="form-control" id="db_host"></div>
+                                            <div class="form-group col-md-4"><label>Port</label><input type="text" class="form-control" id="db_port"></div>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group col-md-6"><label>Nama Database</label><input type="text" class="form-control" id="db_name"></div>
+                                            <div class="form-group col-md-6"><label>Username</label><input type="text" class="form-control" id="db_user"></div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Password</label>
+                                            <div class="password-wrapper">
+                                                <input type="password" class="form-control" id="db_pass" placeholder="Isi hanya jika ingin mengubah password">
+                                                <i class="fas fa-eye password-peek"></i>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="form-group" id="settings-pg-ssl-group" style="display:none;">
+                                            <label class="font-weight-bold small">Mode SSL</label>
+                                            <select id="db_sslmode" class="form-control form-control-sm">
+                                                <option value="disable">Disable (Lokal)</option>
+                                                <option value="require">Require (Cloud)</option>
+                                                <option value="verify-full">Verify Full</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <button type="button" id="test-db-btn" class="btn btn-info btn-block mt-3"><i class="fas fa-plug mr-1"></i> Tes Koneksi Server</button>
+                                    </div>
+                                </div>
+                                
+                                <button type="submit" class="btn btn-primary float-right px-5"><i class="fas fa-save mr-2"></i> Simpan DB</button>
+                            </form>
                         </div>
-                        <button type="submit" class="btn btn-danger btn-block">
-                          <i class="fas fa-history mr-2"></i>Pulihkan Database
-                        </button>
-                      </form>
+
+                        <div class="tab-pane fade" id="backup" role="tabpanel">
+                            <div class="row mt-3">
+                                <div class="col-lg-6 mb-4">
+                                    <div class="card border-left-primary h-100">
+                                        <div class="card-body">
+                                            <h5 class="font-weight-bold text-primary mb-3"><i class="fas fa-download mr-2"></i>Backup Data</h5>
+                                            <p class="text-gray-600 mb-4">Unduh salinan database (SQLite) saat ini.</p>
+                                            <div class="form-group">
+                                                <label>Folder Backup Server</label>
+                                                <input type="text" id="backup_path" class="form-control form-control-sm bg-light" readonly>
+                                            </div>
+                                            <form action="/api/backups" method="POST" target="_blank">
+                                                <button type="submit" id="backup-btn" class="btn btn-primary btn-block"><i class="fas fa-file-download mr-2"></i>Download File .db</button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-lg-6 mb-4">
+                                    <div class="card border-left-danger h-100">
+                                        <div class="card-body">
+                                            <h5 class="font-weight-bold text-danger mb-3"><i class="fas fa-upload mr-2"></i>Restore Data</h5>
+                                            <p class="text-gray-600 mb-4">Kembalikan data dari file backup. <strong>Data saat ini akan ditimpa!</strong></p>
+                                            <form id="restore-form">
+                                                <div class="custom-file mb-3">
+                                                    <input type="file" class="custom-file-input" id="restore-file" name="restore-file" accept=".db" required>
+                                                    <label class="custom-file-label" for="restore-file">Pilih file backup...</label>
+                                                </div>
+                                                <button type="submit" id="restore-btn" class="btn btn-danger btn-block"><i class="fas fa-history mr-2"></i>Pulihkan Database</button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="alert alert-info"><i class="fas fa-info-circle mr-1"></i> Fitur Backup & Restore hanya berlaku untuk database <strong>SQLite</strong>.</div>
+                        </div>
+
+                        <div class="tab-pane fade" id="migration" role="tabpanel">
+                            <div id="migration-panel">
+                                <div class="alert alert-warning mt-3">
+                                    <h5 class="alert-heading font-weight-bold"><i class="fas fa-exclamation-triangle mr-2"></i>Prosedur Migrasi Data</h5>
+                                    <p class="mb-0">Fitur ini menyalin <strong>SELURUH DATA</strong> ke database target baru. Target harus kosong.</p>
+                                </div>
+                                <form id="migration-form" class="mt-4">
+                                    <h6 class="font-weight-bold text-gray-800">Target Database</h6>
+                                    <div class="form-row">
+                                        <div class="col-md-3">
+                                            <select id="mig_dialect" class="form-control"><option value="mysql">MySQL</option><option value="postgres">PostgreSQL</option></select>
+                                        </div>
+                                        <div class="col-md-5"><input type="text" id="mig_host" class="form-control" placeholder="Host IP"></div>
+                                        <div class="col-md-2"><input type="text" id="mig_port" class="form-control" value="3306"></div>
+                                        <div class="col-md-2" id="mig-ssl-wrap" style="display:none;"><select id="mig_sslmode" class="form-control"><option value="disable">Disable</option><option value="require">Require</option></select></div>
+                                    </div>
+                                    <div class="form-row mt-3">
+                                        <div class="col-md-4"><input type="text" id="mig_name" class="form-control" placeholder="DB Name"></div>
+                                        <div class="col-md-4"><input type="text" id="mig_user" class="form-control" placeholder="User"></div>
+                                        <div class="col-md-4">
+                                            <div class="password-wrapper">
+                                                <input type="password" id="mig_pass" class="form-control" placeholder="Password">
+                                                <i class="fas fa-eye password-peek"></i>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <hr>
+                                    <button type="submit" id="btn-migrate" class="btn btn-warning btn-block font-weight-bold py-3"><i class="fas fa-rocket mr-2"></i>Mulai Migrasi Data</button>
+                                </form>
+                            </div>
+                            
+                            <div id="migration-progress-area" style="display: none;" class="mt-4 text-center">
+                                <h5 class="font-weight-bold text-gray-800 mb-3">Sedang Memindahkan Data...</h5>
+                                <div class="progress mb-3" style="height: 25px;">
+                                    <div id="mig-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-warning" role="progressbar" style="width: 0%">0%</div>
+                                </div>
+                                <p id="mig-status-text" class="text-muted small">Menginisialisasi...</p>
+                                <div class="card bg-dark text-white text-left">
+                                    <div class="card-body p-2">
+                                        <pre id="mig-log" class="m-0 small text-success" style="height: 150px; overflow-y: auto; font-family: monospace;"></pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
-                  </div>
                 </div>
-              </div>
             </div>
 
-            <div class="tab-pane fade" id="migration" role="tabpanel">
-              <div class="alert alert-warning mt-3">
-                <h5 class="alert-heading">
-                  <i class="fas fa-exclamation-triangle mr-2"></i>Hati-hati!
-                </h5>
-                <p>
-                  Fitur ini akan menyalin <strong>SELURUH DATA</strong> dari
-                  database yang sedang aktif ke database target baru. Pastikan
-                  database target dalam keadaan kosong.
-                </p>
-              </div>
-              <form id="migration-form" class="mt-4">
-                <h6 class="font-weight-bold text-gray-800">Database Tujuan</h6>
-                <div class="form-row">
-                  <div class="col-md-3">
-                    <label>Tipe</label>
-                    <select id="mig_dialect" class="form-control">
-                      <option value="mysql">MySQL</option>
-                      <option value="postgres">PostgreSQL</option>
-                    </select>
-                  </div>
-                  <div class="col-md-5">
-                    <label>Host</label
-                    ><input
-                      type="text"
-                      id="mig_host"
-                      class="form-control"
-                      placeholder="127.0.0.1"
-                    />
-                  </div>
-                  <div class="col-md-2">
-                    <label>Port</label
-                    ><input
-                      type="text"
-                      id="mig_port"
-                      class="form-control"
-                      value="3306"
-                    />
-                  </div>
-                  <div class="col-md-2" id="mig-ssl-wrap" style="display: none">
-                    <label>SSL</label
-                    ><select id="mig_sslmode" class="form-control">
-                      <option value="disable">Off</option>
-                      <option value="require">On</option>
-                    </select>
-                  </div>
-                </div>
-                <div class="form-row mt-3">
-                  <div class="col-md-4">
-                    <label>Nama DB</label
-                    ><input
-                      type="text"
-                      id="mig_name"
-                      class="form-control"
-                      placeholder="simdokpol_new"
-                    />
-                  </div>
-                  <div class="col-md-4">
-                    <label>User</label
-                    ><input
-                      type="text"
-                      id="mig_user"
-                      class="form-control"
-                      placeholder="root"
-                    />
-                  </div>
-                  <div class="col-md-4">
-                    <label>Password</label>
-                    <div class="password-wrapper">
-                      <input
-                        type="password"
-                        id="mig_pass"
-                        class="form-control"
-                        placeholder="Password"
-                      />
-                      <i class="fas fa-eye password-peek"></i>
-                    </div>
-                  </div>
-                </div>
-                <hr />
-                <button
-                  type="submit"
-                  class="btn btn-warning btn-block font-weight-bold py-3"
-                >
-                  <i class="fas fa-rocket mr-2"></i>Mulai Proses Migrasi Data
-                </button>
-              </form>
-            </div>
-          </div>
         </div>
-      </div>
     </div>
-  </div>
-  {{template "_footer.html" .}}
+    {{template "_footer.html" .}}
 </div>
 
-{{template "_scripts.html" .}} {{template "_settingsScript.html" .}}
+{{template "_scripts.html" .}}
+{{template "_settingsScript.html" .}}
 <script>
-  // Custom file input label
-  $(".custom-file-input").on("change", function () {
-    let fileName = $(this).val().split("\\").pop();
-    $(this).next(".custom-file-label").addClass("selected").html(fileName);
-  });
+    // Custom file input label
+    $('.custom-file-input').on('change', function() {
+        let fileName = $(this).val().split('\\').pop();
+        $(this).next('.custom-file-label').addClass("selected").html(fileName);
+    });
 </script>

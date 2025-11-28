@@ -15,7 +15,8 @@ import (
 )
 
 type DataMigrationService interface {
-	MigrateDataTo(targetConfig dto.DBTestRequest, actorID uint) error
+	// Update signature: Tambah channel untuk progress report
+	MigrateDataTo(targetConfig dto.DBTestRequest, actorID uint, progressChan chan<- dto.MigrationProgress) error
 }
 
 type dataMigrationService struct {
@@ -32,15 +33,21 @@ func NewDataMigrationService(currentDB *gorm.DB, auditService AuditLogService, c
 	}
 }
 
-func (s *dataMigrationService) MigrateDataTo(target dto.DBTestRequest, actorID uint) error {
-	// 1. Buka Koneksi ke Target Database
+func (s *dataMigrationService) MigrateDataTo(target dto.DBTestRequest, actorID uint, progressChan chan<- dto.MigrationProgress) error {
+	// Helper kirim progress
+	report := func(step string, pct int, msg string) {
+		if progressChan != nil {
+			progressChan <- dto.MigrationProgress{Step: step, Percent: pct, Message: msg}
+		}
+	}
+
+	report("connect", 5, "Menghubungkan ke database target...")
 	targetDB, err := s.openTargetConnection(target)
 	if err != nil {
 		return fmt.Errorf("gagal koneksi ke target database: %w", err)
 	}
 	
-	// 2. Auto Migrate Target (Buat Tabel)
-	log.Println("MIGRASI: Membuat skema tabel di target...")
+	report("schema", 10, "Membuat struktur tabel...")
 	err = targetDB.AutoMigrate(
 		&models.Configuration{}, &models.User{}, &models.Resident{},
 		&models.LostDocument{}, &models.LostItem{}, &models.AuditLog{},
@@ -50,8 +57,8 @@ func (s *dataMigrationService) MigrateDataTo(target dto.DBTestRequest, actorID u
 		return fmt.Errorf("gagal membuat tabel di target: %w", err)
 	}
 
-	// 3. Mulai Transaksi Migrasi Data
-	// FIX QF1003: Gunakan switch case
+	// --- MATIKAN FOREIGN KEY CHECKS (CRITICAL FIX) ---
+	// Ini mencegah error FK saat insert data yang urutannya mungkin acak atau circular
 	switch target.DBDialect {
 	case "mysql":
 		targetDB.Exec("SET FOREIGN_KEY_CHECKS = 0")
@@ -59,40 +66,49 @@ func (s *dataMigrationService) MigrateDataTo(target dto.DBTestRequest, actorID u
 	case "sqlite":
 		targetDB.Exec("PRAGMA foreign_keys = OFF")
 		defer targetDB.Exec("PRAGMA foreign_keys = ON")
+	case "postgres":
+		// Superuser required. Jika gagal, kita andalkan urutan insert yang benar.
+		// session_replication_role = replica menonaktifkan trigger dan FK check
+		targetDB.Exec("SET session_replication_role = 'replica'")
+		defer targetDB.Exec("SET session_replication_role = 'origin'")
 	}
-	// Postgres tidak perlu disable global FK untuk urutan insert ini
 
-	log.Println("MIGRASI: Memindahkan data Configuration...")
-	if err := s.copyTable(s.currentDB, targetDB, &models.Configuration{}); err != nil { return err }
+	// --- PROSES SALIN DATA (FIX: UNSCOPED) ---
+	// Kita gunakan Unscoped() agar data soft-deleted (DeletedAt != NULL) tetap tersalin.
+	// Ini mencegah error FK jika dokumen mereferensi user yang sudah dihapus.
 
-	log.Println("MIGRASI: Memindahkan data License...")
-	if err := s.copyTable(s.currentDB, targetDB, &models.License{}); err != nil { return err }
-	
-	log.Println("MIGRASI: Memindahkan data ItemTemplate...")
-	if err := s.copyTable(s.currentDB, targetDB, &models.ItemTemplate{}); err != nil { return err }
+	tables := []struct {
+		Name  string
+		Model interface{}
+		Pct   int
+	}{
+		{"Konfigurasi", &models.Configuration{}, 15},
+		{"Lisensi", &models.License{}, 20},
+		{"Template Barang", &models.ItemTemplate{}, 25},
+		{"Pengguna", &models.User{}, 35}, // User dulu
+		{"Penduduk", &models.Resident{}, 45}, // Lalu Resident
+		{"Dokumen", &models.LostDocument{}, 60}, // Baru Dokumen (refer ke User & Resident)
+		{"Barang Hilang", &models.LostItem{}, 80},
+		{"Log Audit", &models.AuditLog{}, 90},
+	}
 
-	log.Println("MIGRASI: Memindahkan data User...")
-	if err := s.copyTable(s.currentDB, targetDB, &models.User{}); err != nil { return err }
+	for _, t := range tables {
+		report(t.Name, t.Pct, fmt.Sprintf("Menyalin data %s...", t.Name))
+		if err := s.copyTable(s.currentDB, targetDB, t.Model); err != nil {
+			return fmt.Errorf("gagal menyalin %s: %w", t.Name, err)
+		}
+	}
 
-	log.Println("MIGRASI: Memindahkan data Resident...")
-	if err := s.copyTable(s.currentDB, targetDB, &models.Resident{}); err != nil { return err }
-
-	log.Println("MIGRASI: Memindahkan data LostDocument...")
-	if err := s.copyTable(s.currentDB, targetDB, &models.LostDocument{}); err != nil { return err }
-
-	log.Println("MIGRASI: Memindahkan data LostItem...")
-	if err := s.copyTable(s.currentDB, targetDB, &models.LostItem{}); err != nil { return err }
-
-	log.Println("MIGRASI: Memindahkan data AuditLog...")
-	if err := s.copyTable(s.currentDB, targetDB, &models.AuditLog{}); err != nil { return err }
-
-	s.auditService.LogActivity(actorID, "MIGRASI DATABASE", fmt.Sprintf("Data berhasil disalin ke database baru (%s)", target.DBDialect))
+	report("finish", 100, "Finalisasi migrasi...")
+	s.auditService.LogActivity(actorID, models.AuditSettingsUpdated, fmt.Sprintf("Data berhasil disalin ke database baru (%s)", target.DBDialect))
 
 	return nil
 }
 
 func (s *dataMigrationService) copyTable(src, dest *gorm.DB, model interface{}) error {
-	return src.Model(model).FindInBatches(model, 100, func(tx *gorm.DB, batch int) error {
+	// FIX: Tambahkan Unscoped() agar data terhapus tetap tersalin
+	return src.Unscoped().Model(model).FindInBatches(model, 100, func(tx *gorm.DB, batch int) error {
+		// Gunakan Clauses OnConflict DoNothing agar idempotency terjaga
 		return dest.Clauses(clause.OnConflict{DoNothing: true}).Create(tx.Statement.Dest).Error
 	}).Error
 }
@@ -103,8 +119,10 @@ func (s *dataMigrationService) openTargetConnection(req dto.DBTestRequest) (*gor
 
 	switch req.DBDialect {
 	case "mysql":
-		dsn = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-			req.DBUser, req.DBPass, req.DBHost, req.DBPort, req.DBName)
+		tlsOption := "false"
+		if req.DBSSLMode == "require" { tlsOption = "skip-verify" } else if req.DBSSLMode == "verify-full" { tlsOption = "true" }
+		dsn = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local&tls=%s",
+			req.DBUser, req.DBPass, req.DBHost, req.DBPort, req.DBName, tlsOption)
 		dialector = mysql.Open(dsn)
 	case "postgres":
 		sslMode := req.DBSSLMode

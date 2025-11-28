@@ -132,14 +132,56 @@ func (c *ConfigController) SaveSetup(ctx *gin.Context) {
 	APIResponse(ctx, http.StatusOK, "Setup berhasil.", nil)
 }
 
+// Update fungsi MigrateDatabase
+// @Summary Migrasi Data (Stream)
+// @Router /api/settings/migrate [post]
 func (c *ConfigController) MigrateDatabase(ctx *gin.Context) {
 	var req dto.DBTestRequest
-	if err := ctx.ShouldBindJSON(&req); err != nil { APIError(ctx, http.StatusBadRequest, "Input invalid."); return }
-	if req.DBDialect != "mysql" && req.DBDialect != "postgres" && req.DBDialect != "sqlite" { APIError(ctx, http.StatusBadRequest, "DB tidak didukung."); return }
-	if err := c.migrationService.MigrateDataTo(req, ctx.GetUint("userID")); err != nil {
-		APIError(ctx, http.StatusInternalServerError, "Gagal migrasi: " + err.Error()); return
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		APIError(ctx, http.StatusBadRequest, "Input konfigurasi tidak valid.")
+		return
 	}
-	APIResponse(ctx, http.StatusOK, "Migrasi sukses!", nil)
+
+	// Setup SSE Headers
+	ctx.Header("Content-Type", "text/event-stream")
+	ctx.Header("Cache-Control", "no-cache")
+	ctx.Header("Connection", "keep-alive")
+	ctx.Header("Transfer-Encoding", "chunked")
+
+	actorID := ctx.GetUint("userID")
+	progressChan := make(chan dto.MigrationProgress)
+	errorChan := make(chan error)
+
+	// Jalankan migrasi di Goroutine
+	go func() {
+		err := c.migrationService.MigrateDataTo(req, actorID, progressChan)
+		if err != nil {
+			errorChan <- err
+		}
+		close(progressChan)
+		close(errorChan)
+	}()
+
+	// Stream data ke client
+	ctx.Stream(func(w io.Writer) bool {
+		select {
+		case progress, ok := <-progressChan:
+			if !ok {
+				// Selesai
+				ctx.SSEvent("complete", map[string]string{"message": "Migrasi Selesai"})
+				return false
+			}
+			// Kirim progress
+			ctx.SSEvent("progress", progress)
+			return true
+		case err := <-errorChan:
+			if err != nil {
+				ctx.SSEvent("error", map[string]string{"message": err.Error()})
+				return false
+			}
+			return true
+		}
+	})
 }
 
 func (c *ConfigController) RestoreSetup(ctx *gin.Context) {

@@ -1,10 +1,12 @@
 package services
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"simdokpol/internal/dto"
+	"simdokpol/internal/models"
 	"simdokpol/internal/repositories"
 	"simdokpol/internal/utils"
 	"strconv"
@@ -26,13 +28,18 @@ type ConfigService interface {
 
 type configService struct {
 	configRepo     repositories.ConfigRepository
+	db             *gorm.DB // <-- FIELD BARU: Untuk Sync Nomor Surat
 	cachedLocation *time.Location
 	cachedConfig   *dto.AppConfig
 	mu             sync.RWMutex
 }
 
-func NewConfigService(configRepo repositories.ConfigRepository) ConfigService {
-	return &configService{configRepo: configRepo}
+// NewConfigService sekarang menerima *gorm.DB
+func NewConfigService(configRepo repositories.ConfigRepository, db *gorm.DB) ConfigService {
+	return &configService{
+		configRepo: configRepo,
+		db:         db,
+	}
 }
 
 func (s *configService) SaveConfig(configData map[string]string) error {
@@ -69,9 +76,9 @@ func (s *configService) SaveConfig(configData map[string]string) error {
 	}
 
 	if hasEnvChanges {
-		log.Println("INFO: Memperbarui file .env...")
+		log.Println("INFO: Memperbarui file .env dengan konfigurasi baru...")
 		if err := utils.UpdateEnvFile(envUpdates); err != nil {
-			log.Printf("ERROR: Gagal update .env: %v", err)
+			log.Printf("ERROR: Gagal memperbarui file .env: %v", err)
 		}
 	}
 
@@ -132,6 +139,24 @@ func (s *configService) GetConfig() (*dto.AppConfig, error) {
 		return nil, err
 	}
 
+	// --- FIX BUG 3: SINKRONISASI NOMOR SURAT TERAKHIR ---
+	// Ambil nomor urut dari dokumen terakhir di DB
+	// Logic ini memastikan angka di Settings selalu sesuai realita
+	if s.db != nil {
+		var lastDoc models.LostDocument
+		// Ambil dokumen terakhir berdasarkan ID
+		if err := s.db.Order("id desc").First(&lastDoc).Error; err == nil {
+			// Parsing nomor surat (Format: SKH/001/...)
+			parts := strings.Split(lastDoc.NomorSurat, "/")
+			if len(parts) > 1 {
+				// Jika berhasil diparse, update nilai di map config sementara (untuk ditampilkan)
+				// Kita tidak simpan ke DB config dulu biar gak spam write, cukup di view saja
+				allConfigs["nomor_surat_terakhir"] = parts[1] 
+			}
+		}
+	}
+	// ----------------------------------------------------
+
 	archiveDays, _ := strconv.Atoi(allConfigs["archive_duration_days"])
 
 	backupPath := allConfigs["backup_path"]
@@ -143,7 +168,6 @@ func (s *configService) GetConfig() (*dto.AppConfig, error) {
 	enableHttpsEnv := os.Getenv("ENABLE_HTTPS")
 	isHttps := enableHttpsDB == "true" || (enableHttpsDB == "" && enableHttpsEnv == "true")
 
-	// --- LOGIC TIMEOUT ---
 	sessionTimeout, _ := strconv.Atoi(allConfigs["session_timeout"])
 	if sessionTimeout == 0 {
 		sessionTimeout, _ = strconv.Atoi(os.Getenv("SESSION_TIMEOUT"))
@@ -155,7 +179,6 @@ func (s *configService) GetConfig() (*dto.AppConfig, error) {
 		idleTimeout, _ = strconv.Atoi(os.Getenv("IDLE_TIMEOUT"))
 		if idleTimeout == 0 { idleTimeout = 15 }
 	}
-	// ---------------------
 
 	appConfig := &dto.AppConfig{
 		IsSetupComplete:     allConfigs[IsSetupCompleteKey] == "true",
@@ -165,14 +188,13 @@ func (s *configService) GetConfig() (*dto.AppConfig, error) {
 		NamaKantor:          allConfigs["nama_kantor"],
 		TempatSurat:         allConfigs["tempat_surat"],
 		FormatNomorSurat:    allConfigs["format_nomor_surat"],
-		NomorSuratTerakhir:  allConfigs["nomor_surat_terakhir"],
+		NomorSuratTerakhir:  allConfigs["nomor_surat_terakhir"], // Sudah disync di atas
 		ZonaWaktu:           allConfigs["zona_waktu"],
 		BackupPath:          backupPath,
 		ArchiveDurationDays: archiveDays,
 		
 		SessionTimeout:      sessionTimeout,
 		IdleTimeout:         idleTimeout,
-
 		EnableHTTPS:         isHttps,
 
 		DBDialect:     allConfigs["db_dialect"],
@@ -198,12 +220,25 @@ func (s *configService) GetConfig() (*dto.AppConfig, error) {
 		if appConfig.DBSSLMode == "" { appConfig.DBSSLMode = "disable" }
 	}
 
+	// --- FIX BUG 5: Path DSN Kosong/Relative ---
 	if appConfig.DBDSN == "" {
 		appConfig.DBDSN = os.Getenv("DB_DSN")
-		if appConfig.DBDialect == "sqlite" && appConfig.DBDSN == "" {
-			appConfig.DBDSN = "simdokpol.db?_foreign_keys=on"
+	}
+	// Pastikan path SQLite selalu absolut ke AppData agar tidak "hilang"
+	if appConfig.DBDialect == "sqlite" {
+		if appConfig.DBDSN == "" || !filepath.IsAbs(strings.Split(appConfig.DBDSN, "?")[0]) {
+			fname := "simdokpol.db"
+			if appConfig.DBDSN != "" {
+				// Ambil nama file dari DSN lama jika ada
+				cleanDSN := strings.TrimPrefix(appConfig.DBDSN, "file:")
+				parts := strings.Split(cleanDSN, "?")
+				if parts[0] != "" { fname = filepath.Base(parts[0]) }
+			}
+			// Rebuild absolute path
+			appConfig.DBDSN = filepath.Join(utils.GetAppDataDir(), fmt.Sprintf("%s?_foreign_keys=on", fname))
 		}
 	}
+	// -------------------------------------------
 
 	s.mu.Lock()
 	s.cachedConfig = appConfig
