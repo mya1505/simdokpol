@@ -26,7 +26,7 @@ VER_PATCH := $(word 3,$(subst ., ,$(VERSION_RAW)))
 PREV_VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "HEAD")
 
 # --- 🔐 SECRET KEY ---
-APP_SECRET_KEY ?= RAHASIA_DAPUR_POLSEK_BAHODOPI_JANGAN_DISEBAR_12345
+APP_SECRET_KEY ?= 5f785386230f725107db9bba20c423c0badd0d5002b09eafd6adb092b2a827f5
 
 # --- LDFLAGS ---
 LDFLAGS_COMMON := -w -s -X 'main.version=$(VERSION_FULL)'

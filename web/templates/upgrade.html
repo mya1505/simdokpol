@@ -77,7 +77,7 @@
                                     <p>Salin <strong>Hardware ID</strong> ini dan kirimkan ke Admin untuk mendapatkan Serial Key:</p>
                                     <div class="d-flex justify-content-center align-items-center bg-light p-2 rounded border d-inline-flex">
                                         <code id="hardware-id-val" class="h5 mb-0 mr-3 text-primary">...</code>
-                                        <button class="btn btn-sm btn-outline-primary" onclick="navigator.clipboard.writeText($('#hardware-id-val').text())">
+                                        <button class="btn btn-sm btn-outline-primary" id="copy-hwid-btn" onclick="navigator.clipboard.writeText($('#hardware-id-val').text())">
                                             <i class="fas fa-copy"></i>
                                         </button>
                                     </div>
@@ -111,3 +111,96 @@
 
 {{template "_scripts.html" .}}
 {{template "_licenseScript.html" .}}
+<script>
+// Script Khusus Halaman Tentang (Tombol Copy & Formatter)
+$(document).ready(function() {
+    
+    // --- FUNGSI UTAMA: COPY HWID DENGAN FALLBACK ---
+    function copyToClipboard(text) {
+        // Cara Modern (Hanya HTTPS/Localhost)
+        if (navigator.clipboard && window.isSecureContext) {
+            return navigator.clipboard.writeText(text);
+        } else {
+            // Cara Fallback (Aman untuk HTTP)
+            // Membuat textarea sementara, isi data, select, copy, lalu hapus
+            let textArea = document.createElement("textarea");
+            textArea.value = text;
+            
+            // Pastikan textarea tidak terlihat
+            textArea.style.position = "fixed";
+            textArea.style.left = "-9999px";
+            textArea.style.top = "0";
+            document.body.appendChild(textArea);
+            
+            textArea.focus();
+            textArea.select();
+            
+            return new Promise((resolve, reject) => {
+                try {
+                    const successful = document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    if (successful) {
+                        resolve();
+                    } else {
+                        reject(new Error("Gagal menyalin (execCommand false)"));
+                    }
+                } catch (err) {
+                    document.body.removeChild(textArea);
+                    reject(err);
+                }
+            });
+        }
+    }
+
+    // --- EVENT LISTENER TOMBOL COPY ---
+    $('#copy-hwid-btn').on('click', function() {
+        const hwid = $('#hardware-id-val').text();
+        if (hwid && hwid !== '...' && hwid !== 'ERROR') {
+            copyToClipboard(hwid).then(function() {
+                // Efek Sukses
+                const $btn = $('#copy-hwid-btn');
+                const originalHtml = $btn.html();
+                
+                $btn.html('<i class="fas fa-check"></i>').addClass('btn-success').removeClass('btn-outline-primary');
+                
+                setTimeout(function() {
+                    $btn.html(originalHtml).removeClass('btn-success').addClass('btn-outline-primary');
+                }, 2000);
+                
+                const Toast = Swal.mixin({
+                    toast: true,
+                    position: 'top-end',
+                    showConfirmButton: false,
+                    timer: 2000,
+                    timerProgressBar: false,
+                });
+                Toast.fire({
+                    icon: 'success',
+                    title: 'Hardware ID disalin!'
+                });
+            }).catch(function(err) {
+                console.error('Gagal menyalin:', err);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Gagal Menyalin',
+                    text: 'Silakan blok dan salin ID secara manual.',
+                    footer: '<small>Tips: Gunakan HTTPS untuk fitur copy otomatis.</small>'
+                });
+            });
+        }
+    });
+    
+    // Auto-format input serial key (tambah dash otomatis)
+    $('#serial_key').on('input', function() {
+        let val = $(this).val().toUpperCase().replace(/[^A-Z2-7]/g, ''); // Base32 chars only
+        let formatted = '';
+        for(let i = 0; i < val.length; i++) {
+            if(i > 0 && i % 5 === 0) {
+                formatted += '-';
+            }
+            formatted += val[i];
+        }
+        $(this).val(formatted);
+    });
+});
+</script>
