@@ -481,8 +481,20 @@ release: clean check-deps deps changelog installer-all
 tools: check-deps
 	@echo "$(CYAN)🛠️  Building Admin Tools...$(RESET)"
 	@mkdir -p $(BUILD_DIR)/tools
-	@echo "$(YELLOW)Admin tools target not yet fully implemented$(RESET)"
-	@echo "$(GREEN)✅ Tools preparation complete$(RESET)"
+	
+	@# 1. License Manager GUI (Windows)
+	@echo "   > Building License Manager (GUI)..."
+	@CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc GOOS=windows GOARCH=amd64 \
+	go build -ldflags "$(LDFLAGS_TOOL) -H=windowsgui" \
+	-o $(BUILD_DIR)/tools/LicenseManager.exe cmd/license-manager/main.go
+	
+	@# 2. Signer CLI (Windows)
+	@echo "   > Building Signer CLI..."
+	@CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc GOOS=windows GOARCH=amd64 \
+	go build -ldflags "$(LDFLAGS_TOOL)" \
+	-o $(BUILD_DIR)/tools/SignerCLI.exe cmd/signer/main.go
+	
+	@echo "$(GREEN)✅ Admin Tools Build Complete$(RESET)"
 
 # ====================================================================================
 # 📋 QUICK TARGETS
