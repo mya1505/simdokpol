@@ -19,6 +19,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Test Makefile syntax
         run: |
@@ -63,11 +65,14 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache: false
 
       - name: Test Linux dependency commands
         run: |
@@ -87,11 +92,14 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache: false
 
       - name: Test macOS dependency commands
         shell: bash
@@ -106,11 +114,14 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache: false
 
       - name: Test Windows environment
         shell: bash
@@ -127,11 +138,14 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache: false
 
       - name: Install basic dependencies
         run: |
@@ -172,11 +186,14 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache: false
 
       - name: Install build dependencies
         run: |
@@ -237,11 +254,14 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache: false
 
       - name: Test cross-compilation for ${{ matrix.target }}
         run: |
@@ -256,11 +276,14 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache: false
 
       - name: Test menu display
         run: |
@@ -288,6 +311,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Validate project structure
         run: |
@@ -324,6 +349,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Generate test report
         run: |
@@ -358,11 +385,18 @@ jobs:
           echo "📊 "
           echo "📊 ==========================================="
 
-      - name: Upload test artifacts
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: makefile-test-report
-          path: |
-            Makefile
-          retention-days: 30
+      - name: Create summary
+        run: |
+          echo "## Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Category | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Makefile Syntax | ${{ needs.test-makefile-syntax.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Linux Dependencies | ${{ needs.test-dependencies-linux.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| macOS Dependencies | ${{ needs.test-dependencies-macos.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Windows Dependencies | ${{ needs.test-dependencies-windows.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build Commands | ${{ needs.test-build-commands.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Actual Build | ${{ needs.test-actual-build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Cross-Platform | ${{ needs.test-cross-platform.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Menu System | ${{ needs.test-make-menu.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build Structure | ${{ needs.test-build-structure.result }} |" >> $GITHUB_STEP_SUMMARY
