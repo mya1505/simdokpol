@@ -24,7 +24,8 @@ VER_PATCH := $(word 3,$(subst ., ,$(VERSION_RAW)))
 PREV_VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "HEAD")
 
 # --- 🔐 SECRET KEY ---
-APP_SECRET_KEY ?= 5f785386230f725107db9bba20c423c0badd0d5002b09eafd6adb092b2a827f5
+# Default key (Dev only). Di Production, override via Environment Variable!
+APP_SECRET_KEY ?= 3d8630f96cf107c84d54d90774075a86962fee1c340918978f06db9508853dc5
 
 # --- LDFLAGS ---
 LDFLAGS_COMMON := -w -s -X 'main.version=$(VERSION_FULL)'
@@ -94,7 +95,7 @@ package:
 check-go:
 	@command -v go >/dev/null 2>&1 || (echo "$(RED)❌ Go is not installed$(RESET)" && exit 1)
 	@GO_VERSION=$$(go version | awk '{print $$3}' | sed 's/go//'); \
-	REQUIRED_VERSION="1.21.0"; \
+	REQUIRED_VERSION="1.23.0"; \
 	if [ "$$(printf '%s\n' "$$REQUIRED_VERSION" "$$GO_VERSION" | sort -V | head -n1)" != "$$REQUIRED_VERSION" ]; then \
 		echo "$(RED)❌ Go version $$GO_VERSION is too old. Minimum required: $$REQUIRED_VERSION$(RESET)"; \
 		exit 1; \
@@ -243,8 +244,8 @@ installer-windows: windows check-nsis-deps
 		    -e "s|@LICENSE_DIRECTIVE@|$$LICENSE_DIRECTIVE|g" \
 		    $(TEMPLATES_DIR)/installer.nsi.tmpl > $(BUILD_DIR)/installer/windows/installer.nsi; \
 	else \
-		echo "$(YELLOW)⚠️  Template not found, using inline NSIS script$(RESET)"; \
-		$(MAKE) installer-windows-inline; \
+		echo "$(YELLOW)⚠️  Template not found, generating minimal installer$(RESET)"; \
+		printf '!define APP_NAME "$(APP_NAME)"\n!define VERSION "$(VERSION_RAW)"\n!define INSTALLER_NAME "$(APP_NAME)-windows-x64-v$(VERSION_FULL)-installer.exe"\nName "$${APP_NAME} $${VERSION}"\nOutFile "$${INSTALLER_NAME}"\nInstallDir "$$PROGRAMFILES64\\$${APP_NAME}"\nRequestExecutionLevel admin\n!include "MUI2.nsh"\n!define MUI_ICON "icon.ico"\n!insertmacro MUI_PAGE_WELCOME\n!insertmacro MUI_PAGE_DIRECTORY\n!insertmacro MUI_PAGE_INSTFILES\n!insertmacro MUI_PAGE_FINISH\n!insertmacro MUI_LANGUAGE "English"\nSection "Install"\nSetOutPath "$$INSTDIR"\nFile "$(APP_NAME).exe"\nFile /r "web"\nFile /r "migrations"\nWriteUninstaller "$$INSTDIR\\Uninstall.exe"\nSectionEnd\nSection "Uninstall"\nRMDir /r "$$INSTDIR"\nSectionEnd\n' > $(BUILD_DIR)/installer/windows/installer.nsi; \
 	fi
 	
 	@cd $(BUILD_DIR)/installer/windows && makensis installer.nsi || (echo "$(RED)❌ NSIS build failed$(RESET)" && exit 1)
@@ -265,6 +266,7 @@ installer-windows-arm64: windows-arm64 check-nsis-deps
 	
 	@printf '!define APP_NAME "SIMDOKPOL"\n!define VERSION "$(VERSION_RAW)"\n!define ARCH "ARM64"\n!define INSTALLER_NAME "$(APP_NAME)-windows-arm64-v$(VERSION_FULL)-installer.exe"\n\nName "$${APP_NAME} $${VERSION} ($${ARCH})"\nOutFile "$${INSTALLER_NAME}"\nInstallDir "$$PROGRAMFILES64\\$${APP_NAME}"\nRequestExecutionLevel admin\n\n!include "MUI2.nsh"\n!define MUI_ICON "icon.ico"\n!insertmacro MUI_PAGE_WELCOME\n!insertmacro MUI_PAGE_DIRECTORY\n!insertmacro MUI_PAGE_INSTFILES\n!insertmacro MUI_PAGE_FINISH\n!insertmacro MUI_LANGUAGE "English"\n\nSection "Install"\n  SetOutPath "$$INSTDIR"\n  File "$(APP_NAME).exe"\n' > $(BUILD_DIR)/installer/windows-arm64/installer.nsi
 	@if [ -d "web" ]; then printf '  File /r "web"\n' >> $(BUILD_DIR)/installer/windows-arm64/installer.nsi; fi
+	@if [ -d "migrations" ]; then printf '  File /r "migrations"\n' >> $(BUILD_DIR)/installer/windows-arm64/installer.nsi; fi
 	@printf '  WriteUninstaller "$$INSTDIR\\Uninstall.exe"\nSectionEnd\n\nSection "Uninstall"\n  RMDir /r "$$INSTDIR"\nSectionEnd\n' >> $(BUILD_DIR)/installer/windows-arm64/installer.nsi
 	
 	@cd $(BUILD_DIR)/installer/windows-arm64 && makensis installer.nsi || (echo "$(RED)❌ NSIS build failed$(RESET)" && exit 1)
