@@ -8,7 +8,9 @@ import (
 	"simdokpol/internal/dto"
 	"simdokpol/internal/models"
 	"simdokpol/internal/services"
+	"simdokpol/internal/utils" // <-- PENTING: Import Utils
 	"strings"
+	"time" // <-- PENTING: Import Time
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
@@ -40,7 +42,6 @@ func NewConfigController(
 	}
 }
 
-// --- METHOD BARU ---
 // @Summary Ambil Batasan Konfigurasi (Publik)
 // @Router /api/config/limits [get]
 func (c *ConfigController) GetLimits(ctx *gin.Context) {
@@ -54,7 +55,6 @@ func (c *ConfigController) GetLimits(ctx *gin.Context) {
 		"idle_timeout":    cfg.IdleTimeout,
 	})
 }
-// -------------------
 
 type SaveSetupRequest struct {
 	DBDialect string `json:"db_dialect" binding:"required"`
@@ -130,10 +130,21 @@ func (c *ConfigController) SaveSetup(ctx *gin.Context) {
 		APIError(ctx, http.StatusInternalServerError, "Gagal menyimpan konfigurasi.")
 		return
 	}
-	APIResponse(ctx, http.StatusOK, "Setup berhasil.", nil)
+
+	// --- FIX: AUTO RESTART SETELAH SETUP ---
+	// Jalankan di goroutine agar response JSON terkirim dulu ke frontend
+	go func() {
+		time.Sleep(1 * time.Second) // Tunggu frontend terima response
+		log.Println("✅ Setup Selesai. Melakukan Restart Otomatis...")
+		if err := utils.RestartApp(); err != nil {
+			log.Printf("❌ Gagal restart otomatis: %v. Harap restart manual.", err)
+		}
+	}()
+	// ----------------------------------------
+
+	APIResponse(ctx, http.StatusOK, "Setup berhasil. Sistem sedang dimuat ulang...", nil)
 }
 
-// Update fungsi MigrateDatabase
 // @Summary Migrasi Data (Stream)
 // @Router /api/settings/migrate [post]
 func (c *ConfigController) MigrateDatabase(ctx *gin.Context) {
@@ -192,8 +203,16 @@ func (c *ConfigController) RestoreSetup(ctx *gin.Context) {
 	if err != nil || !strings.HasSuffix(file.Filename, ".db") { APIError(ctx, http.StatusBadRequest, "File harus .db"); return }
 	src, _ := file.Open(); defer src.Close()
 	if err := c.backupService.RestoreBackup(src, 0); err != nil { APIError(ctx, http.StatusInternalServerError, "Gagal restore."); return }
+	
 	c.configService.SaveConfig(map[string]string{services.IsSetupCompleteKey: "true", "DB_DIALECT": "sqlite", "DB_DSN": "simdokpol.db?_foreign_keys=on"})
-	APIResponse(ctx, http.StatusOK, "Restore sukses.", nil)
+	
+	// Restart juga setelah restore
+	go func() {
+		time.Sleep(1 * time.Second)
+		utils.RestartApp()
+	}()
+
+	APIResponse(ctx, http.StatusOK, "Restore sukses. Restarting...", nil)
 }
 
 func (c *ConfigController) ShowSetupPage(ctx *gin.Context) {

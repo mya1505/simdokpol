@@ -79,12 +79,9 @@ $(document).ready(function() {
     $('.prev-step').on('click', function() {
         if (currentSlide === 3) {
              const dialect = $('#db_dialect').val();
-             // Cek apakah ini auto-jump dari env? 
-             // Jika ya, kita tetap izinkan mundur ke 1 untuk ganti DB
              if (dialect === 'sqlite') {
                  showSlide(1); 
              } else {
-                 // Jika MySQL/Postgres, mundur ke Step 2
                  showSlide(2); 
              }
         } else if (currentSlide > 1) {
@@ -92,11 +89,10 @@ $(document).ready(function() {
         }
     });
 
-    // --- DATABASE CONFIG LOGIC (PRE-FILL & AUTO-JUMP) ---
+    // --- DATABASE CONFIG LOGIC ---
     const currentDialect = "{{.CurrentConfig.DBDialect}}";
     const currentHost = "{{.CurrentConfig.DBHost}}";
 
-    // 1. Pre-fill Data
     if (currentDialect) {
         $('#db_dialect').val(currentDialect);
         if(currentDialect !== 'sqlite') {
@@ -104,35 +100,28 @@ $(document).ready(function() {
             $('#db_port').val("{{.CurrentConfig.DBPort}}");
             $('#db_name').val("{{.CurrentConfig.DBName}}");
             $('#db_user').val("{{.CurrentConfig.DBUser}}");
-            // Set SSL jika ada
             const currentSSL = "{{.CurrentConfig.DBSSLMode}}";
             if(currentSSL) $('#db_sslmode').val(currentSSL);
         }
     }
 
-    // 2. Handler perubahan dropdown DB (UI Update)
     $('#db_dialect').on('change', function() {
         const dialect = $(this).val();
         
         if (dialect === 'mysql') {
             $('#db_port').attr('placeholder', '3306').val('3306');
-            $('#pg-ssl-group').slideDown(); // MySQL support SSL via tls param
+            $('#pg-ssl-group').slideDown();
         } else if (dialect === 'postgres') {
             $('#db_port').attr('placeholder', '5432').val('5432');
-            $('#pg-ssl-group').slideDown(); // Tampilkan SSL
+            $('#pg-ssl-group').slideDown();
         } else {
             $('#pg-ssl-group').slideUp();
         }
     });
 
-    // Trigger change sekali di awal untuk set state UI
     $('#db_dialect').trigger('change');
 
-    // 3. LOGIKA AUTO-JUMP JIKA SUDAH CONFIG
-    // Jika dialect bukan sqlite DAN host sudah ada (berarti sudah disetup di .env sebelumnya)
     if (currentDialect && currentDialect !== 'sqlite' && currentHost) {
-        console.log("Database server detected in .env, skipping DB selection steps.");
-        // Langsung lompat ke Langkah 3 (Instansi)
         setTimeout(function() {
             showSlide(3);
             const Toast = Swal.mixin({
@@ -234,16 +223,28 @@ $(document).ready(function() {
             method: 'POST',
             contentType: 'application/json',
             data: JSON.stringify(formData),
+            // --- FIX: UPDATE SUKSES HANDLER ---
             success: function(response) {
+                let timerInterval;
                 Swal.fire({
                     icon: 'success',
                     title: 'Setup Berhasil!',
-                    text: response.message,
+                    html: 'Sistem sedang dimuat ulang untuk menerapkan konfigurasi.<br>Mohon tunggu sebentar...',
                     allowOutsideClick: false,
+                    timer: 5000, // Tunggu 5 detik (waktu server restart)
+                    timerProgressBar: true,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    },
+                    willClose: () => {
+                        clearInterval(timerInterval);
+                    }
                 }).then(() => {
+                    // Setelah restart selesai, arahkan ke login
                     window.location.href = '/login';
                 });
             },
+            // ----------------------------------
             error: function(jqXHR) {
                 const errorMsg = jqXHR.responseJSON ? jqXHR.responseJSON.error : 'Terjadi kesalahan yang tidak diketahui.';
                 Swal.fire('Gagal', errorMsg, 'error');
@@ -297,11 +298,16 @@ $(document).ready(function() {
             allowOutsideClick: () => !Swal.isLoading()
         }).then((result) => {
             if (result.isConfirmed) {
-                Swal.fire(
-                    'Restore Berhasil!',
-                    'Database telah berhasil dipulihkan. Anda akan diarahkan ke halaman login.',
-                    'success'
-                ).then(() => window.location.href = '/login');
+                // FIX: Update logika sukses untuk restore juga
+                Swal.fire({
+                    title: 'Restore Berhasil!',
+                    html: 'Database dipulihkan. Sistem restart otomatis...',
+                    icon: 'success',
+                    timer: 5000,
+                    timerProgressBar: true,
+                    allowOutsideClick: false,
+                    didOpen: () => { Swal.showLoading(); }
+                }).then(() => window.location.href = '/login');
             } else {
                 $submitButton.html(originalButtonText).prop('disabled', false);
             }

@@ -23,7 +23,7 @@ import (
 
 // --- RAHASIA DAPUR ---
 // FIX: Gunakan 'var' agar bisa di-inject via -ldflags di Makefile
-var appSecretKey = "DEFAULT_DEV_KEY_JANGAN_DIPAKAI"
+var appSecretKey = "JANGAN_PAKAI_DEFAULT_KEY_INI_BAHAYA"
 
 func main() {
 	myApp := app.New()

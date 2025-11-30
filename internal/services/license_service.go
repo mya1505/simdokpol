@@ -85,14 +85,6 @@ func (s *licenseService) IsLicensed() bool {
 		// Cek apakah di database config statusnya VALID?
 		status, _ := s.GetLicenseStatus()
 		if status == LicenseStatusValid {
-			// BUG FIX: Dulu ini return true. SEKARANG TIDAK BOLEH.
-			// Kalau status VALID tapi tidak ada Key yang bisa diverifikasi,
-			// kita harus menganggapnya TIDAK VALID (atau cari key di tabel licenses).
-			
-			// Coba cari key aktif di tabel licenses (Fallback)
-			// Ini butuh query ke repo, tapi demi keamanan, worth it.
-			// Untuk simplifikasi code ini, kita anggap: NO KEY = NOT VALID.
-			
 			// Auto-revoke untuk membersihkan state "Hantu"
 			s.RevokeLicense() 
 			return false
@@ -103,10 +95,16 @@ func (s *licenseService) IsLicensed() bool {
 	// 2. Verifikasi HMAC Signature (Inti Keamanan)
 	// Kita hitung ulang: Apakah Key ini cocok dengan HWID mesin ini?
 	hwid := s.GetHardwareID()
-	expectedSignature := generateSignature(hwid)
+	expectedSignature := generateSignatureRaw(hwid)
 	
 	// Normalisasi input (hapus dash dan spasi)
 	cleanKey := strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(currentKey, "-", ""), " ", ""))
+
+	// DEBUG: Tampilkan informasi verifikasi
+	log.Printf("DEBUG License Check - HWID: %s", hwid)
+	log.Printf("DEBUG License Check - Clean Input: %s", cleanKey)
+	log.Printf("DEBUG License Check - Expected: %s", expectedSignature)
+	log.Printf("DEBUG License Check - Match: %v", cleanKey == expectedSignature)
 
 	if cleanKey == expectedSignature {
 		// COCOK! Mesin ini berhak jadi Pro.
@@ -162,11 +160,17 @@ func (s *licenseService) ActivateLicense(inputKey string, actorID uint) (*models
 	cleanKey := strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(inputKey, "-", ""), " ", ""))
 
 	hwid := s.GetHardwareID()
-	expectedSignature := generateSignature(hwid)
+	expectedSignature := generateSignatureRaw(hwid)
+
+	// DEBUG: Tampilkan informasi aktivasi
+	log.Printf("DEBUG Activation - HWID: %s", hwid)
+	log.Printf("DEBUG Activation - Clean Input: %s", cleanKey)
+	log.Printf("DEBUG Activation - Expected: %s", expectedSignature)
+	log.Printf("DEBUG Activation - Match: %v", cleanKey == expectedSignature)
 
 	if cleanKey != expectedSignature {
 		if actorID != 0 {
-			s.auditService.LogActivity(actorID, "GAGAL AKTIVASI", fmt.Sprintf("Key salah/ilegal. HWID: %s", hwid))
+			s.auditService.LogActivity(actorID, "GAGAL AKTIVASI", fmt.Sprintf("Key salah/ilegal. HWID: %s, Input: %s, Expected: %s", hwid, cleanKey, expectedSignature))
 		}
 		return nil, ErrLicenseInvalid
 	}
@@ -205,23 +209,32 @@ func (s *licenseService) ActivateLicense(inputKey string, actorID uint) (*models
 	if actorID != 0 {
 		s.auditService.LogActivity(actorID, "AKTIVASI LISENSI", "Lisensi PRO berhasil diaktifkan.")
 	}
+	
+	log.Printf("SUCCESS: License activated for HWID: %s", hwid)
 	return license, nil
 }
 
-// generateSignature membuat tanda tangan HMAC (Key yang valid)
-func generateSignature(data string) string {
+// generateSignatureRaw membuat tanda tangan HMAC tanpa formatting (untuk comparison)
+func generateSignatureRaw(data string) string {
 	h := hmac.New(sha256.New, []byte(AppSecretKeyString))
 	h.Write([]byte(data))
 	hash := h.Sum(nil)
 	
-	// Ambil 15 byte pertama agar kuncinya tidak kepanjangan
+	// Ambil 15 byte pertama agar kuncinya tidak kepanjangan (SAMA DENGAN ADMIN TOOL)
 	truncatedHash := hash[:15]
-	// Encode ke Base32 agar aman dibaca manusia (huruf kapital & angka)
+	// Encode ke Base32 agar aman dibaca manusia (huruf kapital & angka) TANPA FORMATTING
 	encoded := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(truncatedHash)
+	
+	return encoded
+}
+
+// generateSignature membuat tanda tangan HMAC dengan formatting (untuk display)
+func generateSignature(data string) string {
+	raw := generateSignatureRaw(data)
 	
 	// Format dengan dash setiap 5 karakter: XXXXX-XXXXX-XXXXX...
 	var formattedKey strings.Builder
-	for i, r := range encoded {
+	for i, r := range raw {
 		if i > 0 && i%5 == 0 {
 			formattedKey.WriteRune('-')
 		}

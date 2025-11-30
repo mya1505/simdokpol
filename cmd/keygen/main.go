@@ -1,54 +1,65 @@
 package main
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/x509"
-	"encoding/pem"
-	"log"
+	"bufio"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base32"
+	"fmt"
 	"os"
+	"strings"
 )
 
-// Ini adalah tool helper HANYA UNTUK ANDA (DEVELOPER)
-// Jalankan ini sekali untuk membuat private.pem (RAHASIA) dan public.pem (untuk app)
+// FIX: Gunakan 'var' agar bisa di-inject via -ldflags di Makefile
+var appSecretKey = "JANGAN_PAKAI_DEFAULT_KEY_INI_BAHAYA"
 
 func main() {
-	log.Println("Membuat ECDSA P-256 key pair...")
-	// 1. Buat private key
-	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		log.Fatalf("Gagal membuat private key: %v", err)
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Println(strings.Repeat("=", 50))
+	fmt.Println("   SIMDOKPOL KEY GENERATOR (CLI)")
+	fmt.Println(strings.Repeat("=", 50))
+
+	// 1. Minta Input HWID
+	fmt.Print("👉 Masukkan Hardware ID User: ")
+	hwid, _ := reader.ReadString('\n')
+	hwid = strings.TrimSpace(hwid)
+
+	if hwid == "" {
+		fmt.Println("❌ Error: Hardware ID tidak boleh kosong.")
+		fmt.Println("   Tekan Enter untuk keluar...")
+		reader.ReadString('\n')
+		return
 	}
 
-	// 2. Simpan Private Key (private.pem)
-	// KONVERSI KE FORMAT PKCS#8
-	privateKeyBytes, err := x509.MarshalPKCS8PrivateKey(privateKey)
-	if err != nil {
-		log.Fatalf("Gagal marshal private key: %v", err)
-	}
-	privateKeyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "PRIVATE KEY",
-		Bytes: privateKeyBytes,
-	})
-	if err := os.WriteFile("private.pem", privateKeyPEM, 0600); err != nil {
-		log.Fatalf("Gagal menyimpan private.pem: %v", err)
-	}
-	log.Println("✅ Berhasil disimpan: private.pem (RAHASIA, JANGAN DIBAGIKAN!)")
+	// 2. Generate Key (Logic Sama Persis dengan App Utama)
+	h := hmac.New(sha256.New, []byte(appSecretKey))
+	h.Write([]byte(hwid))
+	hash := h.Sum(nil)
 
+	truncatedHash := hash[:15] // Ambil 15 byte
+	rawKey := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(truncatedHash)
 
-	// 3. Simpan Public Key (public.pem)
-	// KONVERSI KE FORMAT PKIX (Standar public key)
-	publicKeyBytes, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
-	if err != nil {
-		log.Fatalf("Gagal marshal public key: %v", err)
+	// 3. Format Key (XXXXX-XXXXX-...)
+	var formattedKey strings.Builder
+	for i, r := range rawKey {
+		if i > 0 && i%5 == 0 {
+			formattedKey.WriteRune('-')
+		}
+		formattedKey.WriteRune(r)
 	}
-	publicKeyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "PUBLIC KEY",
-		Bytes: publicKeyBytes,
-	})
-	if err := os.WriteFile("public.pem", publicKeyPEM, 0644); err != nil {
-		log.Fatalf("Gagal menyimpan public.pem: %v", err)
-	}
-	log.Println("✅ Berhasil disimpan: public.pem (Tanam ini di dalam aplikasi)")
+	
+	finalKey := formattedKey.String()
+
+	fmt.Println("\n" + strings.Repeat("-", 50))
+	fmt.Println("✅ SERIAL KEY VALID:")
+	fmt.Println(strings.Repeat("-", 50))
+	fmt.Printf("HWID Target : %s\n", hwid)
+	fmt.Printf("Serial Key  : %s\n", finalKey)
+	fmt.Printf("Raw Key     : %s\n", rawKey) // Untuk debug
+	fmt.Println(strings.Repeat("=", 50))
+    
+    // Pause biar window gak langsung nutup di Windows
+    fmt.Println("\nTekan Enter untuk keluar...")
+    reader.ReadString('\n')
 }
