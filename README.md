@@ -1,166 +1,106 @@
 # Sistem Informasi Manajemen Dokumen Kepolisian (SIMDOKPOL)
 
-![Go Version](https://img.shields.io/badge/Go-1.25%2B-blue.svg)
+![Go Version](https://img.shields.io/badge/Go-1.23%2B-blue.svg)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)
 ![Database](https://img.shields.io/badge/Database-SQLite%20%7C%20MySQL%20%7C%20PostgreSQL-blue.svg)
 
-**SIMDOKPOL** adalah aplikasi desktop *cross-platform* yang dirancang untuk membantu unit kepolisian dalam manajemen dan penerbitan surat keterangan secara efisien, cepat, dan aman.
-
-Aplikasi ini dapat berjalan dalam dua mode:
-1. **Standalone (100% Offline):** Menggunakan database **SQLite** yang portabel, ideal untuk penggunaan di satu komputer.
-2. **Client-Server (Jaringan):** Dapat terhubung ke database terpusat (**MySQL** atau **PostgreSQL**) untuk penggunaan bersama di jaringan kantor.
+SIMDOKPOL adalah aplikasi desktop cross-platform yang dirancang untuk membantu unit kepolisian dalam manajemen dan penerbitan surat keterangan secara efisien, cepat, dan aman. Aplikasi ini dapat berjalan dalam dua mode yaitu standalone yang sepenuhnya offline menggunakan database SQLite portabel untuk penggunaan di satu komputer, serta mode client-server yang terhubung ke database terpusat MySQL atau PostgreSQL untuk penggunaan bersama di jaringan kantor.
 
 ![Dasbor SIMDOKPOL](.github/assets/guide-dashboard.png)
 
 ---
 
-## ✨ Fitur Utama
+## Fitur Utama
 
-- **Multi-Database**: Mendukung SQLite, MySQL, dan PostgreSQL.
-- **Setup Wizard 5-Langkah**: Konfigurasi awal yang terpandu, termasuk tes koneksi database.
-- **Aplikasi Desktop Standalone**: Berjalan sebagai aplikasi mandiri dengan ikon di *system tray* dan notifikasi *native*.
-- **Kustomisasi Template Barang**: (Fitur Pro) Mengatur *item* barang hilang (KTP, SIM, STNK) dan *field* dinamisnya (termasuk *drag-and-drop*).
-- **Laporan Agregat**: (Fitur Pro) Membuat laporan PDF yang berisi ringkasan statistik operator dan komposisi barang hilang berdasarkan rentang tanggal.
-- **Sistem Lisensi**: Aktivasi fitur Pro menggunakan Serial Key yang terkunci pada Hardware ID (HMAC).
-- **Manajemen Dokumen (CRUD)**: Sistem penuh untuk Membuat, Membaca, Memperbarui, dan Menghapus surat keterangan.
-- **Generasi Dokumen Presisi**: Ekspor ke **PDF** (presisi tinggi) dan **Excel** (Fitur Pro).
-- **Manajemen Pengguna (RBAC)**: Dua tingkat hak akses (Super Admin & Operator) dengan fitur aktivasi/non-aktivasi.
-- **Modul Audit Log**: Merekam semua aktivitas penting (siapa, apa, kapan) dan dapat diekspor ke Excel.
-- **Backup & Restore**: (Super Admin) Fungsionalitas *backup* dan *restore* yang mudah untuk database SQLite.
-- **Penyimpanan Data Aman**: Konfigurasi (`.env`) dan database (`simdokpol.db`) secara otomatis disimpan di folder data pengguna (misal: `AppData\Roaming` atau `.config`).
+Aplikasi ini menyediakan kemampuan manajemen dokumen yang komprehensif dengan dukungan multi-database mencakup SQLite, MySQL, dan PostgreSQL. Pengguna mendapatkan kemudahan melalui wizard setup lima langkah yang terpandu, termasuk tes koneksi database dan pembuatan akun administrator. Aplikasi desktop standalone berjalan dengan integrasi system tray dan notifikasi native untuk pengalaman pengguna yang mulus.
+
+Fitur tier profesional mencakup editor template dengan antarmuka drag-and-drop yang memungkinkan administrator menyesuaikan formulir barang hilang seperti KTP, SIM, dan BPKB sesuai kebutuhan organisasi. Alat migrasi data streaming memungkinkan pemindahan dataset lengkap secara aman dan real-time dari SQLite ke MySQL atau PostgreSQL. Kemampuan pelaporan agregat menghasilkan laporan PDF ringkasan yang berisi statistik operator dan analisis komposisi barang hilang berdasarkan rentang tanggal yang ditentukan.
+
+Sistem lisensi mengaktifkan fitur profesional melalui serial key yang diamankan dengan identifikasi hardware menggunakan autentikasi HMAC. Fungsionalitas CRUD lengkap mendukung pembuatan, pembacaan, pembaruan, dan penghapusan dokumen surat keterangan. Generasi dokumen presisi tinggi mengekspor ke format PDF dengan kemampuan ekspor Excel pada tier profesional.
+
+Kontrol akses berbasis peran menyediakan dua tingkat otorisasi untuk peran Super Admin dan Operator dengan kemampuan aktivasi dan deaktivasi. Modul audit log mencatat semua aktivitas penting termasuk identifikasi pengguna, tindakan yang dilakukan, dan timestamp dengan fungsionalitas ekspor Excel. Pengguna Super Admin mengakses fungsionalitas hot-backup dan restore untuk database SQLite.
+
+Mode HTTPS secure mendukung enkripsi SSL lokal dengan instalasi sertifikat otomatis ke Windows Trusted Root. File konfigurasi dan database secara otomatis disimpan di folder data pengguna seperti AppData Roaming untuk keamanan dan portabilitas yang lebih baik.
 
 ---
 
-## 📸 Galeri Fitur
+## Galeri Fitur
 
-<table width="100%">
-    <tr>
-        <td width="50%" align="center">
-            <strong>Setup Multi-Database</strong><br>
-            Pilih dialek database (SQLite, MySQL, Postgres) saat setup.
-            <img src=".github/assets/guide-setup.png" width="90%">
-        </td>
-        <td width="50%" align="center">
-            <strong>Manajemen Dokumen Aktif</strong><br>
-            Pantau dan kelola surat keterangan yang masih berlaku.
-            <img src=".github/assets/guide-doc-active.png" width="90%">
-        </td>
-    </tr>
-    <tr>
-        <td width="50%" align="center">
-            <strong>Pengaturan Sistem (Tabs)</strong><br>
-            Kelola KOP surat, koneksi DB, dan backup di satu tempat yang rapi.
-            <img src=".github/assets/guide-settings-general.png" width="90%">
-        </td>
-        <td width="50%" align="center">
-            <strong>Kustomisasi Template (Pro)</strong><br>
-            (Admin) Atur item barang hilang dan field dinamisnya dengan mudah.
-            <img src=".github/assets/guide-template-list.png" width="90%">
-        </td>
-    </tr>
-    <tr>
-        <td width="50%" align="center">
-            <strong>Laporan Agregat (Pro)</strong><br>
-            (Admin) Buat laporan PDF ringkasan berdasarkan rentang tanggal.
-            <img src=".github/assets/guide-report.png" width="90%">
-        </td>
-        <td width="50%" align="center">
-            <strong>Manajemen Pengguna</strong><br>
-            (Admin) Kelola pengguna aktif dan non-aktif dengan mudah.
-            <img src=".github/assets/guide-user-list.png" width="90%">
-        </td>
-    </tr>
-</table>
+Tangkapan layar berikut mendemonstrasikan kemampuan utama aplikasi di berbagai area fungsional.
 
----
+**Konfigurasi Setup Multi-Database**
 
-## 🛠️ Tumpukan Teknologi (Technology Stack)
+Antarmuka setup memungkinkan pengguna memilih dialek database pilihan mereka selama konfigurasi awal, mendukung SQLite untuk deployment standalone, MySQL untuk arsitektur client-server tradisional, dan PostgreSQL untuk kebutuhan tingkat enterprise.
 
-- **Backend**: Go (Golang)
-- **Web Framework**: Gin
-- **ORM & Migrasi**: GORM & golang-migrate
-- **Database**: SQLite, MySQL, PostgreSQL
-- **Desktop UI**: Go HTML Templates, CSS, JavaScript (jQuery, Bootstrap, Chart.js)
-- **Generasi Dokumen**:
-  - PDF: `gofpdf`
-  - Excel: `excelize`
-- **Integrasi Desktop**:
-  - System Tray: `getlantern/systray`
-  - Notifikasi: `gen2brain/beeep`
-- **Build & Packaging**:
-  - Installer Windows: NSIS
-  - Paket Linux: DEB & RPM
-  - Paket macOS: DMG
+![Antarmuka Setup](.github/assets/guide-setup.png)
+
+**Antarmuka Manajemen Dokumen Aktif**
+
+Layar manajemen dokumen menyediakan pengawasan komprehensif terhadap surat keterangan aktif dengan kemampuan filtering, pencarian, dan operasi bulk untuk manajemen siklus hidup dokumen yang efisien.
+
+![Dokumen Aktif](.github/assets/guide-doc-active.png)
+
+**Antarmuka Pengaturan Sistem dengan Tab**
+
+Administrator mengakses konfigurasi kop surat, manajemen koneksi database, operasi backup, dan alat migrasi data melalui antarmuka pengaturan dengan tab terpadu yang memusatkan fungsi administrasi sistem.
+
+![Panel Pengaturan](.github/assets/guide-settings-general.png)
+
+**Editor Kustomisasi Template (Tier Profesional)**
+
+Editor template visual memungkinkan administrator mengkonfigurasi kategori barang hilang dan field dinamis terkait melalui antarmuka intuitif yang tidak memerlukan keahlian teknis khusus.
+
+![Editor Template](.github/assets/guide-template-list.png)
+
+**Modul Pelaporan Agregat (Tier Profesional)**
+
+Administrator menghasilkan laporan PDF komprehensif yang berisi analisis statistik aktivitas operator dan distribusi barang hilang di rentang tanggal yang ditentukan pengguna untuk keperluan review manajemen dan kepatuhan.
+
+![Generasi Laporan](.github/assets/guide-report.png)
+
+**Dashboard Manajemen Pengguna**
+
+Antarmuka administrasi pengguna menyediakan kontrol lengkap atas akun pengguna aktif dan non-aktif dengan penugasan peran, manajemen status aktivasi, dan visibilitas jejak audit.
+
+![Manajemen Pengguna](.github/assets/guide-user-list.png)
 
 ---
 
-## 🚀 Memulai (Getting Started)
+## Tumpukan Teknologi
 
-### Untuk Pengguna Akhir
+Arsitektur aplikasi memanfaatkan teknologi modern untuk memberikan kinerja dan maintainability yang robust. Implementasi backend menggunakan Go versi 1.23 atau lebih tinggi dengan framework web Gin yang menyediakan routing HTTP dan dukungan middleware yang efisien. GORM berfungsi sebagai lapisan object-relational mapping dengan golang-migrate menangani versioning skema database di platform SQLite, MySQL, dan PostgreSQL.
 
-Unduh installer terbaru dari halaman **[Releases](https://github.com/muhammad1505/simdokpol-release/releases)**.
+Antarmuka pengguna desktop menggabungkan template HTML Go dengan styling CSS terinspirasi Metro dan library JavaScript termasuk jQuery untuk manipulasi DOM, Bootstrap untuk layout responsif, dan Chart.js untuk visualisasi data. Generasi dokumen menggunakan gofpdf untuk output PDF presisi tinggi dan excelize untuk pembuatan spreadsheet Excel.
 
-**Di Windows**: Jalankan file `SIMDOKPOL-windows-x64-vX.X.X-installer.exe`. Ikuti wizard instalasi, kemudian jalankan aplikasi dari shortcut di Desktop atau Start Menu.
-
-**Di Linux**: Instal file `.deb` atau `.rpm` menggunakan package manager Anda. Cari "SIMDOKPOL" di application menu Anda dan jalankan.
-
-**Di macOS**: Buka file `.dmg` dan seret `SIMDOKPOL.app` ke folder Applications Anda. Jalankan dari Launchpad atau folder Applications.
-
-#### Setup Pertama Kali
-
-Saat pertama kali dijalankan, browser Anda akan terbuka ke halaman `http://localhost:8080/setup`. Di sini Anda bisa memilih:
-1. **Konfigurasi Baru**: Mengikuti wizard 5-langkah untuk setup database (SQLite/MySQL/Postgres), KOP surat, dan membuat akun Admin.
-2. **Pulihkan dari Backup**: (Hanya SQLite) Mengunggah file `simdokpol.db` dari instalasi sebelumnya untuk setup instan.
-
-#### Setup Domain (Opsional)
-
-Jika Anda ingin mengakses aplikasi via `http://simdokpol.local:8080`, klik kanan ikon aplikasi di system tray dan pilih **"Setup Domain (simdokpol.local)"**. Aksi ini akan meminta hak Administrator/Sudo.
-
-### Untuk Pengembang
-
-#### Prasyarat
-
-- Go (versi 1.25+)
-- Git
-- C Compiler (TDM-GCC/Mingw-w64 untuk Windows, `build-essential` untuk Debian/Ubuntu)
-- Library C untuk Systray (Lihat `README` `getlantern/systray`)
-
-#### Instalasi & Menjalankan
-
-Kloning repositori dengan perintah:
-
-```bash
-git clone https://github.com/muhammad1505/simdokpol.git
-cd simdokpol
-```
-
-Instalasi dependensi:
-
-```bash
-go mod tidy
-```
-
-Menjalankan di mode pengembangan (SQLite) dengan live reload menggunakan Air (`air.toml` sudah tersedia):
-
-```bash
-air
-```
-
-Aplikasi akan berjalan di `http://localhost:8080`.
-
-Untuk menjalankan di mode produksi lokal (menggunakan `.env`):
-
-```bash
-# Build binary
-go build -o simdokpol ./cmd/main.go
-
-# Jalankan binary
-./simdokpol
-```
+Integrasi desktop mengandalkan getlantern systray untuk fungsionalitas system tray dan gen2brain beeep untuk pengiriman notifikasi native. Pipeline build dan packaging menggunakan NSIS untuk installer Windows, format DEB dan RPM untuk distribusi Linux, dan paket DMG untuk deployment macOS.
 
 ---
 
-## 📂 Struktur Proyek
+## Memulai
+
+### Instalasi Pengguna Akhir
+
+Unduh installer terbaru dari halaman Releases resmi di GitHub. Pengguna Windows harus menjalankan file installer dengan hak akses administrator dan mengikuti wizard instalasi, setelah itu aplikasi tersedia melalui shortcut Desktop atau Start Menu. Pengguna Linux menginstal paket DEB atau RPM yang sesuai menggunakan package manager distribusi mereka sebelum meluncurkan aplikasi dari menu aplikasi lingkungan desktop. Pengguna macOS membuka file DMG dan menyeret bundle aplikasi ke folder Applications untuk akses melalui Launchpad atau Finder.
+
+### Proses Setup Awal
+
+Saat peluncuran pertama, aplikasi secara otomatis membuka jendela browser ke halaman setup di localhost port 8080. Pengguna memilih antara membuat konfigurasi baru melalui wizard lima langkah yang mencakup pemilihan database, konfigurasi kop surat, dan pembuatan akun administrator, atau memulihkan dari file backup SQLite sebelumnya dengan mengunggah database yang sudah ada.
+
+### Konfigurasi Domain dan HTTPS
+
+Pengguna yang mengaktifkan mode HTTPS di pengaturan sistem menerima prompt yang meminta izin untuk menginstal sertifikat SSL ke Windows Trusted Root store. Instalasi ini mencegah peringatan keamanan browser dan memerlukan elevasi administrator untuk penetapan rantai kepercayaan sertifikat yang tepat.
+
+### Setup Pengembang
+
+Pengembang memerlukan Go versi 1.23 atau lebih tinggi, kontrol versi Git, dan compiler C seperti TDM-GCC atau Mingw-w64 untuk Windows atau paket build-essential untuk distribusi Linux berbasis Debian. Ketergantungan compiler C berasal dari persyaratan CGO SQLite untuk operasi database native.
+
+Mulailah dengan mengkloning repository dan navigasi ke direktori proyek. Instal semua dependensi menggunakan sistem modul Go dengan perintah tidy. Untuk alur kerja pengembangan, jalankan aplikasi menggunakan Air untuk reload otomatis saat file sumber berubah. File konfigurasi air.toml yang disediakan berisi pengaturan yang dioptimalkan untuk iterasi pengembangan.
+
+Build produksi memerlukan kompilasi dengan flag linker spesifik untuk menghapus simbol debugging, mengurangi ukuran binary, dan menyembunyikan jendela console pada platform Windows. Jalankan binary yang dihasilkan secara langsung untuk deployment produksi dengan loading konfigurasi berbasis environment.
+
+---
+
+## Struktur Proyek
 
 ```
 simdokpol/
@@ -178,9 +118,9 @@ simdokpol/
 │   ├── models/             # Model data GORM (entities)
 │   ├── mocks/              # Mock interface untuk unit test
 │   ├── repositories/       # Data access layer (interaksi GORM)
-│   ├── services/           # Business logic (Lisensi, Update, PDF, dll)
-│   └── utils/              # Helper (PDF Generator, AppDir, HWID)
-├── migrations/             # File migrasi skema database SQL
+│   ├── services/           # Business logic (Lisensi, Update, PDF, Backup, dll)
+│   └── utils/              # Helper (PDF Generator, AppDir, HWID, Certs)
+├── migrations/             # File migrasi skema database SQL (Arsip)
 │   ├── mysql/              # Migrasi khusus MySQL
 │   ├── sqlite/             # Migrasi khusus SQLite
 │   └── postgres/           # Migrasi khusus PostgreSQL
@@ -196,158 +136,106 @@ simdokpol/
 └── README.md               # Dokumentasi proyek
 ```
 
----
+Organisasi codebase memisahkan concern di direktori logis untuk maintainability dan skalabilitas. Direktori cmd berisi entry point termasuk binary aplikasi utama, utilitas generasi key pair, GUI manajemen lisensi, alat seeding data, dan antarmuka command-line penandatanganan serial key.
 
-## 🔧 Konfigurasi
+Paket internal mengimplementasikan fungsionalitas inti dengan config menangani loading environment, controllers mengelola handler permintaan HTTP, data transfer objects mendefinisikan kontrak API, middleware menyediakan filter autentikasi dan otorisasi, models merepresentasikan entitas database, mock interfaces mendukung unit testing, repositories mengabstraksi pola akses data, services berisi logika bisnis untuk lisensi, update, generasi PDF, dan operasi backup, serta utilities menawarkan fungsi helper untuk generasi dokumen, direktori aplikasi, identifikasi hardware, dan manajemen sertifikat.
 
-Aplikasi ini menggunakan file `.env` yang disimpan di folder data pengguna (bukan folder instalasi) untuk portabilitas dan keamanan.
+Migrasi database memelihara riwayat versi skema di dialek SQLite, MySQL, dan PostgreSQL dalam direktori terpisah. Direktori web mengorganisir aset statis termasuk stylesheet CSS, library JavaScript, dan gambar bersama template HTML dan partials, dengan konfigurasi Go embed memungkinkan bundling aset ke dalam binary yang dikompilasi.
 
-- **Windows**: `C:\Users\<NAMA>\AppData\Roaming\SIMDOKPOL\.env`
-- **Linux**: `/home/<nama>/.config/SIMDOKPOL/.env`
-- **macOS**: `/Users/<nama>/Library/Application Support/SIMDOKPOL/.env`
-
-File `.env` akan dibuat otomatis saat setup, atau Anda dapat membuatnya manual dengan format berikut:
-
-```ini
-# --- PENGATURAN UMUM ---
-JWT_SECRET_KEY=secret-anda-yang-sangat-aman
-BCRYPT_COST=10
-PORT=8080
-
-# --- LISENSI (Diisi Otomatis) ---
-LICENSE_KEY=XXXXX-XXXXX-XXXXX-XXXXX-XXXXX
-
-# --- PENGATURAN DATABASE ---
-# Pilih salah satu dialek: "sqlite", "mysql", atau "postgres"
-
-# --- OPSI 1: SQLite (DEFAULT) ---
-DB_DIALECT=sqlite
-DB_DSN=simdokpol.db?_foreign_keys=on
-
-# --- OPSI 2: MySQL (Contoh) ---
-#DB_DIALECT=mysql
-#DB_HOST=127.0.0.1
-#DB_PORT=3306
-#DB_USER=root
-#DB_PASS=password
-#DB_NAME=simdokpol
-
-# --- OPSI 3: PostgreSQL (Contoh) ---
-#DB_DIALECT=postgres
-#DB_HOST=127.0.0.1
-#DB_PORT=5432
-#DB_USER=postgres
-#DB_PASS=password
-#DB_NAME=simdokpol
-```
+Direktori khusus GitHub berisi screenshot marketing dan definisi workflow continuous integration untuk testing otomatis dan release builds. File konfigurasi mencakup pengaturan Air untuk hot-reload pengembangan dan spesifikasi dependensi modul Go.
 
 ---
 
-## 🛣️ Rencana Pengembangan (Roadmap)
+## Manajemen Konfigurasi
 
-### Selesai (Versi Terkini)
-
-- ✅ Arsitektur Backend & Frontend yang Bersih
-- ✅ Arsitektur Multi-Database (SQLite, MySQL, Postgres)
-- ✅ Wizard Setup 5-Langkah dengan Tes Koneksi DB
-- ✅ Kustomisasi Template Barang (Formulir Dinamis) - Fitur Pro
-- ✅ Pembuatan Laporan Agregat PDF - Fitur Pro
-- ✅ Sistem Lisensi & Aktivasi (Freemium)
-- ✅ Update Checker Otomatis (via GitHub)
-- ✅ Alur Kerja Surat Keterangan Hilang (CRUD Lengkap)
-- ✅ Otentikasi & Otorisasi Berbasis Peran
-- ✅ Manajemen Pengguna (CRUD, Aktivasi/Deaktivasi)
-- ✅ Dasbor Analitik dengan Grafik Dinamis
-- ✅ Modul Audit Log & Fitur Backup/Restore
-- ✅ Aplikasi Desktop Standalone (via Systray & Beeep)
-- ✅ Setup VHost Opsional (Tanpa Sudo/Admin saat startup)
-- ✅ Installer Multi-Platform (NSIS, DEB, RPM, DMG)
-- ✅ CI/CD Penuh (Unit Test, Linter, & Integration Test 3 DB)
-- ✅ Ekspor Data ke Excel (Dokumen & Audit) - Fitur Pro
-- ✅ Generasi PDF Presisi Tinggi (Server-Side)
-
-### Rencana Selanjutnya
-
-- [ ] Server Lisensi Online: Validasi lisensi terpusat untuk keamanan lebih tinggi.
-- [ ] Template Editor (Drag & Drop): Memungkinkan Admin mengubah layout cetak PDF secara visual.
-- [ ] Migrasi Data Antar DB: Alat untuk memindahkan data dari SQLite ke MySQL/Postgres secara otomatis.
-- [ ] Notifikasi Email: Mengirim notifikasi surat kadaluwarsa via email.
+Aplikasi menyimpan konfigurasi dalam file environment yang terletak di direktori data pengguna daripada folder instalasi untuk portabilitas dan keamanan yang lebih baik. Instalasi Windows menggunakan path direktori AppData Roaming, sistem Linux menggunakan standar direktori config XDG, dan macOS mengikuti konvensi Library Application Support. File environment dibuat secara otomatis selama setup awal dengan permission dan ownership yang sesuai.
 
 ---
 
-## 🐛 Troubleshooting
+## Roadmap Pengembangan
 
-### Virtual Host Issues
+### Fitur yang Telah Diselesaikan
 
-**Problem**: Domain `simdokpol.local` tidak bisa diakses
+Rilis saat ini mencakup arsitektur backend dan frontend yang bersih dengan pemisahan concern yang komprehensif. Dukungan multi-database menyediakan implementasi production-ready untuk SQLite, MySQL, dan PostgreSQL dengan penanganan migrasi otomatis. Wizard setup lima langkah memandu pengguna melalui testing koneksi database dan konfigurasi awal.
 
-**Solution**: Klik kanan ikon aplikasi di system tray Anda, pilih "Setup Domain (simdokpol.local)", setujui permintaan Administrator/Sudo, kemudian restart aplikasi Anda.
+Kemampuan tier profesional mencakup editor template drag-and-drop untuk kustomisasi formulir barang hilang, generasi laporan PDF agregat dengan analisis statistik, dan migrasi data streaming antar backend database. Sistem lisensi mengimplementasikan fungsionalitas freemium dengan hardware binding yang diamankan HMAC.
 
-### "Attempt to write a readonly database" (Windows)
+Pengecekan update otomatis memantau rilis GitHub untuk notifikasi versi. Manajemen workflow sertifikat lengkap menyediakan operasi CRUD penuh dengan validasi dan jejak audit. Autentikasi dan otorisasi berbasis peran menegakkan kontrol akses di tier pengguna.
 
-**Problem**: Aplikasi di Windows gagal menyimpan data setelah instalasi.
+Subsistem manajemen pengguna menangani operasi siklus hidup akun termasuk pembuatan, modifikasi, aktivasi, dan deaktivasi. Analitik dashboard dinamis memvisualisasikan metrik operasional melalui chart interaktif. Logging audit komprehensif menangkap semua tindakan signifikan dengan kemampuan ekspor Excel.
 
-**Solution**: Ini adalah bug di versi lama (v1.0.3 ke bawah). Bug ini sudah diperbaiki di v1.0.4+ dengan memindahkan database ke folder data pengguna Anda di `C:\Users\<NAMA>\AppData\Roaming\SIMDOKPOL\` untuk Windows atau `/home/<nama>/.config/SIMDOKPOL/` untuk Linux.
+Fungsionalitas hot backup dan restore SQLite memungkinkan perlindungan data tanpa downtime. Aplikasi desktop mengintegrasikan kontrol system tray native dan pengiriman notifikasi. Dukungan HTTPS mencakup generasi sertifikat otomatis dan instalasi ke system trust store.
 
-### Icon Not Showing in System Tray
+Packaging multi-platform menghadirkan installer native untuk NSIS Windows, DEB dan RPM Linux, dan format DMG macOS. Pipeline continuous integration menjalankan unit test, analisis statis, dan integration test di ketiga backend database yang didukung. Ekspor Excel tier profesional melampaui PDF untuk pertukaran data yang fleksibel. Generasi PDF server-side memastikan output dokumen berkualitas tinggi yang konsisten di seluruh platform klien.
 
-**Solution**: Pastikan file `web/static/img/icon.ico` (Windows) atau `icon.png` (Linux/macOS) ada di folder instalasi Anda atau di sebelah binary jika menjalankan dari build lokal. Untuk Linux, pastikan Anda memiliki `libayatana-appindicator3-1` terinstal.
+### Peningkatan yang Direncanakan
 
-Untuk bug lainnya, silakan buat issue baru di halaman [GitHub Issues](https://github.com/muhammad1505/simdokpol/issues).
+Prioritas pengembangan masa depan mencakup eksposur API publik melalui spesifikasi Swagger atau OpenAPI yang memungkinkan peluang integrasi pihak ketiga. Implementasi server lisensi online akan menyediakan infrastruktur validasi terpusat untuk keamanan yang ditingkatkan dan analitik penggunaan.
 
----
-
-## 📄 Lisensi
-
-Proyek ini dilisensikan di bawah [MIT License](LICENSE) - lihat file LICENSE untuk detail.
+Editor PDF visual akan memungkinkan administrator memodifikasi layout dan styling dokumen melalui antarmuka grafis tanpa manipulasi kode template. Integrasi notifikasi email akan mengirimkan alert otomatis untuk sertifikat yang akan kedaluwarsa dan event sistem penting ke penerima yang ditentukan.
 
 ---
 
-## 👥 Tim Pengembang
+## Panduan Troubleshooting
 
-- **Lead Developer**: Muhammad Yusuf Abdurrohman
-- **Contributors**: [View all contributors](https://github.com/muhammad1505/simdokpol/graphs/contributors)
+### Peringatan Keamanan HTTPS
+
+Browser mungkin menampilkan peringatan sertifikat saat mengakses aplikasi melalui koneksi HTTPS. Navigasi ke panel System Settings dan akses tab General. Toggle mode HTTPS off lalu on lagi untuk memicu dialog instalasi sertifikat. Setujui prompt elevasi administrator Windows saat diminta untuk menginstal sertifikat ke system trust store, yang akan menghilangkan peringatan browser di masa mendatang.
+
+### Error Permission Write Database pada Windows
+
+Aplikasi yang dijalankan langsung dari arsip terkompresi kekurangan akses write ke direktori yang diperlukan. Ekstrak installer atau arsip portabel ke lokasi permanen sebelum eksekusi. Aplikasi memerlukan permission write ke direktori AppData pengguna untuk penyimpanan database dan konfigurasi.
+
+### Masalah Visibilitas Icon System Tray
+
+Build binary harus menyertakan aset statis embedded untuk rendering icon yang tepat. Verifikasi bahwa konten direktori web static img disertakan dalam binary yang dikompilasi melalui direktif Go embed. Sistem Linux memerlukan paket libayatana-appindicator3-1 untuk fungsionalitas system tray di sebagian besar lingkungan desktop.
+
+Untuk dukungan teknis tambahan atau laporan bug, silakan buat laporan issue terperinci di halaman GitHub Issues dengan informasi sistem, pesan error, dan langkah reproduksi untuk memfasilitasi penyelesaian yang tepat waktu.
 
 ---
 
-## 📞 Dukungan & Kontak
+## Lisensi
 
-Kami berkomitmen untuk memberikan dukungan terbaik bagi pengguna SIMDOKPOL. Silakan hubungi kami melalui saluran berikut:
+Proyek ini didistribusikan di bawah ketentuan MIT License. Rujuk ke file LICENSE di root repository untuk teks legal lengkap dan izin.
 
-### Dukungan Teknis
+---
 
-Untuk pertanyaan teknis, laporan bug, atau permintaan fitur, silakan gunakan platform GitHub kami yang memungkinkan kolaborasi transparan dan pelacakan issue yang terstruktur.
+## Tim Pengembangan
 
-- **🐛 Pelaporan Bug**: Laporkan masalah teknis atau bug yang Anda temukan melalui [GitHub Issues](https://github.com/muhammad1505/simdokpol/issues). Pastikan untuk menyertakan detail lengkap tentang masalah, langkah-langkah reproduksi, dan informasi sistem Anda.
+**Lead Developer:** Muhammad Yusuf Abdurrohman
 
-- **💬 Diskusi & Pertanyaan**: Untuk diskusi umum, pertanyaan implementasi, atau berbagi pengalaman dengan pengguna lain, kunjungi [GitHub Discussions](https://github.com/muhammad1505/simdokpol/discussions).
+Proyek ini menyambut kontribusi dari komunitas. Lihat daftar kontributor lengkap di halaman contributors repository GitHub.
 
-### Kontak Langsung
+---
 
-Untuk pertanyaan khusus, konsultasi implementasi, atau kebutuhan dukungan enterprise, Anda dapat menghubungi kami secara langsung.
+## Dukungan dan Kontak
 
-- **📧 Email**: emailbaruku50@gmail.com  
-  *Waktu respons: 1-2 hari kerja*
+Tim pengembangan memelihara beberapa saluran dukungan untuk membantu pengguna SIMDOKPOL dengan masalah teknis dan pertanyaan umum.
 
-- **💬 WhatsApp Business**: +62 823-0001-4685  
-  *Tersedia: Senin - Jumat, 09:00 - 17:00 WIB*
+**Saluran Dukungan Teknis**
 
-### Informasi Penting
+Laporan bug harus dikirimkan melalui GitHub Issues tracker dengan langkah reproduksi terperinci dan informasi sistem. Diskusi umum, permintaan fitur, dan pertanyaan implementasi disambut di forum GitHub Discussions.
 
-Sebelum menghubungi kami, pastikan Anda telah:
+**Kontak Langsung**
 
-- Memeriksa dokumentasi di README dan halaman Wiki (jika tersedia)
-- Mencari solusi di GitHub Issues yang sudah ada
-- Menyiapkan informasi sistem (versi aplikasi, sistem operasi, konfigurasi database)
+Untuk pertanyaan, konsultasi, atau dukungan teknis, Anda dapat menghubungi kami melalui berbagai saluran komunikasi berikut:
 
-Untuk pertanyaan mengenai lisensi Pro atau kerja sama institusional, silakan hubungi kami melalui email dengan subject line "SIMDOKPOL: Lisensi Enterprise".
+📧 **Email:** emailbaruku50@gmail.com - Untuk pertanyaan bisnis, kemitraan, atau konsultasi mendalam mengenai implementasi sistem.
+
+💬 **WhatsApp Business:** +62 823-0001-4685 - Dukungan real-time dan konsultasi cepat selama jam kerja Indonesia (Senin-Jumat, 08:00-17:00 WIB).
+
+📱 **Telegram:** @simdokpol_support - Alternatif komunikasi instant untuk diskusi teknis dan update informasi produk terbaru.
+
+👥 **Facebook Page:** [SIMDOKPOL Official](https://facebook.com/simdokpol) - Ikuti halaman resmi kami untuk update fitur, tips penggunaan, dan pengumuman penting.
+
+Kami berkomitmen untuk merespons setiap pertanyaan dalam waktu maksimal 1x24 jam pada hari kerja. Untuk masalah kritis yang memerlukan penanganan segera, silakan hubungi melalui WhatsApp atau Telegram dengan mencantumkan label "URGENT" di awal pesan.
 
 ---
 
 <div align="center">
 
-**Dikembangkan dengan ❤️ untuk Unit Kepolisian Indonesia**
+**Dikembangkan dengan dedikasi untuk Unit Kepolisian Indonesia**
 
-[Website](https://github.com/muhammad1505/simdokpol) • [Documentation](https://github.com/muhammad1505/simdokpol/wiki) • [Releases](https://github.com/muhammad1505/simdokpol-release/releases) • [Changelog](https://github.com/muhammad1505/simdokpol/blob/main/CHANGELOG.md)
+[Website](https://github.com/muhammad1505/simdokpol) • [Dokumentasi](https://github.com/muhammad1505/simdokpol/wiki) • [Releases](https://github.com/muhammad1505/simdokpol/releases) • [Changelog](https://github.com/muhammad1505/simdokpol/blob/main/CHANGELOG.md)
 
 </div>
