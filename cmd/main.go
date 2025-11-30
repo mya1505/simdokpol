@@ -18,7 +18,6 @@ import (
 
 	"simdokpol/internal/config"
 	"simdokpol/internal/controllers"
-	"simdokpol/internal/dto"
 	"simdokpol/internal/middleware"
 	"simdokpol/internal/models"
 	"simdokpol/internal/repositories"
@@ -57,30 +56,41 @@ func main() {
 
 	cfg := config.LoadConfig()
 
+	// FIX 1: Jangan log.Fatal kalau DB error, biar User bisa baca alert & Quit via Tray
 	db, err := setupDatabase(cfg)
 	if err != nil {
-		msg := fmt.Sprintf("FATAL: Gagal koneksi database: %v", err)
+		msg := fmt.Sprintf("GAGAL KONEKSI DATABASE: %v. Silakan cek konfigurasi atau restart aplikasi.", err)
+		log.Println(msg)
 		_ = beeep.Alert("SIMDOKPOL Error", msg, "")
-		log.Fatal(msg) // ✅ Menggunakan log.Fatal sesuai request
+		// Lanjut jalan agar Systray muncul (untuk akses menu Quit/Logs)
 	}
 
-	// Auto-Seed Template jika SQLite (Biar gak kosong pas awal)
-	if cfg.DBDialect == "sqlite" {
-		seedDefaultTemplates(db)
-	}
+	// FIX 2: Hapus Seeding Manual (seedDefaultTemplates). 
+	// Data template sekarang dihandle 100% oleh File Migrasi SQL agar konsisten.
 
 	// --- REPOSITORIES ---
-	userRepo := repositories.NewUserRepository(db)
-	docRepo := repositories.NewLostDocumentRepository(db)
-	residentRepo := repositories.NewResidentRepository(db)
-	configRepo := repositories.NewConfigRepository(db)
-	auditRepo := repositories.NewAuditLogRepository(db)
-	licenseRepo := repositories.NewLicenseRepository(db)
-	itemTemplateRepo := repositories.NewItemTemplateRepository(db)
+	// Init repo walaupun DB nil (untuk safety panic check nanti di service level)
+	var userRepo repositories.UserRepository
+	var docRepo repositories.LostDocumentRepository
+	var residentRepo repositories.ResidentRepository
+	var configRepo repositories.ConfigRepository
+	var auditRepo repositories.AuditLogRepository
+	var licenseRepo repositories.LicenseRepository
+	var itemTemplateRepo repositories.ItemTemplateRepository
+
+	if db != nil {
+		userRepo = repositories.NewUserRepository(db)
+		docRepo = repositories.NewLostDocumentRepository(db)
+		residentRepo = repositories.NewResidentRepository(db)
+		configRepo = repositories.NewConfigRepository(db)
+		auditRepo = repositories.NewAuditLogRepository(db)
+		licenseRepo = repositories.NewLicenseRepository(db)
+		itemTemplateRepo = repositories.NewItemTemplateRepository(db)
+	}
 
 	// --- SERVICES ---
 	auditService := services.NewAuditLogService(auditRepo)
-	configService := services.NewConfigService(configRepo, db) // Inject DB untuk sync nomor
+	configService := services.NewConfigService(configRepo, db)
 	backupService := services.NewBackupService(db, cfg, configService, auditService)
 	licenseService := services.NewLicenseService(licenseRepo, configService, auditService)
 	userService := services.NewUserService(userRepo, auditService, cfg)
@@ -143,12 +153,14 @@ func main() {
 
 	authorized := r.Group("/")
 	authorized.Use(middleware.SetupMiddleware(configService))
-	authorized.Use(middleware.AuthMiddleware(userRepo))
+	if userRepo != nil {
+		authorized.Use(middleware.AuthMiddleware(userRepo))
+	}
 
 	authorized.GET("/", func(c *gin.Context) {
 		c.HTML(200, "dashboard.html", gin.H{"Title": "Beranda", "CurrentUser": c.MustGet("currentUser"), "Config": mustGetConfig(configService)})
 	})
-	authorized.GET("/api/config/limits", configController.GetLimits) // Route Config Publik
+	authorized.GET("/api/config/limits", configController.GetLimits)
 
 	authorized.GET("/api/stats", dashboardController.GetStats)
 	authorized.GET("/api/stats/monthly-issuance", dashboardController.GetMonthlyChart)
@@ -210,14 +222,14 @@ func main() {
 		c.HTML(200, "panduan.html", gin.H{"Title": "Panduan", "CurrentUser": c.MustGet("currentUser")})
 	})
 	authorized.GET("/upgrade", func(c *gin.Context) {
-      conf, _ := configService.GetConfig()
-      c.HTML(200, "upgrade.html", gin.H{
-          "Title": "Upgrade ke Pro", 
-          "CurrentUser": c.MustGet("currentUser"), 
-          "Config": conf,
-          "AppVersion": version,
-      })
-  })
+		conf, _ := configService.GetConfig()
+		c.HTML(200, "upgrade.html", gin.H{
+			"Title":       "Upgrade ke Pro",
+			"CurrentUser": c.MustGet("currentUser"),
+			"Config":      conf,
+			"AppVersion":  version,
+		})
+	})
 	authorized.GET("/tentang", func(c *gin.Context) {
 		conf, _ := configService.GetConfig()
 		c.HTML(200, "tentang.html", gin.H{"Title": "Tentang", "CurrentUser": c.MustGet("currentUser"), "AppVersion": version, "Config": conf})
@@ -288,29 +300,30 @@ func main() {
 
 	srv := &http.Server{Addr: ":" + port, Handler: r}
 
-	// --- HTTPS LOGIC ---
+	// --- HTTPS LOGIC (FIX PATH) ---
 	isHTTPS := os.Getenv("ENABLE_HTTPS") == "true"
-	log.Printf("🔍 Konfigurasi HTTPS: %v", isHTTPS)
-
-	// Generate/Check Certs
-	certFile, keyFile, errCert := utils.EnsureCertificates()
-	if errCert != nil {
-		log.Printf("⚠️ ERROR CERT: Gagal membuat sertifikat: %v", errCert)
-		if isHTTPS {
-			isHTTPS = false // Fallback ke HTTP jika cert gagal
+	
+	certFile, keyFile := "", ""
+	if isHTTPS {
+		// FIX: Generate certs di AppData, bukan exeDir (karena permission)
+		var errCert error
+		certFile, keyFile, errCert = utils.EnsureCertificates()
+		if errCert != nil {
+			log.Printf("⚠️ ERROR CERT: Gagal membuat sertifikat: %v. Fallback ke HTTP.", errCert)
+			isHTTPS = false
+		} else {
+			log.Printf("✅ HTTPS Enabled. Cert Path: %s", certFile)
 		}
-	} else {
-		log.Printf("✅ Cert Path: %s", certFile)
 	}
 
 	go func() {
 		if isHTTPS {
-			log.Printf("🔒 Server berjalan di port %s (HTTPS Enabled)", port)
+			log.Printf("🔒 Server berjalan di port %s (HTTPS)", port)
 			if err := srv.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
 				log.Fatalf("ListenTLS error: %s\n", err)
 			}
 		} else {
-			log.Printf("🌐 Server berjalan di port %s (HTTP Standar)", port)
+			log.Printf("🌐 Server berjalan di port %s (HTTP)", port)
 			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				log.Fatalf("listen: %s\n", err)
 			}
@@ -329,8 +342,6 @@ func main() {
 		}
 	})
 }
-
-// --- HELPER FUNCTIONS (WAJIB ADA) ---
 
 func setupDatabase(cfg *config.Config) (*gorm.DB, error) {
 	var db *gorm.DB
@@ -371,42 +382,22 @@ func setupDatabase(cfg *config.Config) (*gorm.DB, error) {
 	sqlDB.SetMaxOpenConns(100)
 	sqlDB.SetConnMaxLifetime(time.Hour)
 
-	// Auto Migrate untuk SEMUA DB (Fix Bug 2)
-	err = db.AutoMigrate(&models.User{}, &models.Resident{}, &models.LostDocument{}, &models.LostItem{}, &models.AuditLog{}, &models.Configuration{}, &models.ItemTemplate{}, &models.License{})
+	// Auto Migrate
+	err = db.AutoMigrate(
+		&models.User{}, 
+		&models.Resident{}, 
+		&models.LostDocument{}, 
+		&models.LostItem{}, 
+		&models.AuditLog{}, 
+		&models.Configuration{}, 
+		&models.ItemTemplate{}, 
+		&models.License{},
+	)
 	if err != nil {
 		return nil, fmt.Errorf("migrasi gagal: %w", err)
 	}
 
 	return db, nil
-}
-
-func seedDefaultTemplates(db *gorm.DB) {
-	var count int64
-	db.Model(&models.ItemTemplate{}).Count(&count)
-	if count > 0 {
-		return
-	}
-	log.Println("🔹 Seeding default templates...")
-	templates := []models.ItemTemplate{
-		{
-			NamaBarang: "KTP", Urutan: 1, IsActive: true,
-			FieldsConfig: models.JSONFieldArray{
-				{Label: "NIK", Type: "text", DataLabel: "NIK", RequiredLength: 16, IsNumeric: true},
-			},
-		},
-		{
-			NamaBarang: "SIM", Urutan: 2, IsActive: true,
-			FieldsConfig: models.JSONFieldArray{
-				{Label: "Golongan SIM", Type: "select", DataLabel: "Gol", Options: []string{"A", "C", "B I", "B II", "D"}},
-				{Label: "Nomor SIM", Type: "text", DataLabel: "No. SIM", MinLength: 12, IsNumeric: true},
-			},
-		},
-		{NamaBarang: "STNK", Urutan: 3, IsActive: true, FieldsConfig: models.JSONFieldArray{}},
-		{NamaBarang: "BPKB", Urutan: 4, IsActive: true, FieldsConfig: models.JSONFieldArray{}},
-		{NamaBarang: "ATM", Urutan: 5, IsActive: true, FieldsConfig: models.JSONFieldArray{}},
-		{NamaBarang: "LAINNYA", Urutan: 99, IsActive: true, FieldsConfig: models.JSONFieldArray{}},
-	}
-	db.Create(&templates)
 }
 
 func setupEnvironment() {
@@ -419,8 +410,6 @@ func setupLogging() {
 	logPath := filepath.Join(utils.GetAppDataDir(), "logs", "simdokpol.log")
 	_ = os.MkdirAll(filepath.Dir(logPath), 0755)
 	fileLogger := &lumberjack.Logger{Filename: logPath, MaxSize: 10, MaxBackups: 3, MaxAge: 28, Compress: true}
-	
-	// FIX: Logging ke Terminal & File sekaligus (MultiWriter)
 	mw := io.MultiWriter(os.Stdout, fileLogger)
 	log.SetOutput(mw)
 }
@@ -445,7 +434,9 @@ func onReady(isHTTPS bool) {
 	}
 
 	go func() {
-		time.Sleep(1 * time.Second)
+		// FIX 3: Tambah waktu tunggu inisialisasi agar tidak connection refused
+		time.Sleep(2 * time.Second)
+		
 		port := os.Getenv("PORT")
 		if port == "" {
 			port = "8080"
@@ -467,9 +458,7 @@ func onReady(isHTTPS bool) {
 			select {
 			case <-mOpen.ClickedCh:
 				port := os.Getenv("PORT")
-				if port == "" {
-					port = "8080"
-				}
+				if port == "" { port = "8080" }
 				openBrowser(fmt.Sprintf("%s://localhost:%s", protocol, port))
 			case <-mVhost.ClickedCh:
 				vhost := utils.NewVHostSetup()

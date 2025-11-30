@@ -3,25 +3,34 @@ package middleware
 import (
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/time/rate"
 )
 
-// RateLimiter struct untuk menyimpan limiter per IP
+// Wrapper untuk menyimpan waktu akses terakhir
+type client struct {
+	limiter  *rate.Limiter
+	lastSeen time.Time
+}
+
 type RateLimiter struct {
-	ips map[string]*rate.Limiter
+	ips map[string]*client
 	mu  sync.Mutex
 	r   rate.Limit
 	b   int
 }
 
 func NewRateLimiter(r rate.Limit, b int) *RateLimiter {
-	return &RateLimiter{
-		ips: make(map[string]*rate.Limiter),
+	rl := &RateLimiter{
+		ips: make(map[string]*client),
 		r:   r,
 		b:   b,
 	}
+	// Jalankan Garbage Collector di background
+	go rl.cleanupLoop()
+	return rl
 }
 
 func (i *RateLimiter) AddIP(ip string) *rate.Limiter {
@@ -30,14 +39,32 @@ func (i *RateLimiter) AddIP(ip string) *rate.Limiter {
 
 	limiter, exists := i.ips[ip]
 	if !exists {
-		limiter = rate.NewLimiter(i.r, i.b)
+		limiter = &client{
+			limiter:  rate.NewLimiter(i.r, i.b),
+			lastSeen: time.Now(),
+		}
 		i.ips[ip] = limiter
+		return limiter.limiter
 	}
 
-	return limiter
+	limiter.lastSeen = time.Now()
+	return limiter.limiter
 }
 
-// GetLimiterMiddleware mengembalikan handler Gin
+// Hapus IP yang tidak aktif lebih dari 3 menit untuk membebaskan memori
+func (i *RateLimiter) cleanupLoop() {
+	for {
+		time.Sleep(1 * time.Minute)
+		i.mu.Lock()
+		for ip, client := range i.ips {
+			if time.Since(client.lastSeen) > 3*time.Minute {
+				delete(i.ips, ip)
+			}
+		}
+		i.mu.Unlock()
+	}
+}
+
 func (i *RateLimiter) GetLimiterMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ip := c.ClientIP()
@@ -45,7 +72,7 @@ func (i *RateLimiter) GetLimiterMiddleware() gin.HandlerFunc {
 
 		if !limiter.Allow() {
 			c.JSON(http.StatusTooManyRequests, gin.H{
-				"error": "Terlalu banyak percobaan login. Silakan tunggu beberapa saat.",
+				"error": "Terlalu banyak percobaan. Silakan tunggu sebentar.",
 			})
 			c.Abort()
 			return
@@ -54,6 +81,4 @@ func (i *RateLimiter) GetLimiterMiddleware() gin.HandlerFunc {
 	}
 }
 
-// LoginRateLimiter: Izinkan 1 request per detik, burst 5 (max 5 percobaan cepat)
-// Setelah itu harus nunggu.
 var LoginRateLimiter = NewRateLimiter(1, 5)

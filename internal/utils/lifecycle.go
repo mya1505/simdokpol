@@ -4,35 +4,36 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"syscall"
 )
 
-// RestartApp me-restart aplikasi saat ini.
-// Cocok digunakan setelah perubahan konfigurasi kritis (DB/HTTPS).
+// RestartApp me-restart aplikasi saat ini (Cross-Platform)
 func RestartApp() error {
-	// 1. Dapatkan path executable saat ini
-	self, err := os.Executable()
+	exePath, err := os.Executable()
 	if err != nil {
 		return err
 	}
 
-	// 2. Siapkan perintah untuk menjalankan ulang diri sendiri
-	// os.Args[1:] meneruskan argumen CLI (jika ada) ke proses baru
-	cmd := exec.Command(self, os.Args[1:]...)
-	
-	// Teruskan stdout/stderr agar log tetap jalan (untuk mode console)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	
-	// Detach process (biar tidak ikut mati saat parent mati)
-	// Di Windows/Linux Go biasanya handle ini otomatis via Start()
-	
-	// 3. Jalankan proses baru
-	log.Println("🔄 SYSTEM RESTART TRIGGERED...")
-	if err := cmd.Start(); err != nil {
+	exePath, err = filepath.EvalSymlinks(exePath)
+	if err != nil {
 		return err
 	}
 
-	// 4. Matikan proses saat ini
-	os.Exit(0)
+	log.Println("🔄 SYSTEM RESTART TRIGGERED...")
+
+	// Coba exec (Unix)
+	err = syscall.Exec(exePath, os.Args, os.Environ())
+	if err != nil {
+		// Fallback (Windows/Others)
+		cmd := exec.Command(exePath, os.Args[1:]...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Stdin = os.Stdin
+		if err := cmd.Start(); err != nil {
+			return err
+		}
+		os.Exit(0)
+	}
 	return nil
 }

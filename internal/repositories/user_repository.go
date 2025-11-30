@@ -9,7 +9,6 @@ import (
 
 type UserRepository interface {
 	Create(user *models.User) error
-	// Update: Method lama FindAll diganti/dilengkapi dengan Paged
 	FindAllPaged(req dto.DataTableRequest, statusFilter string) ([]models.User, int64, int64, error)
 	FindByID(id uint) (*models.User, error)
 	FindByNRP(nrp string) (*models.User, error)
@@ -32,45 +31,33 @@ func (r *userRepository) Create(user *models.User) error {
 	return r.db.Create(user).Error
 }
 
-// --- IMPLEMENTASI SERVER-SIDE PAGING ---
 func (r *userRepository) FindAllPaged(req dto.DataTableRequest, statusFilter string) ([]models.User, int64, int64, error) {
 	var users []models.User
 	var total, filtered int64
 
-	// 1. Base Query (Filter Status Aktif/Non-Aktif)
+	// Fix Logic Limit
+	limit := req.Length
+	if limit <= 0 { limit = 10 }
+	if limit > 100 { limit = 100 }
+
 	db := r.db.Model(&models.User{})
 	if statusFilter == "inactive" {
 		db = db.Unscoped().Where("deleted_at IS NOT NULL")
 	} else {
-		// Default GORM sudah filter deleted_at IS NULL, tapi kita eksplisit biar jelas
 		db = db.Where("deleted_at IS NULL")
 	}
 
-	// Hitung Total (Sebelum Search)
 	db.Count(&total)
 
-	// 2. Filter Pencarian Global (NRP, Nama, Jabatan, Pangkat)
 	if req.Search != "" {
 		search := fmt.Sprintf("%%%s%%", req.Search)
-		db = db.Where(
-			"nama_lengkap LIKE ? OR nrp LIKE ? OR jabatan LIKE ? OR pangkat LIKE ?", 
-			search, search, search, search,
-		)
+		db = db.Where("nama_lengkap LIKE ? OR nrp LIKE ? OR jabatan LIKE ? OR pangkat LIKE ?", search, search, search, search)
 	}
-	
-	// Hitung Total Setelah Filter
 	db.Count(&filtered)
 
-	// 3. Paging & Ordering
-	// Default sort by nama_lengkap asc kalau user gak klik sort
-	err := db.Order("nama_lengkap asc").
-		Limit(req.Length).
-		Offset(req.Start).
-		Find(&users).Error
-
+	err := db.Order("nama_lengkap asc").Limit(limit).Offset(req.Start).Find(&users).Error
 	return users, total, filtered, err
 }
-// ----------------------------------------
 
 func (r *userRepository) FindByID(id uint) (*models.User, error) {
 	var user models.User
@@ -108,8 +95,6 @@ func (r *userRepository) Restore(id uint) error {
 
 func (r *userRepository) CountAll() (int64, error) {
 	var count int64
-	if err := r.db.Model(&models.User{}).Count(&count).Error; err != nil {
-		return 0, err
-	}
-	return count, nil
+	err := r.db.Model(&models.User{}).Count(&count).Error
+	return count, err
 }

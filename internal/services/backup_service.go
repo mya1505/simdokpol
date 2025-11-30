@@ -40,106 +40,72 @@ func (s *backupService) getCleanDBPath() string {
 	return dsnParts[0]
 }
 
-// ... (Fungsi CreateBackup TIDAK BERUBAH, gunakan yang lama) ...
 func (s *backupService) CreateBackup(actorID uint) (string, error) {
 	appConfig, err := s.configService.GetConfig()
 	if err != nil {
-		return "", fmt.Errorf("gagal mendapatkan konfigurasi aplikasi: %w", err)
+		return "", fmt.Errorf("gagal konfigurasi: %w", err)
 	}
 
 	backupDir := appConfig.BackupPath
 	if backupDir == "" {
 		backupDir = filepath.Join(utils.GetAppDataDir(), "backups")
 	}
-
-	if err := os.MkdirAll(backupDir, 0755); err != nil {
-		return "", fmt.Errorf("gagal membuat direktori backup di '%s': %w", backupDir, err)
-	}
+	os.MkdirAll(backupDir, 0755)
 
 	timestamp := time.Now().Format("2006-01-02_15-04-05")
-	destinationPath := filepath.Join(backupDir, fmt.Sprintf("backup-simdokpol-%s.db", timestamp))
+	destinationPath := filepath.Join(backupDir, fmt.Sprintf("backup-%s.db", timestamp))
 
 	if s.cfg.DBDialect == "sqlite" {
 		os.Remove(destinationPath)
 		if err := s.db.Exec("VACUUM INTO ?", destinationPath).Error; err != nil {
-			return "", fmt.Errorf("gagal melakukan SQLite Hot Backup: %w", err)
+			return "", fmt.Errorf("gagal SQLite Hot Backup: %w", err)
 		}
 	} else {
-		sourcePath := s.getCleanDBPath()
-		if _, err := os.Stat(sourcePath); os.IsNotExist(err) {
-			return "", fmt.Errorf("backup file hanya support SQLite. Gunakan tools DB untuk %s", s.cfg.DBDialect)
-		}
-
-		sourceFile, err := os.Open(sourcePath)
-		if err != nil {
-			return "", fmt.Errorf("gagal membuka file database sumber: %w", err)
-		}
-		defer sourceFile.Close()
-
-		destinationFile, err := os.Create(destinationPath)
-		if err != nil {
-			return "", fmt.Errorf("gagal membuat file database backup: %w", err)
-		}
-		defer destinationFile.Close()
-
-		if _, err := io.Copy(destinationFile, sourceFile); err != nil {
-			return "", fmt.Errorf("gagal menyalin data ke file backup: %w", err)
-		}
+		// Fallback copy manual (hanya jika connection closed, risky)
+		return "", fmt.Errorf("backup hanya support SQLite")
 	}
 
-	s.auditService.LogActivity(actorID, models.AuditBackupCreated, fmt.Sprintf("Membuat file backup baru: %s", filepath.Base(destinationPath)))
-
+	s.auditService.LogActivity(actorID, models.AuditBackupCreated, "Backup: "+filepath.Base(destinationPath))
 	return destinationPath, nil
 }
 
-// --- FIX RESTORE WINDOWS LOCK ---
 func (s *backupService) RestoreBackup(uploadedFile io.Reader, actorID uint) error {
 	if s.cfg.DBDialect != "sqlite" {
-		return fmt.Errorf("fitur restore hanya tersedia untuk database SQLite")
+		return fmt.Errorf("restore hanya support SQLite")
 	}
 
 	targetPath := s.getCleanDBPath()
-	
-	// 1. Tulis uploaded file ke file temporary dulu (.db.new)
-	// Ini menghindari lock karena kita menulis ke file baru, bukan file yang sedang dibuka GORM
 	tempNewPath := targetPath + ".new"
 	
 	newFile, err := os.Create(tempNewPath)
 	if err != nil {
-		return fmt.Errorf("gagal membuat file temporary: %w", err)
+		return fmt.Errorf("gagal buat temp file: %w", err)
 	}
 	
-	// Pastikan file temp tertutup walau ada error copy
 	_, copyErr := io.Copy(newFile, uploadedFile)
-	newFile.Close() 
+	newFile.Close()
 	
 	if copyErr != nil {
-		os.Remove(tempNewPath) // Bersihkan sampah
-		return fmt.Errorf("gagal menyalin data upload: %w", copyErr)
+		os.Remove(tempNewPath)
+		return fmt.Errorf("gagal copy data: %w", copyErr)
 	}
 
-	// 2. Lakukan Swap File
-	// Strategy: Rename DB Aktif -> .bak, Rename .new -> DB Aktif
-	// Windows mengizinkan rename file yang sedang terbuka (biasanya), tapi tidak delete.
-	
 	backupPath := targetPath + ".bak." + time.Now().Format("20060102150405")
 	
-	// Rename file asli ke backup
+	// Rename file asli ke backup (Windows mungkin fail jika terkunci)
 	if err := os.Rename(targetPath, backupPath); err != nil {
 		os.Remove(tempNewPath)
-		// Pesan error yang membantu user Windows
-		return fmt.Errorf("FILE TERKUNCI (Windows Lock). Tutup aplikasi lalu rename manual file '%s' menjadi '%s', dan '%s' menjadi '%s'", 
-			filepath.Base(targetPath), filepath.Base(backupPath), filepath.Base(tempNewPath), filepath.Base(targetPath))
+		if strings.Contains(err.Error(), "process cannot access") {
+			return fmt.Errorf("DB TERKUNCI: Tutup aplikasi dan rename file .db secara manual.")
+		}
+		return fmt.Errorf("gagal backup file lama: %w", err)
 	}
 
-	// Rename file baru ke nama asli
 	if err := os.Rename(tempNewPath, targetPath); err != nil {
-		// Critical: Coba kembalikan file lama jika gagal
-		os.Rename(backupPath, targetPath)
-		return fmt.Errorf("gagal mengaktifkan database baru: %w", err)
+		os.Rename(backupPath, targetPath) // Rollback
+		return fmt.Errorf("gagal aktifkan DB baru: %w", err)
 	}
 
-	s.auditService.LogActivity(actorID, models.AuditRestoreFromFile, "Database dipulihkan (Swap Method). Restart aplikasi diperlukan.")
-
+	s.auditService.LogActivity(actorID, models.AuditRestoreFromFile, "Restore DB Sukses")
 	return nil
 }

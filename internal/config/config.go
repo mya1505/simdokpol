@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log"
 	"os"
 	"path/filepath"
 	"simdokpol/internal/dto"
@@ -19,55 +20,59 @@ type Config struct {
 	DBPass       string
 }
 
+// Helper untuk parsing INT dengan default value (Fix Silent Failure)
+func getEnvAsInt(key string, defaultVal int) int {
+	valStr := os.Getenv(key)
+	if valStr == "" {
+		return defaultVal
+	}
+	val, err := strconv.Atoi(valStr)
+	if err != nil {
+		log.Printf("⚠️ Warning: Invalid integer for ENV %s: %s. Using default: %d", key, valStr, defaultVal)
+		return defaultVal
+	}
+	return val
+}
+
 func LoadConfig() *Config {
-	// 1. Load .env dari AppData (Prioritas Utama)
 	appDataDir := utils.GetAppDataDir()
 	envPath := filepath.Join(appDataDir, ".env")
+	
 	_ = godotenv.Load(envPath)
-	// Fallback ke lokal (untuk dev)
 	_ = godotenv.Load()
 
-	// 2. Setup Security
 	secretStr := os.Getenv("JWT_SECRET_KEY")
 	if secretStr == "" {
+		if os.Getenv("APP_ENV") == "production" {
+			log.Println("⚠️ CRITICAL: Using default JWT Secret in Production!")
+		}
 		secretStr = "default-insecure-secret-change-me-immediately"
 	}
 
-	costStr := os.Getenv("BCRYPT_COST")
-	cost, _ := strconv.Atoi(costStr)
-	if cost < bcrypt.MinCost { cost = 10 }
-	
-	// 3. Database Logic (Path Fix)
+	cost := getEnvAsInt("BCRYPT_COST", 10)
+	if cost < bcrypt.MinCost {
+		cost = bcrypt.MinCost
+	}
+
 	dialect := strings.ToLower(os.Getenv("DB_DIALECT"))
 	if dialect == "" { dialect = "sqlite" }
 
 	dsn := os.Getenv("DB_DSN")
 	if dialect == "sqlite" {
-		if dsn == "" || dsn == "simdokpol.db?_foreign_keys=on" {
-			dsn = filepath.Join(appDataDir, "simdokpol.db?_foreign_keys=on")
-		} else if !filepath.IsAbs(strings.Split(dsn, "?")[0]) {
-			cleanDSN := strings.TrimPrefix(dsn, "file:")
-			parts := strings.Split(cleanDSN, "?")
-			fname := filepath.Base(parts[0])
-			dsn = filepath.Join(appDataDir, fname)
-			if len(parts) > 1 { dsn += "?" + parts[1] }
+		if dsn == "" {
+			dsn = "simdokpol.db?_foreign_keys=on"
+		}
+		// Fix Path SQLite agar selalu absolute ke AppData
+		if !strings.HasPrefix(dsn, "file:") && !filepath.IsAbs(strings.Split(dsn, "?")[0]) {
+			dsn = filepath.Join(appDataDir, dsn)
 		}
 	}
 
-	// 4. Parse Settings Lain (Fallback Default)
-	archiveDays, _ := strconv.Atoi(os.Getenv("archive_duration_days"))
-	if archiveDays == 0 { archiveDays = 15 }
-
-	// Session Timeout (Default 8 Jam)
-	sessionTimeout, _ := strconv.Atoi(os.Getenv("SESSION_TIMEOUT"))
-	if sessionTimeout == 0 { sessionTimeout = 480 }
-
-	// Idle Timeout (Default 15 Menit)
-	idleTimeout, _ := strconv.Atoi(os.Getenv("IDLE_TIMEOUT"))
-	if idleTimeout == 0 { idleTimeout = 15 }
-
-	// HTTPS Status
-	enableHTTPS := os.Getenv("ENABLE_HTTPS") == "true"
+	// Fix Env Key Case Sensitive di Linux
+	archiveDays := getEnvAsInt("ARCHIVE_DURATION_DAYS", 15)
+	if archiveDays == 0 {
+		archiveDays = getEnvAsInt("archive_duration_days", 15)
+	}
 
 	return &Config{
 		AppConfig: &dto.AppConfig{
@@ -78,23 +83,22 @@ func LoadConfig() *Config {
 			DBUser:              os.Getenv("DB_USER"),
 			DBName:              os.Getenv("DB_NAME"),
 			DBSSLMode:           os.Getenv("DB_SSLMODE"),
-			IsSetupComplete:     os.Getenv("is_setup_complete") == "true",
+			IsSetupComplete:     os.Getenv("IS_SETUP_COMPLETE") == "true",
 			
-			KopBaris1:           os.Getenv("kop_baris_1"),
-			KopBaris2:           os.Getenv("kop_baris_2"),
-			KopBaris3:           os.Getenv("kop_baris_3"),
-			NamaKantor:          os.Getenv("nama_kantor"),
-			TempatSurat:         os.Getenv("tempat_surat"),
-			FormatNomorSurat:    os.Getenv("format_nomor_surat"),
-			NomorSuratTerakhir:  os.Getenv("nomor_surat_terakhir"),
-			ZonaWaktu:           os.Getenv("zona_waktu"),
-			BackupPath:          os.Getenv("backup_path"),
+			KopBaris1:           os.Getenv("KOP_BARIS_1"),
+			KopBaris2:           os.Getenv("KOP_BARIS_2"),
+			KopBaris3:           os.Getenv("KOP_BARIS_3"),
+			NamaKantor:          os.Getenv("NAMA_KANTOR"),
+			TempatSurat:         os.Getenv("TEMPAT_SURAT"),
+			FormatNomorSurat:    os.Getenv("FORMAT_NOMOR_SURAT"),
+			NomorSuratTerakhir:  os.Getenv("NOMOR_SURAT_TERAKHIR"),
+			ZonaWaktu:           os.Getenv("ZONA_WAKTU"),
+			BackupPath:          os.Getenv("BACKUP_PATH"),
 			
-			// Field Baru
 			ArchiveDurationDays: archiveDays,
-			EnableHTTPS:         enableHTTPS,
-			SessionTimeout:      sessionTimeout,
-			IdleTimeout:         idleTimeout,
+			EnableHTTPS:         os.Getenv("ENABLE_HTTPS") == "true",
+			SessionTimeout:      getEnvAsInt("SESSION_TIMEOUT", 480),
+			IdleTimeout:         getEnvAsInt("IDLE_TIMEOUT", 15),
 		},
 		JWTSecretKey: []byte(secretStr),
 		BcryptCost:   cost,
