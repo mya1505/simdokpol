@@ -263,6 +263,7 @@ func main() {
 	admin.POST("/api/backups", backupController.CreateBackup)
 	admin.POST("/api/restore", backupController.RestoreBackup)
 	admin.POST("/api/settings/migrate", configController.MigrateDatabase)
+	admin.POST("/api/settings/install-cert", settingsController.InstallCertificate)
 
 	admin.GET("/api/audit-logs", auditController.FindAll)
 	admin.GET("/api/audit-logs/export", auditController.Export)
@@ -492,4 +493,76 @@ func openBrowser(url string) {
 func mustGetConfig(s services.ConfigService) *dto.AppConfig {
 	c, _ := s.GetConfig()
 	return c
+}
+
+// --- FUNGSI SEEDING LENGKAP (SINGLE SOURCE OF TRUTH) ---
+
+func seedDefaultTemplates(db *gorm.DB) {
+	// 1. Cek apakah tabel sudah ada isinya? (Termasuk yang soft-deleted)
+	var count int64
+	db.Model(&models.ItemTemplate{}).Unscoped().Count(&count)
+	
+	// 2. Jika sudah ada data, SKIP. Biarkan data yang ada.
+	if count > 0 {
+		return 
+	}
+	
+	log.Println("🔹 Database kosong. Melakukan seeding template default LENGKAP...")
+
+	// 3. Definisi Data Template (Sesuai Standar Migrasi SQL)
+	templates := []models.ItemTemplate{
+		{
+			NamaBarang: "KTP", Urutan: 1, IsActive: true,
+			FieldsConfig: models.JSONFieldArray{
+				{Label: "NIK", Type: "text", DataLabel: "NIK", Regex: "^[0-9]{16}$", RequiredLength: 16, IsNumeric: true, Placeholder: "16 Digit NIK"},
+			},
+		},
+		{
+			NamaBarang: "SIM", Urutan: 2, IsActive: true,
+			FieldsConfig: models.JSONFieldArray{
+				{Label: "Golongan SIM", Type: "select", DataLabel: "Gol", Options: []string{"A", "B I", "B II", "C", "D"}},
+				{Label: "Nomor SIM", Type: "text", DataLabel: "No. SIM", Regex: "^[0-9]{12,14}$", MinLength: 12, MaxLength: 14, IsNumeric: true, Placeholder: "12-14 Digit No. SIM"},
+			},
+		},
+		{
+			NamaBarang: "STNK", Urutan: 3, IsActive: true,
+			FieldsConfig: models.JSONFieldArray{
+				{Label: "Nomor Polisi", Type: "text", DataLabel: "No. Pol", Regex: "^[A-Z0-9 ]{1,10}$", MaxLength: 10, IsUppercase: true, Placeholder: "Contoh: DD 1234 AB"},
+				{Label: "Nomor Rangka", Type: "text", DataLabel: "No. Rangka", Regex: "^[A-Z0-9]{17}$", RequiredLength: 17, IsUppercase: true, Placeholder: "17 Digit (VIN)"},
+				{Label: "Nomor Mesin", Type: "text", DataLabel: "No. Mesin", Regex: "^[A-Z0-9]{1,15}$", MaxLength: 15, IsUppercase: true, Placeholder: "Hingga 15 digit"},
+			},
+		},
+		{
+			NamaBarang: "BPKB", Urutan: 4, IsActive: true,
+			FieldsConfig: models.JSONFieldArray{
+				{Label: "Nomor BPKB", Type: "text", DataLabel: "No. BPKB", Regex: "^[A-Z0-9]{9}$", RequiredLength: 9, IsUppercase: true, Placeholder: "9 Digit (Huruf & Angka)"},
+				{Label: "Atas Nama", Type: "text", DataLabel: "a.n.", IsTitlecase: true, Placeholder: "Nama Pemilik di BPKB"},
+			},
+		},
+		{
+			NamaBarang: "IJAZAH", Urutan: 5, IsActive: true,
+			FieldsConfig: models.JSONFieldArray{
+				{Label: "Tingkat Ijazah", Type: "select", DataLabel: "Tingkat", Options: []string{"SD", "SMP", "SMA/SMK", "D3", "S1", "S2", "S3"}},
+				{Label: "Nomor Ijazah", Type: "text", DataLabel: "No. Ijazah", Regex: "^[A-Z0-9\\/-]{1,50}$", MaxLength: 50, IsUppercase: true, Placeholder: "Termasuk / dan -"},
+			},
+		},
+		{
+			NamaBarang: "ATM", Urutan: 6, IsActive: true,
+			FieldsConfig: models.JSONFieldArray{
+				{Label: "Nama Bank", Type: "select", DataLabel: "Bank", Options: []string{"BRI", "BCA", "Mandiri", "BNI", "BTN", "Lainnya"}},
+				{Label: "Nomor Rekening", Type: "text", DataLabel: "No. Rek", Regex: "^[0-9]{1,20}$", MaxLength: 20, IsNumeric: true, Placeholder: "Hanya Angka"},
+			},
+		},
+		{
+			NamaBarang: "LAINNYA", Urutan: 99, IsActive: true,
+			FieldsConfig: models.JSONFieldArray{}, // Kosong (Free text description)
+		},
+	}
+
+	// 4. Eksekusi Insert
+	if err := db.Create(&templates).Error; err != nil {
+		log.Printf("⚠️ Gagal seeding templates: %v", err)
+	} else {
+		log.Println("✅ Default templates berhasil dibuat dengan field lengkap.")
+	}
 }

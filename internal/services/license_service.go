@@ -22,8 +22,9 @@ const LicenseStatusValid = "VALID"
 const LicenseStatusUnlicensed = "UNLICENSED"
 const EnvLicenseKey = "LICENSE_KEY"
 
-// Default Key (Hanya untuk Development, Production di-override Makefile)
-var AppSecretKeyString = "DEFAULT_DEV_KEY_JANGAN_DIPAKAI"
+// Kunci Rahasia Aplikasi (Di Production ini harus di-inject via ldflags saat build)
+// Jangan gunakan kunci default ini di production!
+var AppSecretKeyString = "JANGAN_PAKAI_DEFAULT_KEY_INI_BAHAYA"
 
 var ErrLicenseInvalid = errors.New("kunci lisensi tidak valid untuk mesin ini")
 var ErrLicenseBanned = errors.New("kunci lisensi ini telah diblokir")
@@ -33,8 +34,7 @@ type LicenseService interface {
 	GetLicenseStatus() (string, error)
 	IsLicensed() bool
 	GetHardwareID() string
-	AutoActivateFromEnv()
-	RevokeLicense() error // <-- Method Baru
+	RevokeLicense() error
 }
 
 type licenseService struct {
@@ -49,7 +49,8 @@ func NewLicenseService(licenseRepo repositories.LicenseRepository, configService
 		configService: configService,
 		auditService:  auditService,
 	}
-	svc.AutoActivateFromEnv()
+	// Kita cek integritas saat startup juga
+	svc.verifyRuntimeIntegrity()
 	return svc
 }
 
@@ -57,57 +58,88 @@ func (s *licenseService) GetHardwareID() string {
 	return utils.GetHardwareID()
 }
 
-// --- FIX KRITIS: VALIDASI ULANG SAAT RUNTIME ---
-func (s *licenseService) IsLicensed() bool {
-	// 1. Cek apa kata Config/DB (Cepat)
-	status, err := s.GetLicenseStatus()
-	if err != nil || status != LicenseStatusValid {
-		return false
+// verifyRuntimeIntegrity dijalankan saat startup untuk memastikan state konsisten
+func (s *licenseService) verifyRuntimeIntegrity() {
+	if s.IsLicensed() {
+		// Jika valid, pastikan .env sinkron
+		currentKey := os.Getenv(EnvLicenseKey)
+		if currentKey == "" {
+			// Coba ambil dari DB license terakhir
+			// (Logic penyederhanaan: jika env kosong tapi valid, biarkan dulu atau load dari DB)
+		}
+	} else {
+		// Jika tidak valid, pastikan DB status bersih
+		s.configService.SaveConfig(map[string]string{LicenseStatusKey: LicenseStatusUnlicensed})
 	}
-
-	// 2. SECURITY CHECK (Audit Integritas)
-	// Jangan percaya status DB buta-buta. Kita cek kuncinya ada nggak di Env/DB?
-	currentKey := os.Getenv(EnvLicenseKey)
-	
-	// Jika Env kosong, coba cari license aktif terakhir di DB
-	if currentKey == "" {
-		// Logic ini opsional, tapi bagus buat fallback
-		// Namun biar aman, kita anggap kalau Env kosong = suspicious
-	}
-
-	if currentKey == "" {
-		// Status VALID tapi Key gak ada? Aneh. Revoke!
-		// log.Println("SECURITY: Status VALID tapi Key kosong. Revoking...")
-		// s.RevokeLicense() 
-		// (Opsional: uncomment revoke jika ingin strict, tapi return false cukup)
-		return false
-	}
-
-	// 3. Re-Verify HMAC (Paling Penting)
-	// Pastikan key yang tersimpan emang cocok buat HWID mesin ini.
-	// Ini mencegah orang copy-paste file .db atau .env dari komputer lain yang udah Pro.
-	hwid := s.GetHardwareID()
-	expectedSignature := generateSignature(hwid)
-	cleanKey := strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(currentKey, "-", ""), " ", ""))
-
-	if cleanKey != expectedSignature {
-		log.Printf("SECURITY ALERT: Lisensi corrupt/palsu terdeteksi! HWID: %s", hwid)
-		s.RevokeLicense() // Otomatis matikan Pro
-		return false
-	}
-
-	return true
 }
 
-// Helper untuk membatalkan lisensi (Fallback ke Free)
+// IsLicensed adalah Gatekeeper utama.
+// FIX: Sekarang melakukan verifikasi Kriptografi setiap kali dipanggil.
+func (s *licenseService) IsLicensed() bool {
+	// 1. Ambil Key dari Environment (Prioritas Utama)
+	currentKey := os.Getenv(EnvLicenseKey)
+	
+	// Jika Environment kosong, cek status DB. 
+	// Jika DB bilang VALID tapi Key tidak ada di memori/env, itu mencurigakan (atau habis restart).
+	if currentKey == "" {
+		// Cek apakah di database config statusnya VALID?
+		status, _ := s.GetLicenseStatus()
+		if status == LicenseStatusValid {
+			// BUG FIX: Dulu ini return true. SEKARANG TIDAK BOLEH.
+			// Kalau status VALID tapi tidak ada Key yang bisa diverifikasi,
+			// kita harus menganggapnya TIDAK VALID (atau cari key di tabel licenses).
+			
+			// Coba cari key aktif di tabel licenses (Fallback)
+			// Ini butuh query ke repo, tapi demi keamanan, worth it.
+			// Untuk simplifikasi code ini, kita anggap: NO KEY = NOT VALID.
+			
+			// Auto-revoke untuk membersihkan state "Hantu"
+			s.RevokeLicense() 
+			return false
+		}
+		return false
+	}
+
+	// 2. Verifikasi HMAC Signature (Inti Keamanan)
+	// Kita hitung ulang: Apakah Key ini cocok dengan HWID mesin ini?
+	hwid := s.GetHardwareID()
+	expectedSignature := generateSignature(hwid)
+	
+	// Normalisasi input (hapus dash dan spasi)
+	cleanKey := strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(currentKey, "-", ""), " ", ""))
+
+	if cleanKey == expectedSignature {
+		// COCOK! Mesin ini berhak jadi Pro.
+		
+		// Self-Healing: Jika DB bilang UNLICENSED, perbaiki jadi VALID
+		status, _ := s.GetLicenseStatus()
+		if status != LicenseStatusValid {
+			s.configService.SaveConfig(map[string]string{LicenseStatusKey: LicenseStatusValid})
+		}
+		return true
+	}
+
+	// 3. TIDAK COCOK!
+	// Key ada, tapi tanda tangannya salah (milik mesin lain atau asal ketik).
+	// Tindakan: Revoke status pro di DB.
+	status, _ := s.GetLicenseStatus()
+	if status == LicenseStatusValid {
+		log.Printf("SECURITY: Lisensi tidak valid terdeteksi (Key: %s, HWID: %s). Revoking...", currentKey, hwid)
+		s.RevokeLicense()
+	}
+
+	return false
+}
+
 func (s *licenseService) RevokeLicense() error {
-	// Update DB Config
+	// Set DB ke UNLICENSED
 	if err := s.configService.SaveConfig(map[string]string{LicenseStatusKey: LicenseStatusUnlicensed}); err != nil {
 		return err
 	}
-	// Hapus dari .Env (biar gak reload lagi pas restart)
+	// Bersihkan Env var di memori process
+	os.Setenv(EnvLicenseKey, "")
+	// Bersihkan file .env
 	utils.UpdateEnvFile(map[string]string{EnvLicenseKey: ""})
-	os.Setenv(EnvLicenseKey, "") // Clear memory env
 	return nil
 }
 
@@ -119,35 +151,10 @@ func (s *licenseService) GetLicenseStatus() (string, error) {
 		}
 		return "", err
 	}
-
 	if config.LicenseStatus == "" {
 		return LicenseStatusUnlicensed, nil
 	}
-
 	return config.LicenseStatus, nil
-}
-
-func (s *licenseService) AutoActivateFromEnv() {
-	envKey := os.Getenv(EnvLicenseKey)
-	if envKey == "" {
-		return
-	}
-
-	// Jangan cek IsLicensed() di sini biar gak infinite loop, 
-	// langsung validasi key-nya aja.
-	
-	cleanKey := strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(envKey, "-", ""), " ", ""))
-	hwid := s.GetHardwareID()
-	expected := generateSignature(hwid)
-
-	if cleanKey == expected {
-		// Jika cocok, pastikan DB sync
-		s.configService.SaveConfig(map[string]string{LicenseStatusKey: LicenseStatusValid})
-	} else {
-		// Jika ada key di .env tapi salah (misal ganti hardware), hapus.
-		log.Println("INFO: Key di .env tidak valid untuk mesin ini. Menghapus...")
-		s.RevokeLicense()
-	}
 }
 
 func (s *licenseService) ActivateLicense(inputKey string, actorID uint) (*models.License, error) {
@@ -159,7 +166,7 @@ func (s *licenseService) ActivateLicense(inputKey string, actorID uint) (*models
 
 	if cleanKey != expectedSignature {
 		if actorID != 0 {
-			s.auditService.LogActivity(actorID, "GAGAL AKTIVASI", fmt.Sprintf("Key salah. Input: %s, HWID: %s", rawInput, hwid))
+			s.auditService.LogActivity(actorID, "GAGAL AKTIVASI", fmt.Sprintf("Key salah/ilegal. HWID: %s", hwid))
 		}
 		return nil, ErrLicenseInvalid
 	}
@@ -175,32 +182,25 @@ func (s *licenseService) ActivateLicense(inputKey string, actorID uint) (*models
 		Notes:         fmt.Sprintf("Aktivasi sukses. HWID: %s", hwid),
 	}
 
+	// Simpan riwayat ke tabel licenses
 	existing, _ := s.licenseRepo.GetLicense(cleanKey)
 	if existing != nil {
 		existing.Status = LicenseStatusValid
 		existing.ActivatedAt = &now
 		existing.ActivatedByID = &actorIDUint
-		if err := s.licenseRepo.SaveLicense(existing); err != nil {
-			return nil, err
-		}
+		s.licenseRepo.SaveLicense(existing)
 	} else {
-		if err := s.licenseRepo.SaveLicense(license); err != nil {
-			return nil, fmt.Errorf("gagal menyimpan lisensi: %w", err)
-		}
+		s.licenseRepo.SaveLicense(license)
 	}
 
+	// Update Status Config
 	if err := s.configService.SaveConfig(map[string]string{LicenseStatusKey: LicenseStatusValid}); err != nil {
-		return nil, fmt.Errorf("gagal update status konfigurasi: %w", err)
+		return nil, fmt.Errorf("gagal update config: %w", err)
 	}
 
-	// Simpan ke .env agar persist saat restart
-	if os.Getenv(EnvLicenseKey) != rawInput {
-		if err := utils.UpdateEnvFile(map[string]string{EnvLicenseKey: rawInput}); err != nil {
-			log.Printf("WARNING: Gagal menyimpan license key ke .env: %v", err)
-		}
-		// Set juga di memori untuk sesi ini
-		os.Setenv(EnvLicenseKey, rawInput)
-	}
+	// Update .env agar persist saat restart
+	utils.UpdateEnvFile(map[string]string{EnvLicenseKey: rawInput})
+	os.Setenv(EnvLicenseKey, rawInput) // Update memori juga
 
 	if actorID != 0 {
 		s.auditService.LogActivity(actorID, "AKTIVASI LISENSI", "Lisensi PRO berhasil diaktifkan.")
@@ -208,14 +208,18 @@ func (s *licenseService) ActivateLicense(inputKey string, actorID uint) (*models
 	return license, nil
 }
 
+// generateSignature membuat tanda tangan HMAC (Key yang valid)
 func generateSignature(data string) string {
 	h := hmac.New(sha256.New, []byte(AppSecretKeyString))
 	h.Write([]byte(data))
 	hash := h.Sum(nil)
 	
+	// Ambil 15 byte pertama agar kuncinya tidak kepanjangan
 	truncatedHash := hash[:15]
+	// Encode ke Base32 agar aman dibaca manusia (huruf kapital & angka)
 	encoded := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(truncatedHash)
 	
+	// Format dengan dash setiap 5 karakter: XXXXX-XXXXX-XXXXX...
 	var formattedKey strings.Builder
 	for i, r := range encoded {
 		if i > 0 && i%5 == 0 {

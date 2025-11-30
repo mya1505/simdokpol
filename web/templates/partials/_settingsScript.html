@@ -43,18 +43,14 @@ $(document).ready(function () {
 
                 if (!isPro) {
                     // KUNCI FITUR PRO
-                    
-                    // 1. Kunci HTTPS
                     $('#enable_https').prop('disabled', true);
                     $('#https-pro-badge').show();
                     
-                    // 2. Kunci DB Server (MySQL/PG)
                     if (s.db_dialect === 'sqlite') {
                         $('#db_dialect option[value="mysql"]').prop('disabled', true).text('MySQL (Fitur Pro 🔒)');
                         $('#db_dialect option[value="postgres"]').prop('disabled', true).text('PostgreSQL (Fitur Pro 🔒)');
                     }
                     
-                    // 3. Kunci Tab Migrasi
                     $('#migration-form input, #migration-form select').prop('disabled', true);
                     $('#btn-migrate').prop('disabled', true).removeClass('btn-warning').addClass('btn-secondary').html('<i class="fas fa-lock mr-2"></i> Fitur Terkunci (Pro Only)');
                     
@@ -72,7 +68,6 @@ $(document).ready(function () {
                         `);
                     }
                 }
-                // --- AKHIR LOGIKA PRO ---
 
                 toggleDBSettings(s.db_dialect || 'sqlite');
             },
@@ -89,7 +84,7 @@ $(document).ready(function () {
         } else {
             $('#sqlite-settings').slideUp(); $('#server-db-settings').slideDown();
             $('#backup-btn, #restore-btn, #restore-file').prop('disabled', true);
-            $('#settings-pg-ssl-group').slideDown(); // Show SSL for servers
+            $('#settings-pg-ssl-group').slideDown();
             
             if (dialect === 'mysql') $('#db_port').attr('placeholder', '3306');
             else if (dialect === 'postgres') $('#db_port').attr('placeholder', '5432');
@@ -97,37 +92,87 @@ $(document).ready(function () {
     }
     $('#db_dialect').change(function() { toggleDBSettings($(this).val()); });
 
-    // --- SUBMIT & RESTART ---
-    function submitPartialConfig(data, customSuccessMsg) {
-        Swal.fire({title: 'Menyimpan...', allowOutsideClick: false, didOpen: () => Swal.showLoading()});
-        $.ajax({
-            url: "/api/settings", method: "PUT", contentType: "application/json", data: JSON.stringify(data),
-            success: function(response) {
-                if (response.restart_required) {
-                    let timerInterval;
-                    Swal.fire({
-                        title: 'Sistem Dimulai Ulang', html: 'Konfigurasi tersimpan. Restart otomatis...<br>Mohon tunggu...', icon: 'info',
-                        timer: 5000, timerProgressBar: true, allowOutsideClick: false,
-                        didOpen: () => Swal.showLoading(), willClose: () => clearInterval(timerInterval)
-                    }).then(() => window.location.reload());
-                } else {
-                    Swal.fire("Sukses", customSuccessMsg || "Disimpan.", "success");
-                }
-            },
-            error: function(xhr) { Swal.fire("Gagal", "Error saat menyimpan.", "error"); }
-        });
+    // --- HELPER UNTUK RESTART OTOMATIS ---
+    function handleRestartSequence(isRequired) {
+        if (isRequired) {
+            let timerInterval;
+            Swal.fire({
+                title: 'Sistem Dimulai Ulang', 
+                html: 'Konfigurasi tersimpan. Restart otomatis...<br>Mohon tunggu...', 
+                icon: 'success',
+                timer: 5000, 
+                timerProgressBar: true, 
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading(), 
+                willClose: () => clearInterval(timerInterval)
+            }).then(() => window.location.reload());
+        } else {
+            Swal.fire("Sukses", "Pengaturan disimpan.", "success");
+        }
     }
 
+    // --- SUBMIT CONFIG (GENERAL) DENGAN LOGIC HTTPS ---
     $('#general-form').submit(function(e) {
         e.preventDefault();
-        submitPartialConfig({
+        
+        let data = {
             kop_baris_1: $("#kop_baris_1").val(), kop_baris_2: $("#kop_baris_2").val(), kop_baris_3: $("#kop_baris_3").val(),
             nama_kantor: $("#nama_kantor").val(), tempat_surat: $("#tempat_surat").val(),
             format_nomor_surat: $("#format_nomor_surat").val(), nomor_surat_terakhir: $("#nomor_surat_terakhir").val(),
             zona_waktu: $("#zona_waktu").val(), archive_duration_days: $("#archive_duration_days").val(),
             session_timeout: $("#session_timeout").val(), idle_timeout: $("#idle_timeout").val(),
             enable_https: $("#enable_https").is(":checked") ? "true" : "false"
-        }, "Pengaturan Umum disimpan.");
+        };
+
+        Swal.fire({title: 'Menyimpan...', allowOutsideClick: false, didOpen: () => Swal.showLoading()});
+        
+        $.ajax({
+            url: "/api/settings", method: "PUT", contentType: "application/json", data: JSON.stringify(data),
+            success: function(response) {
+                // --- LOGIC BARU: TAWARKAN INSTALL SERTIFIKAT ---
+                if (response.check_https_cert) {
+                    Swal.fire({
+                        title: 'Install Sertifikat Keamanan?',
+                        text: "Agar browser tidak menampilkan layar merah 'Not Secure', sertifikat perlu diinstal ke Windows. Lakukan sekarang?",
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonText: 'Ya, Install Otomatis',
+                        cancelButtonText: 'Tidak, Nanti Saja',
+                        confirmButtonColor: '#1cc88a'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            // Panggil API Install
+                            Swal.fire({
+                                title: 'Meminta Izin Administrator...',
+                                text: 'Silakan klik "Yes" pada popup Windows yang muncul.',
+                                icon: 'info',
+                                showConfirmButton: false,
+                                allowOutsideClick: false
+                            });
+                            
+                            $.ajax({
+                                url: "/api/settings/install-cert",
+                                method: "POST",
+                                success: function() {
+                                    handleRestartSequence(response.restart_required);
+                                },
+                                error: function() {
+                                    Swal.fire("Gagal", "Instalasi dibatalkan atau gagal.", "error")
+                                        .then(() => handleRestartSequence(response.restart_required));
+                                }
+                            });
+                        } else {
+                            // User pilih No, langsung restart
+                            handleRestartSequence(response.restart_required);
+                        }
+                    });
+                } else {
+                    // Tidak aktifkan HTTPS, langsung proses restart biasa
+                    handleRestartSequence(response.restart_required);
+                }
+            },
+            error: function(xhr) { Swal.fire("Gagal", "Error saat menyimpan.", "error"); }
+        });
     });
 
     $('#database-form').submit(function(e) {
@@ -138,10 +183,17 @@ $(document).ready(function () {
             db_sslmode: $("#db_sslmode").val()
         };
         if(data.db_pass === "") delete data.db_pass;
-        submitPartialConfig(data);
+        
+        // Database config tidak butuh cek HTTPS cert
+        Swal.fire({title: 'Menyimpan...', allowOutsideClick: false, didOpen: () => Swal.showLoading()});
+        $.ajax({
+            url: "/api/settings", method: "PUT", contentType: "application/json", data: JSON.stringify(data),
+            success: function(response) { handleRestartSequence(response.restart_required); },
+            error: function(xhr) { Swal.fire("Gagal", "Error saat menyimpan DB.", "error"); }
+        });
     });
 
-    // --- TEST DB ---
+    // --- TEST DB & MIGRASI (SAMA SEPERTI SEBELUMNYA) ---
     $('#test-db-btn').click(function() {
         let btn = $(this); btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Test...');
         let payload = {
@@ -155,7 +207,6 @@ $(document).ready(function () {
         });
     });
 
-    // --- MIGRASI STREAMING ---
     $('#mig_dialect').change(function() {
         if($(this).val() === 'postgres') { $('#mig_port').val('5432'); $('#mig-ssl-wrap').show(); }
         else { $('#mig_port').val('3306'); $('#mig-ssl-wrap').hide(); }

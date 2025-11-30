@@ -35,3 +35,5 @@ Thumbs.db
 .vscode/
 .git.old
 coverage.out
+certs/
+backups/

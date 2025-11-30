@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"simdokpol/internal/models"
 	"simdokpol/internal/services"
-	"simdokpol/internal/utils" // <-- Import Utils
+	"simdokpol/internal/utils" // Pastikan import utils ada
 	"strings"
 	"time"
 
@@ -41,7 +41,7 @@ func (c *SettingsController) UpdateSettings(ctx *gin.Context) {
 		return
 	}
 
-	// Validasi keamanan
+	// Validasi keamanan Path Traversal
 	if path, exists := settings["backup_path"]; exists {
 		if strings.Contains(path, "..") {
 			APIError(ctx, http.StatusBadRequest, "Path tidak valid.")
@@ -66,17 +66,23 @@ func (c *SettingsController) UpdateSettings(ctx *gin.Context) {
 	}
 
 	// --- LOGIC DETEKSI RESTART ---
-	// Cek apakah perubahan memerlukan restart aplikasi
 	restartRequired := false
 	criticalKeys := []string{"db_dialect", "db_host", "db_port", "db_name", "db_user", "db_pass", "db_dsn", "db_sslmode", "enable_https"}
-	
+
 	for _, key := range criticalKeys {
 		if _, exists := settings[key]; exists {
 			restartRequired = true
 			break
 		}
 	}
-	// -----------------------------
+
+	// --- LOGIC DETEKSI HTTPS AKTIF ---
+	// Cek apakah user baru saja mengaktifkan HTTPS (dari sebelumnya mati/tidak ada)
+	// Kita kirim flag 'check_https_cert' ke frontend jika enable_https = "true"
+	askForCertInstall := false
+	if val, ok := settings["enable_https"]; ok && val == "true" {
+		askForCertInstall = true
+	}
 
 	if err := c.configService.SaveConfig(settings); err != nil {
 		log.Printf("ERROR: Gagal menyimpan pengaturan: %v", err)
@@ -92,9 +98,10 @@ func (c *SettingsController) UpdateSettings(ctx *gin.Context) {
 	c.auditService.LogActivity(actorID, models.AuditSettingsUpdated, logDetail)
 
 	// --- AUTO RESTART SEQUENCE ---
-	if restartRequired {
+	// Hanya restart otomatis JIKA tidak perlu prompt sertifikat.
+	// Jika perlu prompt, frontend yang akan handle restart setelah user klik Yes/No.
+	if restartRequired && !askForCertInstall {
 		go func() {
-			// Tunggu 2 detik agar response JSON terkirim ke frontend dulu
 			time.Sleep(2 * time.Second)
 			log.Println("Melakukan restart otomatis karena perubahan konfigurasi...")
 			if err := utils.RestartApp(); err != nil {
@@ -102,11 +109,23 @@ func (c *SettingsController) UpdateSettings(ctx *gin.Context) {
 			}
 		}()
 	}
-	// -----------------------------
 
-	// Kirim respon dengan flag restart_required
+	// Kirim respon
 	ctx.JSON(http.StatusOK, gin.H{
 		"message":          "Pengaturan berhasil disimpan.",
 		"restart_required": restartRequired,
+		"check_https_cert": askForCertInstall, // <-- Flag Baru
 	})
+}
+
+// InstallCertificate menghandle request instalasi sertifikat
+// @Router /api/settings/install-cert [post]
+func (c *SettingsController) InstallCertificate(ctx *gin.Context) {
+	// Panggil utilitas sistem
+	if err := utils.InstallCertToSystem(); err != nil {
+		log.Printf("Gagal install sertifikat: %v", err)
+		APIError(ctx, http.StatusInternalServerError, "Gagal menginstal sertifikat. Pastikan Anda klik 'Yes' pada popup Administrator.")
+		return
+	}
+	APIResponse(ctx, http.StatusOK, "Sertifikat berhasil diinstal ke Trusted Root!", nil)
 }
