@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -53,11 +55,12 @@ func waitForServer(t *testing.T) {
 }
 
 func performSetup(t *testing.T) {
-	// FIX: Kirim DB_DSN kosong ("") agar backend menggunakan default path (AppData/simdokpol.db).
-	// Ini menjamin konsistensi lokasi file database antara proses Setup dan Restart.
+	cwd, _ := os.Getwd()
+	absDBPath := filepath.Join(cwd, "e2e_test.db")
+
 	payload := map[string]string{
 		"db_dialect": "sqlite", 
-		"db_dsn": "", 
+		"db_dsn": "", // Default Path (AppData)
 		
 		"kop_baris_1": "KEPOLISIAN NEGARA",
 		"kop_baris_2": "REPUBLIK INDONESIA",
@@ -130,7 +133,10 @@ func performCreateDocument(t *testing.T, token string) {
 	payload := map[string]interface{}{
 		"nama_lengkap":       "WARGA TEST E2E",
 		"tempat_lahir":       "JAKARTA",
-		"tanggal_lahir":      "01-01-1990",
+		
+		// FIX: Format Tanggal harus YYYY-MM-DD agar diterima controller
+		"tanggal_lahir":      "1990-01-01", 
+		
 		"jenis_kelamin":      "Laki-laki",
 		"agama":              "Islam",
 		"pekerjaan":          "Wiraswasta",
