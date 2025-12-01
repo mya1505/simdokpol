@@ -113,11 +113,9 @@ func TestSettingsController_UpdateSettings(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, recorder.Code)
 	
-	// --- PERBAIKAN UTAMA: Tambahkan 'restart_required: false' di ekspektasi ---
-	// Karena perubahan nama kantor bukan perubahan kritis, restart_required harus false
-	expectedJSON := `{"message":"Pengaturan berhasil disimpan.", "restart_required":false}`
+	// FIX: Tambahkan check_https_cert: false karena di payload tidak ada enable_https="true"
+	expectedJSON := `{"message":"Pengaturan berhasil disimpan.", "restart_required":false, "check_https_cert":false}`
 	assert.JSONEq(t, expectedJSON, recorder.Body.String())
-	// --- AKHIR PERBAIKAN ---
 
 	mockConfigSvc.AssertExpectations(t)
 	mockAuditSvc.AssertExpectations(t)
