@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -55,12 +53,11 @@ func waitForServer(t *testing.T) {
 }
 
 func performSetup(t *testing.T) {
-	cwd, _ := os.Getwd()
-	absDBPath := filepath.Join(cwd, "e2e_test.db")
-
+	// FIX: Hapus variabel absDBPath yang bikin error
+	// Kita kirim string kosong agar backend otomatis pakai path AppData default
 	payload := map[string]string{
 		"db_dialect": "sqlite", 
-		"db_dsn": "", // Default Path (AppData)
+		"db_dsn": "", 
 		
 		"kop_baris_1": "KEPOLISIAN NEGARA",
 		"kop_baris_2": "REPUBLIK INDONESIA",
@@ -133,10 +130,7 @@ func performCreateDocument(t *testing.T, token string) {
 	payload := map[string]interface{}{
 		"nama_lengkap":       "WARGA TEST E2E",
 		"tempat_lahir":       "JAKARTA",
-		
-		// FIX: Format Tanggal harus YYYY-MM-DD agar diterima controller
-		"tanggal_lahir":      "1990-01-01", 
-		
+		"tanggal_lahir":      "1990-01-01", // Format YYYY-MM-DD
 		"jenis_kelamin":      "Laki-laki",
 		"agama":              "Islam",
 		"pekerjaan":          "Wiraswasta",
