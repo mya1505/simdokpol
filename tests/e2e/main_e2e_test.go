@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	// "os" <-- HAPUS INI
 	"testing"
 	"time"
 
@@ -22,35 +21,85 @@ type LoginReq struct {
 	Password string `json:"password"`
 }
 
-// TestMainE2E: Skenario Nyata User
-// Pastikan server 'simdokpol' sudah jalan sebelum test ini dieksekusi!
 func TestEndToEndFlow(t *testing.T) {
-	// 1. Tunggu Server Ready (Health Check Manual)
+	// 1. Tunggu Server Ready (Health Check)
+	fmt.Println("⏳ Menunggu server up...")
 	waitForServer(t)
 
-	// 2. Skenario: Login sebagai Super Admin (Default Seeding)
+	// 2. STEP BARU: Lakukan Setup Awal (Bikin Admin)
+	// Karena database kosong, kita harus register admin dulu lewat API Setup
+	fmt.Println("🛠️ Melakukan Setup Awal...")
+	performSetup(t)
+	
+	// Tunggu sebentar karena SaveSetup memicu RESTART server
+	fmt.Println("🔄 Menunggu server restart setelah setup...")
+	time.Sleep(5 * time.Second) 
+	waitForServer(t) // Pastikan server up lagi
+
+	// 3. Skenario: Login sebagai Super Admin (Yang barusan dibuat)
+	fmt.Println("🔑 Mencoba Login...")
 	token := performLogin(t, "12345678", "admin123")
 	fmt.Println("✅ Login Sukses! Token didapat.")
 
-	// 3. Skenario: Cek Dashboard Stats (Butuh Auth)
+	// 4. Skenario: Cek Dashboard Stats
 	performGetDashboard(t, token)
 	fmt.Println("✅ Akses Dashboard Sukses!")
 
-	// 4. Skenario: Buat Surat Baru (Create Document)
+	// 5. Skenario: Buat Surat Baru
 	performCreateDocument(t, token)
 	fmt.Println("✅ Buat Surat Sukses!")
 }
 
 func waitForServer(t *testing.T) {
-	// Coba ping server sampai 30 detik
 	for i := 0; i < 30; i++ {
-		resp, err := http.Get(baseURL + "/login")
-		if err == nil && resp.StatusCode == 200 {
-			return // Server ready
+		// Cek endpoint setup karena ini yang pasti terbuka saat awal
+		resp, err := http.Get(baseURL + "/setup")
+		if err == nil && resp.StatusCode < 500 {
+			return 
 		}
 		time.Sleep(1 * time.Second)
 	}
 	t.Fatal("Server tidak menyala dalam 30 detik!")
+}
+
+// Fungsi baru untuk nembak API Setup
+func performSetup(t *testing.T) {
+	// Payload sesuai SaveSetupRequest di ConfigController
+	payload := map[string]string{
+		"db_dialect": "sqlite", 
+		"db_dsn": "e2e_test.db",
+		"kop_baris_1": "KEPOLISIAN NEGARA",
+		"kop_baris_2": "REPUBLIK INDONESIA",
+		"kop_baris_3": "SEKTOR E2E TEST",
+		"nama_kantor": "POLSEK E2E",
+		"tempat_surat": "JAKARTA",
+		"format_nomor_surat": "SKH/%03d/X/2025",
+		"nomor_surat_terakhir": "0",
+		"zona_waktu": "Asia/Jakarta",
+		"archive_duration_days": "30",
+		
+		// Kredensial Admin yang akan kita pakai login nanti
+		"admin_nama_lengkap": "Super Admin E2E",
+		"admin_nrp": "12345678",
+		"admin_pangkat": "JENDERAL",
+		"admin_password": "admin123",
+	}
+	
+	jsonData, _ := json.Marshal(payload)
+	resp, err := http.Post(baseURL+"/api/setup", "application/json", bytes.NewBuffer(jsonData))
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+
+	// Setup mungkin mengembalikan 200 OK
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		// Abaikan error jika setup sudah done (403), lanjut ke login
+		if resp.StatusCode == 403 {
+			fmt.Println("⚠️ Setup sudah dilakukan sebelumnya, lanjut login.")
+			return
+		}
+		t.Fatalf("Gagal Setup. Status: %d, Body: %s", resp.StatusCode, string(body))
+	}
 }
 
 func performLogin(t *testing.T, nrp, password string) string {
@@ -61,15 +110,11 @@ func performLogin(t *testing.T, nrp, password string) string {
 	assert.NoError(t, err)
 	defer resp.Body.Close()
 
-	// Debug jika gagal login
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
 		t.Fatalf("Gagal Login. Status: %d, Body: %s", resp.StatusCode, string(body))
 	}
 
-	assert.Equal(t, 200, resp.StatusCode, "Login harus return 200 OK")
-	
-	// Ambil cookie token
 	cookies := resp.Cookies()
 	var token string
 	for _, cookie := range cookies {
@@ -90,11 +135,10 @@ func performGetDashboard(t *testing.T, token string) {
 	assert.NoError(t, err)
 	defer resp.Body.Close()
 
-	assert.Equal(t, 200, resp.StatusCode, "Harus bisa akses dashboard stats")
+	assert.Equal(t, 200, resp.StatusCode)
 }
 
 func performCreateDocument(t *testing.T, token string) {
-	// Data Dummy Surat
 	payload := map[string]interface{}{
 		"nama_lengkap":       "WARGA TEST E2E",
 		"tempat_lahir":       "JAKARTA",
@@ -104,7 +148,7 @@ func performCreateDocument(t *testing.T, token string) {
 		"pekerjaan":          "Wiraswasta",
 		"alamat":             "Jl. Testing No. 1",
 		"lokasi_hilang":      "Pasar Senen",
-		"petugas_pelapor_id": 1, // Asumsi ID Admin
+		"petugas_pelapor_id": 1, // ID Admin yang baru dibuat pasti 1
 		"pejabat_persetuju_id": 1,
 		"items": []map[string]string{
 			{"nama_barang": "KTP", "deskripsi": "NIK: 3171234567890001"},
