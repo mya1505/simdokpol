@@ -2,17 +2,25 @@ package e2e
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base32"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
-const baseURL = "http://localhost:8080"
+const (
+	baseURL       = "http://localhost:8080"
+	// Secret key default untuk dev/test environment
+	testSecretKey = "SIMDOKPOL_SECRET_KEY_2025" 
+)
 
 type LoginReq struct {
 	NRP      string `json:"nrp"`
@@ -20,26 +28,46 @@ type LoginReq struct {
 }
 
 func TestEndToEndFlow(t *testing.T) {
-	fmt.Println("⏳ Menunggu server up...")
+	fmt.Println("⏳ [1/10] Menunggu server up...")
 	waitForServer(t)
 
-	fmt.Println("🛠️ Melakukan Setup Awal...")
+	fmt.Println("🛠️ [2/10] Setup Awal (Super Admin)...")
 	performSetup(t)
 	
-	fmt.Println("🔄 Menunggu server restart setelah setup...")
+	fmt.Println("🔄 Menunggu server restart...")
 	time.Sleep(5 * time.Second) 
 	waitForServer(t)
 
-	fmt.Println("🔑 Mencoba Login...")
+	fmt.Println("🔑 [3/10] Login Admin...")
 	token := performLogin(t, "12345678", "admin123")
-	fmt.Println("✅ Login Sukses! Token didapat.")
+	
+	// --- TEST SUITE LENGKAP ---
 
+	fmt.Println("🔐 [4/10] Testing Aktivasi Lisensi PRO...")
+	performLicenseActivation(t, token)
+
+	fmt.Println("📊 [5/10] Testing Dashboard & Stats...")
 	performGetDashboard(t, token)
-	fmt.Println("✅ Akses Dashboard Sukses!")
 
+	fmt.Println("👥 [6/10] Testing Manajemen User (Create Operator)...")
+	performUserManagement(t, token)
+
+	fmt.Println("🧩 [7/10] Testing Template Barang (Fitur Pro)...")
+	performTemplateManagement(t, token)
+
+	fmt.Println("🌐 [8/10] Testing Konfigurasi HTTPS...")
+	performHTTPSCheck(t, token)
+
+	fmt.Println("📝 [9/10] Testing Dokumen (Create SKTLK)...")
 	performCreateDocument(t, token)
-	fmt.Println("✅ Buat Surat Sukses!")
+
+	fmt.Println("⚙️ [10/10] Testing Utilities (Report/Backup)...")
+	performSettingsAndUtils(t, token)
+
+	fmt.Println("✅✅✅ ULTIMATE TEST SUCCESS! SYSTEM 100% STABIL. ✅✅✅")
 }
+
+// --- HELPER FUNCTIONS ---
 
 func waitForServer(t *testing.T) {
 	for i := 0; i < 30; i++ {
@@ -53,22 +81,18 @@ func waitForServer(t *testing.T) {
 }
 
 func performSetup(t *testing.T) {
-	// FIX: Hapus variabel absDBPath yang bikin error
-	// Kita kirim string kosong agar backend otomatis pakai path AppData default
 	payload := map[string]string{
 		"db_dialect": "sqlite", 
 		"db_dsn": "", 
-		
 		"kop_baris_1": "KEPOLISIAN NEGARA",
 		"kop_baris_2": "REPUBLIK INDONESIA",
-		"kop_baris_3": "SEKTOR E2E TEST",
-		"nama_kantor": "POLSEK E2E",
+		"kop_baris_3": "RESOR TESTING",
+		"nama_kantor": "POLSEK E2E ULTIMATE",
 		"tempat_surat": "JAKARTA",
-		"format_nomor_surat": "SKH/%03d/X/2025",
+		"format_nomor_surat": "SKH/%03d/TEST/2025",
 		"nomor_surat_terakhir": "0",
 		"zona_waktu": "Asia/Jakarta",
 		"archive_duration_days": "30",
-		
 		"admin_nama_lengkap": "Super Admin E2E",
 		"admin_nrp": "12345678",
 		"admin_pangkat": "JENDERAL",
@@ -82,11 +106,8 @@ func performSetup(t *testing.T) {
 
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
-		if resp.StatusCode == 403 {
-			fmt.Println("⚠️ Setup sudah dilakukan sebelumnya, lanjut login.")
-			return
-		}
-		t.Fatalf("Gagal Setup. Status: %d, Body: %s", resp.StatusCode, string(body))
+		if resp.StatusCode == 403 { return } 
+		t.Fatalf("Gagal Setup: %s", string(body))
 	}
 }
 
@@ -99,43 +120,156 @@ func performLogin(t *testing.T, nrp, password string) string {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		t.Fatalf("Gagal Login. Status: %d, Body: %s", resp.StatusCode, string(body))
+		t.Fatalf("Gagal Login Status: %d", resp.StatusCode)
 	}
 
 	cookies := resp.Cookies()
-	var token string
 	for _, cookie := range cookies {
 		if cookie.Name == "token" {
-			token = cookie.Value
+			return cookie.Value
 		}
 	}
-	assert.NotEmpty(t, token, "Token cookie harus ada")
-	return token
+	t.Fatal("Token cookie tidak ditemukan")
+	return ""
+}
+
+// --- LOGIC BARU: AKTIVASI LISENSI ---
+func performLicenseActivation(t *testing.T, token string) {
+	client := &http.Client{}
+	
+	// 1. Ambil HWID
+	reqHWID, _ := http.NewRequest("GET", baseURL+"/api/license/hwid", nil)
+	reqHWID.AddCookie(&http.Cookie{Name: "token", Value: token})
+	respHWID, err := client.Do(reqHWID)
+	assert.NoError(t, err)
+	
+	var hwidResp map[string]string
+	json.NewDecoder(respHWID.Body).Decode(&hwidResp)
+	hwid := hwidResp["hardware_id"]
+	assert.NotEmpty(t, hwid, "HWID tidak boleh kosong")
+
+	// 2. Generate Key Valid (Simulasi Keygen)
+	h := hmac.New(sha256.New, []byte(testSecretKey))
+	h.Write([]byte(hwid))
+	hash := h.Sum(nil)
+	rawKey := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(hash[:15])
+	var formattedKey strings.Builder
+	for i, r := range rawKey {
+		if i > 0 && i%5 == 0 { formattedKey.WriteRune('-') }
+		formattedKey.WriteRune(r)
+	}
+	validKey := formattedKey.String()
+
+	// 3. Aktivasi
+	payload := map[string]string{"key": validKey}
+	jsonPayload, _ := json.Marshal(payload)
+	reqAct, _ := http.NewRequest("POST", baseURL+"/api/license/activate", bytes.NewBuffer(jsonPayload))
+	reqAct.Header.Set("Content-Type", "application/json")
+	reqAct.AddCookie(&http.Cookie{Name: "token", Value: token})
+
+	respAct, err := client.Do(reqAct)
+	assert.NoError(t, err)
+	
+	if respAct.StatusCode != 200 {
+		body, _ := io.ReadAll(respAct.Body)
+		t.Fatalf("Gagal Aktivasi Lisensi: %s", string(body))
+	}
+	fmt.Println("   ✅ Lisensi Validated & Activated")
+}
+
+// --- LOGIC BARU: HTTPS CHECK ---
+func performHTTPSCheck(t *testing.T, token string) {
+	// Kita tes apakah backend menerima konfigurasi HTTPS
+	// Kita TIDAK restart server di sini karena CI/CD environment tidak punya sertifikat root
+	
+	payload := map[string]interface{}{
+		"enable_https": "true",
+		// Kirim ulang config lain agar tidak tertimpa kosong (optional tergantung implementasi update partial)
+		"nama_kantor": "POLSEK E2E SECURE", 
+	}
+	jsonData, _ := json.Marshal(payload)
+
+	req, _ := http.NewRequest("PUT", baseURL+"/api/settings", bytes.NewBuffer(jsonData))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "token", Value: token})
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	assert.NoError(t, err)
+	
+	var response map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&response)
+
+	// Validasi Logic: Backend harusnya meminta install sertifikat
+	// "check_https_cert" adalah flag yang kita buat di controller settings
+	assert.Equal(t, true, response["check_https_cert"], "Backend harusnya meminta install sertifikat")
+	assert.Equal(t, true, response["restart_required"], "Backend harusnya meminta restart")
+	
+	fmt.Println("   ✅ HTTPS Config Logic Verified")
 }
 
 func performGetDashboard(t *testing.T, token string) {
-	client := &http.Client{}
 	req, _ := http.NewRequest("GET", baseURL+"/api/stats", nil)
 	req.AddCookie(&http.Cookie{Name: "token", Value: token})
-
+	client := &http.Client{}
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
-	defer resp.Body.Close()
-
 	assert.Equal(t, 200, resp.StatusCode)
+}
+
+func performUserManagement(t *testing.T, token string) {
+	payload := map[string]string{
+		"nama_lengkap": "Petugas E2E",
+		"nrp": "88888888",
+		"kata_sandi": "petugas123",
+		"pangkat": "BRIPDA",
+		"peran": "OPERATOR",
+		"jabatan": "ANGGOTA JAGA",
+		"regu": "I",
+	}
+	jsonData, _ := json.Marshal(payload)
+
+	req, _ := http.NewRequest("POST", baseURL+"/api/users", bytes.NewBuffer(jsonData))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "token", Value: token})
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 201, resp.StatusCode)
+}
+
+func performTemplateManagement(t *testing.T, token string) {
+	payload := map[string]interface{}{
+		"nama_barang": "LAPTOP GAMING",
+		"urutan": 10,
+		"status": "Aktif",
+		"fields_config": []map[string]interface{}{
+			{"label": "Merk", "type": "text", "data_label": "Merk"},
+		},
+	}
+	jsonData, _ := json.Marshal(payload)
+
+	req, _ := http.NewRequest("POST", baseURL+"/api/item-templates", bytes.NewBuffer(jsonData))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "token", Value: token})
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 201, resp.StatusCode)
 }
 
 func performCreateDocument(t *testing.T, token string) {
 	payload := map[string]interface{}{
-		"nama_lengkap":       "WARGA TEST E2E",
-		"tempat_lahir":       "JAKARTA",
-		"tanggal_lahir":      "1990-01-01", // Format YYYY-MM-DD
-		"jenis_kelamin":      "Laki-laki",
-		"agama":              "Islam",
-		"pekerjaan":          "Wiraswasta",
-		"alamat":             "Jl. Testing No. 1",
-		"lokasi_hilang":      "Pasar Senen",
+		"nama_lengkap": "WARGA TEST E2E",
+		"tempat_lahir": "JAKARTA",
+		"tanggal_lahir": "1990-01-01",
+		"jenis_kelamin": "Laki-laki",
+		"agama": "Islam",
+		"pekerjaan": "Wiraswasta",
+		"alamat": "Jl. Testing No. 1",
+		"lokasi_hilang": "Pasar Senen",
 		"petugas_pelapor_id": 1,
 		"pejabat_persetuju_id": 1,
 		"items": []map[string]string{
@@ -151,10 +285,34 @@ func performCreateDocument(t *testing.T, token string) {
 
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
-	defer resp.Body.Close()
-
 	if resp.StatusCode != 201 {
-		body, _ := io.ReadAll(resp.Body)
-		t.Fatalf("Gagal buat surat. Status: %d, Body: %s", resp.StatusCode, string(body))
+		t.Fatalf("Gagal Buat Surat: %d", resp.StatusCode)
+	}
+}
+
+func performSettingsAndUtils(t *testing.T, token string) {
+	client := &http.Client{}
+
+	reqBack, _ := http.NewRequest("POST", baseURL+"/api/backups", nil)
+	reqBack.AddCookie(&http.Cookie{Name: "token", Value: token})
+	respBack, err := client.Do(reqBack)
+	assert.NoError(t, err)
+	assert.Equal(t, 200, respBack.StatusCode)
+
+	startDate := time.Now().Format("2006-01-02")
+	endDate := time.Now().Format("2006-01-02")
+	reportUrl := fmt.Sprintf("%s/api/reports/aggregate/pdf?start_date=%s&end_date=%s", baseURL, startDate, endDate)
+	
+	reqRep, _ := http.NewRequest("GET", reportUrl, nil)
+	reqRep.AddCookie(&http.Cookie{Name: "token", Value: token})
+	respRep, err := client.Do(reqRep)
+	assert.NoError(t, err)
+	
+	// Karena lisensi sudah aktif di step sebelumnya, harusnya 200 OK (bukan 402)
+	if respRep.StatusCode == 200 {
+		assert.Equal(t, "application/pdf", respRep.Header.Get("Content-Type"))
+		fmt.Println("   ✅ Report PDF Generated (License Active)")
+	} else {
+		t.Errorf("Gagal Report PDF: Status %d", respRep.StatusCode)
 	}
 }
