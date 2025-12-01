@@ -1,0 +1,65 @@
+name: Real E2E System Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  e2e-test:
+    name: Test Running Application (E2E)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.0'
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          # Install library GUI linux (diperlukan karena kita pakai systray/webview)
+          sudo apt-get install -y gcc libgtk-3-dev libayatana-appindicator3-dev xvfb
+          go mod tidy
+
+      - name: Build Application
+        run: |
+          # Build binary asli
+          go build -o simdokpol cmd/main.go
+          chmod +x simdokpol
+
+      - name: Run Application in Background
+        run: |
+          # Setup Virtual Display (Xvfb) karena aplikasi desktop butuh layar
+          # Walaupun kita cuma tes API, library systray akan panic kalau gak ada layar
+          Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
+          export DISPLAY=:99
+          
+          # Jalankan aplikasi di background (&)
+          # Kita set PORT khusus test biar gak bentrok
+          export PORT=8080
+          export JWT_SECRET_KEY=rahasia-test-e2e
+          export DB_DIALECT=sqlite
+          export DB_DSN="e2e_test.db"
+          
+          ./simdokpol > app.log 2>&1 &
+          
+          echo "⏳ Menunggu aplikasi booting..."
+          sleep 5 # Beri waktu aplikasi inisialisasi DB & Web Server
+
+      - name: Run Real E2E Test
+        run: |
+          echo "🚀 Menjalankan Skenario User..."
+          # Menjalankan test file yang kita buat di langkah 1
+          go test -v ./tests/e2e/...
+
+      - name: Print App Logs (Jika Gagal)
+        if: failure()
+        run: |
+          echo "=== LOG APLIKASI ==="
+          cat app.log
