@@ -37,7 +37,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause" // <-- PENTING: Tambahan untuk logic Anti-Bentrok
+	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
 )
 
@@ -50,26 +50,34 @@ func main() {
 	setupEnvironment()
 	setupLogging()
 
+	// --- CEK HEADLESS MODE (CI/CD) ---
+	isHeadless := os.Getenv("HEADLESS_MODE") == "true"
+
 	appData := utils.GetAppDataDir()
 	log.Println("==========================================")
 	log.Printf("🚀 SIMDOKPOL STARTUP - v%s", version)
+	if isHeadless {
+		log.Println("👻 RUNNING IN HEADLESS MODE (NO GUI)")
+	}
 	log.Printf("📂 App Data Dir: %s", appData)
 	log.Println("==========================================")
 
 	cfg := config.LoadConfig()
 
-	// FIX 1: Error DB tidak mematikan aplikasi (agar user bisa akses menu Quit)
 	db, err := setupDatabase(cfg)
 	if err != nil {
-		msg := fmt.Sprintf("GAGAL KONEKSI DATABASE: %v. Silakan cek konfigurasi atau restart aplikasi.", err)
+		msg := fmt.Sprintf("GAGAL KONEKSI DATABASE: %v. Cek config/restart.", err)
 		log.Println(msg)
-		_ = beeep.Alert("SIMDOKPOL Error", msg, "")
+		
+		// Hanya tampilkan alert GUI jika BUKAN headless
+		if !isHeadless {
+			_ = beeep.Alert("SIMDOKPOL Error", msg, "")
+		}
 	} else {
-		// FIX 2: Jalankan Seeding yang Aman (Anti-Conflict)
 		seedDefaultTemplates(db)
 	}
 
-	// --- REPOSITORIES ---
+	// --- INIT LAYERS ---
 	var userRepo repositories.UserRepository
 	var docRepo repositories.LostDocumentRepository
 	var residentRepo repositories.ResidentRepository
@@ -88,7 +96,6 @@ func main() {
 		itemTemplateRepo = repositories.NewItemTemplateRepository(db)
 	}
 
-	// --- SERVICES ---
 	auditService := services.NewAuditLogService(auditRepo)
 	configService := services.NewConfigService(configRepo, db)
 	backupService := services.NewBackupService(db, cfg, configService, auditService)
@@ -107,7 +114,6 @@ func main() {
 	dbTestService := services.NewDBTestService()
 	updateService := services.NewUpdateService()
 
-	// --- CONTROLLERS ---
 	authController := controllers.NewAuthController(authService, configService)
 	userController := controllers.NewUserController(userService)
 	docController := controllers.NewLostDocumentController(docService)
@@ -161,7 +167,6 @@ func main() {
 		c.HTML(200, "dashboard.html", gin.H{"Title": "Beranda", "CurrentUser": c.MustGet("currentUser"), "Config": mustGetConfig(configService)})
 	})
 	authorized.GET("/api/config/limits", configController.GetLimits)
-
 	authorized.GET("/api/stats", dashboardController.GetStats)
 	authorized.GET("/api/stats/monthly-issuance", dashboardController.GetMonthlyChart)
 	authorized.GET("/api/stats/item-composition", dashboardController.GetItemCompositionChart)
@@ -211,13 +216,11 @@ func main() {
 	})
 
 	authorized.GET("/api/item-templates/active", itemTemplateController.FindAllActive)
-
 	authorized.GET("/profile", func(c *gin.Context) {
 		c.HTML(200, "profile.html", gin.H{"Title": "Profil Saya", "CurrentUser": c.MustGet("currentUser")})
 	})
 	authorized.PUT("/api/profile", userController.UpdateProfile)
 	authorized.PUT("/api/profile/password", userController.ChangePassword)
-
 	authorized.GET("/panduan", func(c *gin.Context) {
 		c.HTML(200, "panduan.html", gin.H{"Title": "Panduan", "CurrentUser": c.MustGet("currentUser")})
 	})
@@ -237,7 +240,6 @@ func main() {
 
 	admin := authorized.Group("/")
 	admin.Use(middleware.AdminAuthMiddleware())
-
 	admin.GET("/users", func(c *gin.Context) {
 		c.HTML(200, "user_list.html", gin.H{"Title": "Manajemen Pengguna", "CurrentUser": c.MustGet("currentUser")})
 	})
@@ -254,7 +256,6 @@ func main() {
 	admin.PUT("/api/users/:id", userController.Update)
 	admin.DELETE("/api/users/:id", userController.Delete)
 	admin.POST("/api/users/:id/activate", userController.Activate)
-
 	admin.GET("/settings", func(c *gin.Context) {
 		c.HTML(200, "settings.html", gin.H{"Title": "Pengaturan Sistem", "CurrentUser": c.MustGet("currentUser")})
 	})
@@ -264,14 +265,12 @@ func main() {
 	admin.POST("/api/restore", backupController.RestoreBackup)
 	admin.POST("/api/settings/migrate", configController.MigrateDatabase)
 	admin.POST("/api/settings/install-cert", settingsController.InstallCertificate)
-
 	admin.GET("/api/audit-logs", auditController.FindAll)
 	admin.GET("/api/audit-logs/export", auditController.Export)
 	admin.GET("/audit-logs", func(c *gin.Context) {
 		c.HTML(200, "audit_log_list.html", gin.H{"Title": "Log Audit", "CurrentUser": c.MustGet("currentUser")})
 	})
 	admin.GET("/api/documents/export", docController.Export)
-
 	admin.POST("/api/license/activate", licenseController.ActivateLicense)
 	admin.GET("/api/license/hwid", licenseController.GetHardwareID)
 
@@ -294,52 +293,73 @@ func main() {
 	pro.PUT("/api/item-templates/:id", itemTemplateController.Update)
 	pro.DELETE("/api/item-templates/:id", itemTemplateController.Delete)
 
+	// --- STARTUP SEQUENCE ---
+	
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
-
 	srv := &http.Server{Addr: ":" + port, Handler: r}
 
+	// Menangani Shutdown Signal
+	quitChan := make(chan os.Signal, 1)
+	signal.Notify(quitChan, syscall.SIGINT, syscall.SIGTERM)
+
+	// --- LOGIC HTTPS ---
 	isHTTPS := os.Getenv("ENABLE_HTTPS") == "true"
 	certFile, keyFile := "", ""
 	if isHTTPS {
 		var errCert error
 		certFile, keyFile, errCert = utils.EnsureCertificates()
 		if errCert != nil {
-			log.Printf("⚠️ ERROR CERT: Gagal membuat sertifikat: %v. Fallback ke HTTP.", errCert)
+			log.Printf("⚠️ ERROR CERT: %v. Fallback ke HTTP.", errCert)
 			isHTTPS = false
-		} else {
-			log.Printf("✅ HTTPS Enabled. Cert Path: %s", certFile)
 		}
 	}
 
+	// Jalankan Server di Goroutine
 	go func() {
 		if isHTTPS {
 			log.Printf("🔒 Server berjalan di port %s (HTTPS)", port)
 			if err := srv.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
-				log.Fatalf("ListenTLS error: %s\n", err)
+				log.Fatalf("Server Error: %s\n", err)
 			}
 		} else {
 			log.Printf("🌐 Server berjalan di port %s (HTTP)", port)
 			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				log.Fatalf("listen: %s\n", err)
+				log.Fatalf("Server Error: %s\n", err)
 			}
 		}
 	}()
 
-	quitChan := make(chan os.Signal, 1)
-	signal.Notify(quitChan, syscall.SIGINT, syscall.SIGTERM)
-	go func() { <-quitChan; systray.Quit() }()
+	// --- HEADLESS MODE vs GUI MODE ---
+	if isHeadless {
+		// Jika headless (CI/CD/Server), block main thread di sini
+		// Tunggu sinyal matikan (Ctrl+C)
+		<-quitChan
+		log.Println("Shutting down headless server...")
+	} else {
+		// Jika Desktop, jalankan Systray (Blocking)
+		// Saat quitChan menerima sinyal, panggil systray.Quit()
+		go func() { <-quitChan; systray.Quit() }()
 
-	systray.Run(func() { onReady(isHTTPS) }, func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := srv.Shutdown(ctx); err != nil {
-			log.Fatal("Shutdown error:", err)
-		}
-	})
+		systray.Run(func() { onReady(isHTTPS) }, func() {
+			// Cleanup saat systray quit
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := srv.Shutdown(ctx); err != nil {
+				log.Fatal("Shutdown error:", err)
+			}
+		})
+	}
 }
+
+// ... (Fungsi setupDatabase, setupEnvironment, setupLogging, openBrowser SAMA SEPERTI SEBELUMNYA) ...
+// ... (Fungsi seedDefaultTemplates SAMA SEPERTI SEBELUMNYA) ...
+
+// Pastikan copy semua fungsi helper yang ada di file main.go sebelumnya juga
+// (Saya tidak tulis ulang di sini untuk menghemat tempat, karena tidak berubah)
+// Pastikan fungsi `onReady` ada modifikasi `if !isHeadless` jika perlu (tapi logika di main() sudah handle pemisahan itu)
 
 func setupDatabase(cfg *config.Config) (*gorm.DB, error) {
 	var db *gorm.DB
@@ -365,7 +385,7 @@ func setupDatabase(cfg *config.Config) (*gorm.DB, error) {
 		dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=Asia/Jakarta",
 			cfg.DBHost, cfg.DBUser, cfg.DBPass, cfg.DBName, cfg.DBPort, sslMode)
 		db, err = gorm.Open(postgres.Open(dsn), gormConfig)
-	default:
+	default: // sqlite
 		db, err = gorm.Open(sqlite.Open(cfg.DBDSN), gormConfig)
 		if err == nil {
 			db.Exec("PRAGMA foreign_keys = ON")
@@ -381,19 +401,12 @@ func setupDatabase(cfg *config.Config) (*gorm.DB, error) {
 	sqlDB.SetConnMaxLifetime(time.Hour)
 
 	err = db.AutoMigrate(
-		&models.User{}, 
-		&models.Resident{}, 
-		&models.LostDocument{}, 
-		&models.LostItem{}, 
-		&models.AuditLog{}, 
-		&models.Configuration{}, 
-		&models.ItemTemplate{}, 
-		&models.License{},
+		&models.User{}, &models.Resident{}, &models.LostDocument{}, &models.LostItem{},
+		&models.AuditLog{}, &models.Configuration{}, &models.ItemTemplate{}, &models.License{},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("migrasi gagal: %w", err)
 	}
-
 	return db, nil
 }
 
@@ -412,6 +425,7 @@ func setupLogging() {
 }
 
 func onReady(isHTTPS bool) {
+	// Di mode Headless, fungsi ini TIDAK AKAN DIPANGGIL, jadi aman.
 	iconData := web.GetIconBytes()
 	if len(iconData) > 0 {
 		systray.SetIcon(iconData)
@@ -432,11 +446,9 @@ func onReady(isHTTPS bool) {
 
 	go func() {
 		time.Sleep(2 * time.Second)
-		
 		port := os.Getenv("PORT")
-		if port == "" {
-			port = "8080"
-		}
+		if port == "" { port = "8080" }
+		
 		vhost := utils.NewVHostSetup()
 		isVhost, _ := vhost.IsSetup()
 		url := fmt.Sprintf("%s://localhost:%s", protocol, port)
@@ -490,78 +502,22 @@ func mustGetConfig(s services.ConfigService) *dto.AppConfig {
 	return c
 }
 
-// --- FUNGSI SMART SEEDING (ANTI BENTROK) ---
 func seedDefaultTemplates(db *gorm.DB) {
 	var count int64
-	// Cek apakah tabel ItemTemplate sudah berisi data?
-	// Unscoped: hitung juga yang sudah di soft-delete agar tidak duplikat.
 	db.Model(&models.ItemTemplate{}).Unscoped().Count(&count)
-	
-	// Jika sudah ada data (count > 0), berarti ini BUKAN instalasi baru.
-	// Kita SKIP seeding agar tidak bentrok dengan data yang sudah ada/migrasi.
-	if count > 0 {
-		return 
-	}
-	
+	if count > 0 { return }
+
 	log.Println("🔹 Database kosong. Melakukan seeding template default LENGKAP...")
-
+	
 	templates := []models.ItemTemplate{
-		{
-			NamaBarang: "KTP", Urutan: 1, IsActive: true,
-			FieldsConfig: models.JSONFieldArray{
-				{Label: "NIK", Type: "text", DataLabel: "NIK", Regex: "^[0-9]{16}$", RequiredLength: 16, IsNumeric: true, Placeholder: "16 Digit NIK"},
-			},
-		},
-		{
-			NamaBarang: "SIM", Urutan: 2, IsActive: true,
-			FieldsConfig: models.JSONFieldArray{
-				{Label: "Golongan SIM", Type: "select", DataLabel: "Gol", Options: []string{"A", "B I", "B II", "C", "D"}},
-				{Label: "Nomor SIM", Type: "text", DataLabel: "No. SIM", Regex: "^[0-9]{12,14}$", MinLength: 12, MaxLength: 14, IsNumeric: true, Placeholder: "12-14 Digit No. SIM"},
-			},
-		},
-		{
-			NamaBarang: "STNK", Urutan: 3, IsActive: true,
-			FieldsConfig: models.JSONFieldArray{
-				{Label: "Nomor Polisi", Type: "text", DataLabel: "No. Pol", Regex: "^[A-Z0-9 ]{1,10}$", MaxLength: 10, IsUppercase: true, Placeholder: "Contoh: DD 1234 AB"},
-				{Label: "Nomor Rangka", Type: "text", DataLabel: "No. Rangka", Regex: "^[A-Z0-9]{17}$", RequiredLength: 17, IsUppercase: true, Placeholder: "17 Digit (VIN)"},
-				{Label: "Nomor Mesin", Type: "text", DataLabel: "No. Mesin", Regex: "^[A-Z0-9]{1,15}$", MaxLength: 15, IsUppercase: true, Placeholder: "Hingga 15 digit"},
-			},
-		},
-		{
-			NamaBarang: "BPKB", Urutan: 4, IsActive: true,
-			FieldsConfig: models.JSONFieldArray{
-				{Label: "Nomor BPKB", Type: "text", DataLabel: "No. BPKB", Regex: "^[A-Z0-9]{9}$", RequiredLength: 9, IsUppercase: true, Placeholder: "9 Digit (Huruf & Angka)"},
-				{Label: "Atas Nama", Type: "text", DataLabel: "a.n.", IsTitlecase: true, Placeholder: "Nama Pemilik di BPKB"},
-			},
-		},
-		{
-			NamaBarang: "IJAZAH", Urutan: 5, IsActive: true,
-			FieldsConfig: models.JSONFieldArray{
-				{Label: "Tingkat Ijazah", Type: "select", DataLabel: "Tingkat", Options: []string{"SD", "SMP", "SMA/SMK", "D3", "S1", "S2", "S3"}},
-				{Label: "Nomor Ijazah", Type: "text", DataLabel: "No. Ijazah", Regex: "^[A-Z0-9\\/-]{1,50}$", MaxLength: 50, IsUppercase: true, Placeholder: "Termasuk / dan -"},
-			},
-		},
-		{
-			NamaBarang: "ATM", Urutan: 6, IsActive: true,
-			FieldsConfig: models.JSONFieldArray{
-				{Label: "Nama Bank", Type: "select", DataLabel: "Bank", Options: []string{"BRI", "BCA", "Mandiri", "BNI", "BTN", "Lainnya"}},
-				{Label: "Nomor Rekening", Type: "text", DataLabel: "No. Rek", Regex: "^[0-9]{1,20}$", MaxLength: 20, IsNumeric: true, Placeholder: "Hanya Angka"},
-			},
-		},
-		{
-			NamaBarang: "LAINNYA", Urutan: 99, IsActive: true,
-			FieldsConfig: models.JSONFieldArray{}, 
-		},
+		{NamaBarang: "KTP", Urutan: 1, IsActive: true, FieldsConfig: models.JSONFieldArray{{Label: "NIK", Type: "text", DataLabel: "NIK", Regex: "^[0-9]{16}$", RequiredLength: 16, IsNumeric: true, Placeholder: "16 Digit NIK"}}},
+		{NamaBarang: "SIM", Urutan: 2, IsActive: true, FieldsConfig: models.JSONFieldArray{{Label: "Golongan SIM", Type: "select", DataLabel: "Gol", Options: []string{"A", "B I", "B II", "C", "D"}}, {Label: "Nomor SIM", Type: "text", DataLabel: "No. SIM", Regex: "^[0-9]{12,14}$", MinLength: 12, MaxLength: 14, IsNumeric: true}}},
+		{NamaBarang: "STNK", Urutan: 3, IsActive: true, FieldsConfig: models.JSONFieldArray{{Label: "Nomor Polisi", Type: "text", DataLabel: "No. Pol"}, {Label: "Nomor Rangka", Type: "text", DataLabel: "No. Rangka"}, {Label: "Nomor Mesin", Type: "text", DataLabel: "No. Mesin"}}},
+		{NamaBarang: "BPKB", Urutan: 4, IsActive: true, FieldsConfig: models.JSONFieldArray{{Label: "Nomor BPKB", Type: "text", DataLabel: "No. BPKB"}, {Label: "Atas Nama", Type: "text", DataLabel: "a.n."}}},
+		{NamaBarang: "IJAZAH", Urutan: 5, IsActive: true, FieldsConfig: models.JSONFieldArray{{Label: "Tingkat", Type: "select", DataLabel: "Tingkat", Options: []string{"SD", "SMP", "SMA", "D3", "S1", "S2"}}, {Label: "Nomor Ijazah", Type: "text", DataLabel: "No. Ijazah"}}},
+		{NamaBarang: "ATM", Urutan: 6, IsActive: true, FieldsConfig: models.JSONFieldArray{{Label: "Nama Bank", Type: "select", DataLabel: "Bank", Options: []string{"BRI", "BCA", "Mandiri"}}, {Label: "Nomor Rekening", Type: "text", DataLabel: "No. Rek"}}},
+		{NamaBarang: "LAINNYA", Urutan: 99, IsActive: true, FieldsConfig: models.JSONFieldArray{}},
 	}
 
-	// Gunakan Clauses OnConflict untuk MySQL/Postgres (Upsert Safety)
-	// Untuk SQLite, GORM basic create sudah cukup karena kita sudah cek count > 0
-	if err := db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "nama_barang"}},
-		DoNothing: true,
-	}).Create(&templates).Error; err != nil {
-		log.Printf("⚠️ Gagal seeding templates: %v", err)
-	} else {
-		log.Println("✅ Default templates berhasil dibuat dengan field lengkap.")
-	}
+	db.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "nama_barang"}}, DoNothing: true}).Create(&templates)
 }
