@@ -33,8 +33,12 @@ func (_m *LicenseService) GetHardwareID() string {
 	return ret.String(0)
 }
 
-// --- METODE BARU YANG HILANG ---
 func (_m *LicenseService) AutoActivateFromEnv() {
 	_m.Called()
 }
-// -------------------------------
+
+// --- FIX: TAMBAHKAN METHOD INI AGAR TIDAK ERROR INTERFACE ---
+func (_m *LicenseService) RevokeLicense() error {
+	ret := _m.Called()
+	return ret.Error(0)
+}
