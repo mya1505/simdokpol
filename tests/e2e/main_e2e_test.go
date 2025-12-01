@@ -11,15 +11,14 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
 const (
-	baseURL       = "http://localhost:8080"
-	// Secret key default untuk dev/test environment
-	testSecretKey = "SIMDOKPOL_SECRET_KEY_2025" 
+	baseURL = "http://localhost:8080"
+	// FIX: Samakan dengan default di internal/services/license_service.go
+	testSecretKey = "JANGAN_PAKAI_DEFAULT_KEY_INI_BAHAYA" 
 )
 
 type LoginReq struct {
@@ -133,11 +132,9 @@ func performLogin(t *testing.T, nrp, password string) string {
 	return ""
 }
 
-// --- LOGIC BARU: AKTIVASI LISENSI ---
 func performLicenseActivation(t *testing.T, token string) {
 	client := &http.Client{}
 	
-	// 1. Ambil HWID
 	reqHWID, _ := http.NewRequest("GET", baseURL+"/api/license/hwid", nil)
 	reqHWID.AddCookie(&http.Cookie{Name: "token", Value: token})
 	respHWID, err := client.Do(reqHWID)
@@ -148,7 +145,7 @@ func performLicenseActivation(t *testing.T, token string) {
 	hwid := hwidResp["hardware_id"]
 	assert.NotEmpty(t, hwid, "HWID tidak boleh kosong")
 
-	// 2. Generate Key Valid (Simulasi Keygen)
+	// Generate Key (HMAC Logic)
 	h := hmac.New(sha256.New, []byte(testSecretKey))
 	h.Write([]byte(hwid))
 	hash := h.Sum(nil)
@@ -160,7 +157,6 @@ func performLicenseActivation(t *testing.T, token string) {
 	}
 	validKey := formattedKey.String()
 
-	// 3. Aktivasi
 	payload := map[string]string{"key": validKey}
 	jsonPayload, _ := json.Marshal(payload)
 	reqAct, _ := http.NewRequest("POST", baseURL+"/api/license/activate", bytes.NewBuffer(jsonPayload))
@@ -177,14 +173,9 @@ func performLicenseActivation(t *testing.T, token string) {
 	fmt.Println("   ✅ Lisensi Validated & Activated")
 }
 
-// --- LOGIC BARU: HTTPS CHECK ---
 func performHTTPSCheck(t *testing.T, token string) {
-	// Kita tes apakah backend menerima konfigurasi HTTPS
-	// Kita TIDAK restart server di sini karena CI/CD environment tidak punya sertifikat root
-	
 	payload := map[string]interface{}{
 		"enable_https": "true",
-		// Kirim ulang config lain agar tidak tertimpa kosong (optional tergantung implementasi update partial)
 		"nama_kantor": "POLSEK E2E SECURE", 
 	}
 	jsonData, _ := json.Marshal(payload)
@@ -200,10 +191,8 @@ func performHTTPSCheck(t *testing.T, token string) {
 	var response map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&response)
 
-	// Validasi Logic: Backend harusnya meminta install sertifikat
-	// "check_https_cert" adalah flag yang kita buat di controller settings
-	assert.Equal(t, true, response["check_https_cert"], "Backend harusnya meminta install sertifikat")
-	assert.Equal(t, true, response["restart_required"], "Backend harusnya meminta restart")
+	assert.Equal(t, true, response["check_https_cert"])
+	assert.Equal(t, true, response["restart_required"])
 	
 	fmt.Println("   ✅ HTTPS Config Logic Verified")
 }
@@ -308,7 +297,6 @@ func performSettingsAndUtils(t *testing.T, token string) {
 	respRep, err := client.Do(reqRep)
 	assert.NoError(t, err)
 	
-	// Karena lisensi sudah aktif di step sebelumnya, harusnya 200 OK (bukan 402)
 	if respRep.StatusCode == 200 {
 		assert.Equal(t, "application/pdf", respRep.Header.Get("Content-Type"))
 		fmt.Println("   ✅ Report PDF Generated (License Active)")
