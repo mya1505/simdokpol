@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
+	// "os" <-- HAPUS INI
 	"testing"
 	"time"
 
@@ -60,6 +60,12 @@ func performLogin(t *testing.T, nrp, password string) string {
 	resp, err := http.Post(baseURL+"/api/login", "application/json", bytes.NewBuffer(jsonData))
 	assert.NoError(t, err)
 	defer resp.Body.Close()
+
+	// Debug jika gagal login
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("Gagal Login. Status: %d, Body: %s", resp.StatusCode, string(body))
+	}
 
 	assert.Equal(t, 200, resp.StatusCode, "Login harus return 200 OK")
 	
