@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os" // <-- KITA BUTUH INI SEKARANG
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -26,8 +28,7 @@ func TestEndToEndFlow(t *testing.T) {
 	fmt.Println("⏳ Menunggu server up...")
 	waitForServer(t)
 
-	// 2. STEP BARU: Lakukan Setup Awal (Bikin Admin)
-	// Karena database kosong, kita harus register admin dulu lewat API Setup
+	// 2. Setup Awal (Bikin Admin)
 	fmt.Println("🛠️ Melakukan Setup Awal...")
 	performSetup(t)
 	
@@ -36,16 +37,16 @@ func TestEndToEndFlow(t *testing.T) {
 	time.Sleep(5 * time.Second) 
 	waitForServer(t) // Pastikan server up lagi
 
-	// 3. Skenario: Login sebagai Super Admin (Yang barusan dibuat)
+	// 3. Login
 	fmt.Println("🔑 Mencoba Login...")
 	token := performLogin(t, "12345678", "admin123")
 	fmt.Println("✅ Login Sukses! Token didapat.")
 
-	// 4. Skenario: Cek Dashboard Stats
+	// 4. Dashboard
 	performGetDashboard(t, token)
 	fmt.Println("✅ Akses Dashboard Sukses!")
 
-	// 5. Skenario: Buat Surat Baru
+	// 5. Create Surat
 	performCreateDocument(t, token)
 	fmt.Println("✅ Buat Surat Sukses!")
 }
@@ -62,12 +63,16 @@ func waitForServer(t *testing.T) {
 	t.Fatal("Server tidak menyala dalam 30 detik!")
 }
 
-// Fungsi baru untuk nembak API Setup
 func performSetup(t *testing.T) {
-	// Payload sesuai SaveSetupRequest di ConfigController
+	// --- FIX: GUNAKAN ABSOLUTE PATH UNTUK DB ---
+	// Agar Controller dan Main.go (setelah restart) membuka file yang sama
+	cwd, _ := os.Getwd()
+	absDBPath := filepath.Join(cwd, "e2e_test.db")
+	// -------------------------------------------
+
 	payload := map[string]string{
 		"db_dialect": "sqlite", 
-		"db_dsn": "e2e_test.db",
+		"db_dsn": absDBPath, // <-- Path Absolut
 		"kop_baris_1": "KEPOLISIAN NEGARA",
 		"kop_baris_2": "REPUBLIK INDONESIA",
 		"kop_baris_3": "SEKTOR E2E TEST",
@@ -78,7 +83,6 @@ func performSetup(t *testing.T) {
 		"zona_waktu": "Asia/Jakarta",
 		"archive_duration_days": "30",
 		
-		// Kredensial Admin yang akan kita pakai login nanti
 		"admin_nama_lengkap": "Super Admin E2E",
 		"admin_nrp": "12345678",
 		"admin_pangkat": "JENDERAL",
@@ -90,10 +94,8 @@ func performSetup(t *testing.T) {
 	assert.NoError(t, err)
 	defer resp.Body.Close()
 
-	// Setup mungkin mengembalikan 200 OK
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
-		// Abaikan error jika setup sudah done (403), lanjut ke login
 		if resp.StatusCode == 403 {
 			fmt.Println("⚠️ Setup sudah dilakukan sebelumnya, lanjut login.")
 			return
@@ -148,7 +150,7 @@ func performCreateDocument(t *testing.T, token string) {
 		"pekerjaan":          "Wiraswasta",
 		"alamat":             "Jl. Testing No. 1",
 		"lokasi_hilang":      "Pasar Senen",
-		"petugas_pelapor_id": 1, // ID Admin yang baru dibuat pasti 1
+		"petugas_pelapor_id": 1,
 		"pejabat_persetuju_id": 1,
 		"items": []map[string]string{
 			{"nama_barang": "KTP", "deskripsi": "NIK: 3171234567890001"},
