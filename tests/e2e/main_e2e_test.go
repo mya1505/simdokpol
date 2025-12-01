@@ -6,54 +6,43 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os" // <-- KITA BUTUH INI SEKARANG
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
-// Konfigurasi Target Test
 const baseURL = "http://localhost:8080"
 
-// Struct untuk request login
 type LoginReq struct {
 	NRP      string `json:"nrp"`
 	Password string `json:"password"`
 }
 
 func TestEndToEndFlow(t *testing.T) {
-	// 1. Tunggu Server Ready (Health Check)
 	fmt.Println("⏳ Menunggu server up...")
 	waitForServer(t)
 
-	// 2. Setup Awal (Bikin Admin)
 	fmt.Println("🛠️ Melakukan Setup Awal...")
 	performSetup(t)
 	
-	// Tunggu sebentar karena SaveSetup memicu RESTART server
 	fmt.Println("🔄 Menunggu server restart setelah setup...")
 	time.Sleep(5 * time.Second) 
-	waitForServer(t) // Pastikan server up lagi
+	waitForServer(t)
 
-	// 3. Login
 	fmt.Println("🔑 Mencoba Login...")
 	token := performLogin(t, "12345678", "admin123")
 	fmt.Println("✅ Login Sukses! Token didapat.")
 
-	// 4. Dashboard
 	performGetDashboard(t, token)
 	fmt.Println("✅ Akses Dashboard Sukses!")
 
-	// 5. Create Surat
 	performCreateDocument(t, token)
 	fmt.Println("✅ Buat Surat Sukses!")
 }
 
 func waitForServer(t *testing.T) {
 	for i := 0; i < 30; i++ {
-		// Cek endpoint setup karena ini yang pasti terbuka saat awal
 		resp, err := http.Get(baseURL + "/setup")
 		if err == nil && resp.StatusCode < 500 {
 			return 
@@ -64,15 +53,12 @@ func waitForServer(t *testing.T) {
 }
 
 func performSetup(t *testing.T) {
-	// --- FIX: GUNAKAN ABSOLUTE PATH UNTUK DB ---
-	// Agar Controller dan Main.go (setelah restart) membuka file yang sama
-	cwd, _ := os.Getwd()
-	absDBPath := filepath.Join(cwd, "e2e_test.db")
-	// -------------------------------------------
-
+	// FIX: Kirim DB_DSN kosong ("") agar backend menggunakan default path (AppData/simdokpol.db).
+	// Ini menjamin konsistensi lokasi file database antara proses Setup dan Restart.
 	payload := map[string]string{
 		"db_dialect": "sqlite", 
-		"db_dsn": absDBPath, // <-- Path Absolut
+		"db_dsn": "", 
+		
 		"kop_baris_1": "KEPOLISIAN NEGARA",
 		"kop_baris_2": "REPUBLIK INDONESIA",
 		"kop_baris_3": "SEKTOR E2E TEST",

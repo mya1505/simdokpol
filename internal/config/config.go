@@ -20,7 +20,6 @@ type Config struct {
 	DBPass       string
 }
 
-// Helper untuk parsing INT dengan default value (Fix Silent Failure)
 func getEnvAsInt(key string, defaultVal int) int {
 	valStr := os.Getenv(key)
 	if valStr == "" {
@@ -28,7 +27,6 @@ func getEnvAsInt(key string, defaultVal int) int {
 	}
 	val, err := strconv.Atoi(valStr)
 	if err != nil {
-		log.Printf("⚠️ Warning: Invalid integer for ENV %s: %s. Using default: %d", key, valStr, defaultVal)
 		return defaultVal
 	}
 	return val
@@ -38,14 +36,14 @@ func LoadConfig() *Config {
 	appDataDir := utils.GetAppDataDir()
 	envPath := filepath.Join(appDataDir, ".env")
 	
-	_ = godotenv.Load(envPath)
+	log.Printf("INFO CONFIG: Memuat .env dari: %s", envPath)
+	
+	// Gunakan Overload agar file .env MENIMPA variabel sistem (penting untuk test)
+	_ = godotenv.Overload(envPath)
 	_ = godotenv.Load()
 
 	secretStr := os.Getenv("JWT_SECRET_KEY")
 	if secretStr == "" {
-		if os.Getenv("APP_ENV") == "production" {
-			log.Println("⚠️ CRITICAL: Using default JWT Secret in Production!")
-		}
 		secretStr = "default-insecure-secret-change-me-immediately"
 	}
 
@@ -55,20 +53,30 @@ func LoadConfig() *Config {
 	}
 
 	dialect := strings.ToLower(os.Getenv("DB_DIALECT"))
-	if dialect == "" { dialect = "sqlite" }
+	if dialect == "" { 
+		dialect = "sqlite" 
+		log.Println("INFO CONFIG: DB_DIALECT kosong, default ke sqlite")
+	}
 
 	dsn := os.Getenv("DB_DSN")
+	log.Printf("INFO CONFIG: Raw DB_DSN: %s", dsn)
+
 	if dialect == "sqlite" {
 		if dsn == "" {
 			dsn = "simdokpol.db?_foreign_keys=on"
 		}
-		// Fix Path SQLite agar selalu absolute ke AppData
-		if !strings.HasPrefix(dsn, "file:") && !filepath.IsAbs(strings.Split(dsn, "?")[0]) {
-			dsn = filepath.Join(appDataDir, dsn)
+		
+		// NORMALISASI PATH SQLITE (CRITICAL FIX)
+		// Pastikan path selalu absolut ke AppDataDir jika belum absolut
+		cleanPath := strings.TrimPrefix(dsn, "file:")
+		cleanPath = strings.Split(cleanPath, "?")[0]
+		
+		if !filepath.IsAbs(cleanPath) {
+			dsn = filepath.Join(appDataDir, cleanPath) + "?_foreign_keys=on"
+			log.Printf("INFO CONFIG: Path SQLite dinormalisasi ke absolut: %s", dsn)
 		}
 	}
 
-	// Fix Env Key Case Sensitive di Linux
 	archiveDays := getEnvAsInt("ARCHIVE_DURATION_DAYS", 15)
 	if archiveDays == 0 {
 		archiveDays = getEnvAsInt("archive_duration_days", 15)
@@ -77,7 +85,7 @@ func LoadConfig() *Config {
 	return &Config{
 		AppConfig: &dto.AppConfig{
 			DBDialect:           dialect,
-			DBDSN:               dsn,
+			DBDSN:               dsn, // <-- Gunakan DSN yang sudah dinormalisasi
 			DBHost:              os.Getenv("DB_HOST"),
 			DBPort:              os.Getenv("DB_PORT"),
 			DBUser:              os.Getenv("DB_USER"),

@@ -5,12 +5,13 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"path/filepath"
 	"simdokpol/internal/dto"
 	"simdokpol/internal/models"
 	"simdokpol/internal/services"
-	"simdokpol/internal/utils" // <-- PENTING: Import Utils
+	"simdokpol/internal/utils"
 	"strings"
-	"time" // <-- PENTING: Import Time
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
@@ -65,7 +66,7 @@ type SaveSetupRequest struct {
 	DBPass    string `json:"db_pass"`
 	DBName    string `json:"db_name"`
 	DBSSLMode string `json:"db_sslmode"`
-	
+
 	KopBaris1   string `json:"kop_baris_1" binding:"required"`
 	KopBaris2   string `json:"kop_baris_2" binding:"required"`
 	KopBaris3   string `json:"kop_baris_3" binding:"required"`
@@ -92,12 +93,16 @@ func (c *ConfigController) connectToTargetDB(req SaveSetupRequest) (*gorm.DB, er
 		dialector = mysql.Open(dsn)
 	case "postgres":
 		sslMode := req.DBSSLMode
-		if sslMode == "" { sslMode = "disable" }
+		if sslMode == "" {
+			sslMode = "disable"
+		}
 		dsn = fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=Asia/Jakarta", req.DBHost, req.DBUser, req.DBPass, req.DBName, req.DBPort, sslMode)
 		dialector = postgres.Open(dsn)
-	default: 
+	default:
 		dsn = req.DBDSN
-		if dsn == "" { dsn = "simdokpol.db?_foreign_keys=on" }
+		if dsn == "" {
+			dsn = "simdokpol.db?_foreign_keys=on"
+		}
 		dialector = sqlite.Open(dsn)
 	}
 	return gorm.Open(dialector, &gorm.Config{Logger: logger.Default.LogMode(logger.Warn)})
@@ -105,42 +110,126 @@ func (c *ConfigController) connectToTargetDB(req SaveSetupRequest) (*gorm.DB, er
 
 func (c *ConfigController) SaveSetup(ctx *gin.Context) {
 	isSetup, _ := c.configService.IsSetupComplete()
-	if isSetup { APIError(ctx, http.StatusForbidden, "Aplikasi sudah dikonfigurasi."); return }
-	var req SaveSetupRequest
-	if err := ctx.ShouldBindJSON(&req); err != nil { APIError(ctx, http.StatusBadRequest, "Input tidak valid: "+err.Error()); return }
-	
-	targetDB, err := c.connectToTargetDB(req)
-	if err != nil { log.Printf("ERROR: Koneksi target: %v", err); APIError(ctx, http.StatusInternalServerError, "Gagal koneksi DB tujuan."); return }
-	if err := targetDB.AutoMigrate(&models.User{}); err != nil { APIError(ctx, http.StatusInternalServerError, "Gagal migrasi tabel user."); return }
-	
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(req.AdminPassword), 10)
-	superAdmin := &models.User{NamaLengkap: req.AdminNamaLengkap, NRP: req.AdminNRP, Pangkat: req.AdminPangkat, KataSandi: string(hashedPassword), Peran: models.RoleSuperAdmin, Jabatan: models.RoleSuperAdmin, Regu: "-"}
-	if err := targetDB.Where("nrp = ?", superAdmin.NRP).FirstOrCreate(superAdmin).Error; err != nil { APIError(ctx, http.StatusInternalServerError, "Gagal membuat Admin."); return }
-	sqlDB, _ := targetDB.DB(); sqlDB.Close()
+	if isSetup {
+		APIError(ctx, http.StatusForbidden, "Aplikasi sudah dikonfigurasi.")
+		return
+	}
 
+	var req SaveSetupRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		APIError(ctx, http.StatusBadRequest, "Input tidak valid: "+err.Error())
+		return
+	}
+
+	// 1. NORMALISASI PATH SQLITE AGAR ABSOLUT
+	// Ini kunci perbaikan: pastikan path yang disimpan ke .env nanti adalah path absolut
+	if req.DBDialect == "sqlite" || req.DBDialect == "" {
+		req.DBDialect = "sqlite"
+		if req.DBDSN == "" {
+			req.DBDSN = "simdokpol.db"
+		}
+
+		// Bersihkan prefix "file:" jika ada
+		cleanPath := strings.TrimPrefix(req.DBDSN, "file:")
+		cleanPath = strings.Split(cleanPath, "?")[0]
+
+		// Jika path relatif, tambahkan AppDataDir di depannya
+		if !filepath.IsAbs(cleanPath) {
+			cleanPath = filepath.Join(utils.GetAppDataDir(), cleanPath)
+		}
+
+		// Rebuild DSN dengan path absolut
+		req.DBDSN = cleanPath + "?_foreign_keys=on"
+		log.Printf("INFO SETUP: Database path dinormalisasi ke absolut: %s", req.DBDSN)
+	}
+
+	targetDB, err := c.connectToTargetDB(req)
+	if err != nil {
+		log.Printf("ERROR: Gagal koneksi target: %v", err)
+		APIError(ctx, http.StatusInternalServerError, "Gagal koneksi DB tujuan.")
+		return
+	}
+
+	// 2. MIGRASI TABEL
+	if err := targetDB.AutoMigrate(
+		&models.User{}, &models.Resident{}, &models.LostDocument{}, &models.LostItem{},
+		&models.Configuration{}, &models.AuditLog{}, &models.ItemTemplate{}, &models.License{},
+	); err != nil {
+		log.Printf("ERROR: AutoMigrate: %v", err)
+		APIError(ctx, http.StatusInternalServerError, "Gagal migrasi tabel.")
+		return
+	}
+
+	// 3. BUAT ADMIN (TRANSAKSI EKSPLISIT)
+	tx := targetDB.Begin()
+	if tx.Error != nil {
+		APIError(ctx, http.StatusInternalServerError, "DB Error Transaction")
+		return
+	}
+
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(req.AdminPassword), 10)
+	superAdmin := &models.User{
+		NamaLengkap: req.AdminNamaLengkap,
+		NRP:         req.AdminNRP,
+		Pangkat:     req.AdminPangkat,
+		KataSandi:   string(hashedPassword),
+		Peran:       models.RoleSuperAdmin,
+		Jabatan:     models.RoleSuperAdmin,
+		Regu:        "-",
+	}
+
+	// Gunakan FirstOrCreate agar idempoten
+	if err := tx.Where("nrp = ?", superAdmin.NRP).FirstOrCreate(superAdmin).Error; err != nil {
+		tx.Rollback()
+		log.Printf("ERROR: Create Admin: %v", err)
+		APIError(ctx, http.StatusInternalServerError, "Gagal membuat Admin.")
+		return
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		log.Printf("ERROR: Commit Admin: %v", err)
+		APIError(ctx, http.StatusInternalServerError, "Gagal menyimpan admin.")
+		return
+	}
+
+	log.Printf("SUCCESS: Admin dibuat di %s (ID: %d, NRP: %s)", req.DBDSN, superAdmin.ID, superAdmin.NRP)
+
+	sqlDB, _ := targetDB.DB()
+	sqlDB.Close()
+
+	// 4. SIMPAN KONFIGURASI
 	configData := map[string]string{
-		"DB_DIALECT": req.DBDialect, "DB_DSN": req.DBDSN, "DB_HOST": req.DBHost, "DB_PORT": req.DBPort, "DB_USER": req.DBUser, "DB_PASS": req.DBPass, "DB_NAME": req.DBName, "DB_SSLMODE": req.DBSSLMode,
-		"kop_baris_1": req.KopBaris1, "kop_baris_2": req.KopBaris2, "kop_baris_3": req.KopBaris3, "nama_kantor": req.NamaKantor, "tempat_surat": req.TempatSurat,
-		"format_nomor_surat": req.FormatNomorSurat, "nomor_surat_terakhir": req.NomorSuratTerakhir, "zona_waktu": req.ZonaWaktu, "archive_duration_days": req.ArchiveDurationDays,
+		"DB_DIALECT":            req.DBDialect,
+		"DB_DSN":                req.DBDSN, // Ini sudah absolut sekarang
+		"DB_HOST":               req.DBHost,
+		"DB_PORT":               req.DBPort,
+		"DB_USER":               req.DBUser,
+		"DB_PASS":               req.DBPass,
+		"DB_NAME":               req.DBName,
+		"DB_SSLMODE":            req.DBSSLMode,
+		"kop_baris_1":           req.KopBaris1,
+		"kop_baris_2":           req.KopBaris2,
+		"kop_baris_3":           req.KopBaris3,
+		"nama_kantor":           req.NamaKantor,
+		"tempat_surat":          req.TempatSurat,
+		"format_nomor_surat":    req.FormatNomorSurat,
+		"nomor_surat_terakhir":  req.NomorSuratTerakhir,
+		"zona_waktu":            req.ZonaWaktu,
+		"archive_duration_days": req.ArchiveDurationDays,
 		services.IsSetupCompleteKey: "true",
 	}
-	if req.DBDialect == "sqlite" && req.DBDSN == "" { configData["DB_DSN"] = "simdokpol.db?_foreign_keys=on" }
-	
+
 	if err := c.configService.SaveConfig(configData); err != nil {
 		APIError(ctx, http.StatusInternalServerError, "Gagal menyimpan konfigurasi.")
 		return
 	}
 
-	// --- FIX: AUTO RESTART SETELAH SETUP ---
-	// Jalankan di goroutine agar response JSON terkirim dulu ke frontend
+	// 5. RESTART OTOMATIS
 	go func() {
-		time.Sleep(1 * time.Second) // Tunggu frontend terima response
+		time.Sleep(2 * time.Second) // Beri waktu response terkirim
 		log.Println("✅ Setup Selesai. Melakukan Restart Otomatis...")
-		if err := utils.RestartApp(); err != nil {
-			log.Printf("❌ Gagal restart otomatis: %v. Harap restart manual.", err)
-		}
+		utils.RestartApp()
 	}()
-	// ----------------------------------------
 
 	APIResponse(ctx, http.StatusOK, "Setup berhasil. Sistem sedang dimuat ulang...", nil)
 }
@@ -154,7 +243,6 @@ func (c *ConfigController) MigrateDatabase(ctx *gin.Context) {
 		return
 	}
 
-	// Setup SSE Headers
 	ctx.Header("Content-Type", "text/event-stream")
 	ctx.Header("Cache-Control", "no-cache")
 	ctx.Header("Connection", "keep-alive")
@@ -164,7 +252,6 @@ func (c *ConfigController) MigrateDatabase(ctx *gin.Context) {
 	progressChan := make(chan dto.MigrationProgress)
 	errorChan := make(chan error)
 
-	// Jalankan migrasi di Goroutine
 	go func() {
 		err := c.migrationService.MigrateDataTo(req, actorID, progressChan)
 		if err != nil {
@@ -174,16 +261,13 @@ func (c *ConfigController) MigrateDatabase(ctx *gin.Context) {
 		close(errorChan)
 	}()
 
-	// Stream data ke client
 	ctx.Stream(func(w io.Writer) bool {
 		select {
 		case progress, ok := <-progressChan:
 			if !ok {
-				// Selesai
 				ctx.SSEvent("complete", map[string]string{"message": "Migrasi Selesai"})
 				return false
 			}
-			// Kirim progress
 			ctx.SSEvent("progress", progress)
 			return true
 		case err := <-errorChan:
@@ -198,15 +282,24 @@ func (c *ConfigController) MigrateDatabase(ctx *gin.Context) {
 
 func (c *ConfigController) RestoreSetup(ctx *gin.Context) {
 	isSetup, _ := c.configService.IsSetupComplete()
-	if isSetup { APIError(ctx, http.StatusForbidden, "Sudah dikonfigurasi."); return }
+	if isSetup {
+		APIError(ctx, http.StatusForbidden, "Sudah dikonfigurasi.")
+		return
+	}
 	file, err := ctx.FormFile("restore-file")
-	if err != nil || !strings.HasSuffix(file.Filename, ".db") { APIError(ctx, http.StatusBadRequest, "File harus .db"); return }
-	src, _ := file.Open(); defer src.Close()
-	if err := c.backupService.RestoreBackup(src, 0); err != nil { APIError(ctx, http.StatusInternalServerError, "Gagal restore."); return }
-	
+	if err != nil || !strings.HasSuffix(file.Filename, ".db") {
+		APIError(ctx, http.StatusBadRequest, "File harus .db")
+		return
+	}
+	src, _ := file.Open()
+	defer src.Close()
+	if err := c.backupService.RestoreBackup(src, 0); err != nil {
+		APIError(ctx, http.StatusInternalServerError, "Gagal restore.")
+		return
+	}
+
 	c.configService.SaveConfig(map[string]string{services.IsSetupCompleteKey: "true", "DB_DIALECT": "sqlite", "DB_DSN": "simdokpol.db?_foreign_keys=on"})
-	
-	// Restart juga setelah restore
+
 	go func() {
 		time.Sleep(1 * time.Second)
 		utils.RestartApp()
@@ -216,7 +309,10 @@ func (c *ConfigController) RestoreSetup(ctx *gin.Context) {
 }
 
 func (c *ConfigController) ShowSetupPage(ctx *gin.Context) {
-	if ok, _ := c.configService.IsSetupComplete(); ok { ctx.Redirect(http.StatusFound, "/login"); return }
+	if ok, _ := c.configService.IsSetupComplete(); ok {
+		ctx.Redirect(http.StatusFound, "/login")
+		return
+	}
 	cfg, _ := c.configService.GetConfig()
 	ctx.HTML(http.StatusOK, "setup.html", gin.H{"Title": "Konfigurasi Awal", "CurrentConfig": cfg})
 }
