@@ -1,6 +1,11 @@
 name: Real E2E System Test
 
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   e2e-test:
@@ -18,8 +23,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          # Walaupun headless, library Gtk tetap dibutuhkan untuk kompilasi systray
-          sudo apt-get install -y gcc libgtk-3-dev libayatana-appindicator3-dev
+          sudo apt-get install -y gcc libgtk-3-dev libayatana-appindicator3-dev xvfb
           go mod tidy
 
       - name: Build Application
@@ -27,12 +31,20 @@ jobs:
           go build -o simdokpol cmd/main.go
           chmod +x simdokpol
 
-      - name: Run Application in Background (Headless)
+      - name: Run Application in Background
         run: |
+          # Setup Virtual Display
+          Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
+          export DISPLAY=:99
+          
+          # --- CONFIG BERSIH ---
           export PORT=8080
           export JWT_SECRET_KEY=rahasia-test-e2e
-          # AKTIFKAN MODE HEADLESS
           export HEADLESS_MODE=true
+          
+          # HAPUS SEMUA VARIABEL DB DISINI! 
+          # Jangan ada export DB_DSN, DB_DIALECT, dll.
+          # Biarkan Setup Wizard yang menulis .env dan App membacanya saat restart.
           
           # Jalankan app
           ./simdokpol > app.log 2>&1 &
@@ -43,6 +55,7 @@ jobs:
       - name: Run Real E2E Test
         run: |
           echo "🚀 Menjalankan Skenario User..."
+          # Test script akan melakukan Setup -> Restart -> Login
           go test -v ./tests/e2e/...
 
       - name: Print App Logs (Jika Gagal)

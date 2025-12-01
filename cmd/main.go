@@ -412,7 +412,7 @@ func setupDatabase(cfg *config.Config) (*gorm.DB, error) {
 
 func setupEnvironment() {
 	envPath := filepath.Join(utils.GetAppDataDir(), ".env")
-	_ = godotenv.Load(envPath)
+	_ = godotenv.Overload(envPath)
 	_ = godotenv.Load()
 }
 
