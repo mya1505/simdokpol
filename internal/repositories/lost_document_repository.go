@@ -45,7 +45,7 @@ func NewLostDocumentRepository(db *gorm.DB) LostDocumentRepository {
 	}
 }
 
-// --- FUNGSI HELPER SQL POLYGLOT (PENTING BUAT DASHBOARD) ---
+// --- FUNGSI HELPER SQL POLYGLOT ---
 func (r *lostDocumentRepository) selectYear(field string) string {
 	switch r.dialect {
 	case "mysql":
@@ -67,42 +67,9 @@ func (r *lostDocumentRepository) selectMonth(field string) string {
 		return fmt.Sprintf("CAST(strftime('%%m', %s) AS INTEGER)", field)
 	}
 }
-// -----------------------------------------------------------
 
-func (r *lostDocumentRepository) GetMonthlyIssuanceForYear(year int) ([]MonthlyCount, error) {
-	var results []MonthlyCount
-	
-	yearSel := r.selectYear("tanggal_laporan")
-	monthSel := r.selectMonth("tanggal_laporan")
-	
-	// Query Agregat
-	err := r.db.Model(&models.LostDocument{}).
-		Select(fmt.Sprintf("%s as year, %s as month, COUNT(id) as count", yearSel, monthSel)).
-		Where(fmt.Sprintf("%s = ?", yearSel), year).
-		Group("year, month").
-		Order("month asc").
-		Scan(&results).Error
-	
-	return results, err
-}
+// --- IMPLEMENTASI UTAMA ---
 
-func (r *lostDocumentRepository) GetItemCompositionStats() ([]dto.ItemCompositionStat, error) {
-	var results []dto.ItemCompositionStat
-	
-	// Fix: Explicit join table names untuk menghindari "ambiguous column"
-	err := r.db.Model(&models.LostItem{}).
-		Select("lost_items.nama_barang, COUNT(lost_items.id) as count").
-		Joins("JOIN lost_documents ON lost_documents.id = lost_items.lost_document_id").
-		Where(fmt.Sprintf("%s = ?", r.selectYear("lost_documents.tanggal_laporan")), time.Now().Year()).
-		Group("lost_items.nama_barang").
-		Order("count desc").
-		Scan(&results).Error
-		
-	return results, err
-}
-
-// ... (SISA FUNGSI FindByID, Create, Update, Delete, FindAllPaged SAMA SEPERTI CODE LAMA) ...
-// Pastikan fungsi FindAllPaged ada di sini (dari Turn sebelumnya)
 func (r *lostDocumentRepository) FindAllPaged(req dto.DataTableRequest, statusFilter string, archiveDurationDays int) ([]models.LostDocument, int64, int64, error) {
 	var docs []models.LostDocument
 	var total, filtered int64
@@ -129,7 +96,39 @@ func (r *lostDocumentRepository) FindAllPaged(req dto.DataTableRequest, statusFi
 	return docs, total, filtered, err
 }
 
-// ... (Copy fungsi helper lain: CountByDateRange, GetLastDocumentOfYear, dll dari file lama) ...
+// --- FIX: IMPLEMENTASI FindAll UNTUK EXPORT EXCEL ---
+func (r *lostDocumentRepository) FindAll(query string, statusFilter string, archiveDurationDays int) ([]models.LostDocument, error) {
+	var docs []models.LostDocument
+	db := r.db.Model(&models.LostDocument{})
+
+	// 1. Filter Status (Aktif/Arsip)
+	archiveDate := time.Now().Add(-time.Duration(archiveDurationDays) * 24 * time.Hour)
+	if statusFilter == "archived" {
+		db = db.Where("tanggal_laporan <= ?", archiveDate)
+	} else {
+		db = db.Where("tanggal_laporan > ?", archiveDate)
+	}
+
+	// 2. Filter Search (Jika ada query pencarian dari DataTables)
+	if query != "" {
+		searchQuery := fmt.Sprintf("%%%s%%", query)
+		db = db.Joins("JOIN residents ON lost_documents.resident_id = residents.id").
+			Where("lost_documents.nomor_surat LIKE ? OR residents.nama_lengkap LIKE ?", searchQuery, searchQuery)
+	}
+
+	// 3. Preload Data Lengkap (Penting untuk Excel)
+	err := db.Preload("Resident").
+		Preload("LostItems").          // Butuh list barang
+		Preload("Operator").
+		Preload("PetugasPelapor").     // Butuh nama petugas
+		Preload("PejabatPersetuju").   // Butuh nama pejabat
+		Order("lost_documents.tanggal_laporan desc").
+		Find(&docs).Error
+
+	return docs, err
+}
+// ---------------------------------------------------
+
 func (r *lostDocumentRepository) FindByID(id uint) (*models.LostDocument, error) {
 	var doc models.LostDocument
 	err := r.db.Preload("Resident").Preload("LostItems").Preload("PetugasPelapor").Preload("PejabatPersetuju").Preload("Operator").First(&doc, id).Error
@@ -156,11 +155,6 @@ func (r *lostDocumentRepository) Delete(tx *gorm.DB, id uint) error {
 	return db.Delete(&models.LostDocument{}, id).Error
 }
 
-func (r *lostDocumentRepository) FindAll(query string, statusFilter string, archiveDurationDays int) ([]models.LostDocument, error) {
-	// Dummy implementation agar interface terpenuhi (karena kita pakai Paged)
-	return nil, nil
-}
-
 func (r *lostDocumentRepository) SearchGlobal(query string) ([]models.LostDocument, error) {
 	var docs []models.LostDocument
 	db := r.db.Preload("Resident").Preload("Operator").Order("tanggal_laporan desc")
@@ -178,11 +172,8 @@ func (r *lostDocumentRepository) GetLastDocumentOfYear(tx *gorm.DB, year int) (*
 	if tx != nil { db = tx }
 	var doc models.LostDocument
 	var err error
-	
-	// Gunakan helper selectYear biar aman
 	yearSel := r.selectYear("created_at")
 	err = db.Unscoped().Where(fmt.Sprintf("%s = ?", yearSel), year).Order("id desc").First(&doc).Error
-	
 	return &doc, err
 }
 
@@ -190,6 +181,31 @@ func (r *lostDocumentRepository) CountByDateRange(start time.Time, end time.Time
 	var count int64
 	err := r.db.Model(&models.LostDocument{}).Where("tanggal_laporan BETWEEN ? AND ?", start, end).Count(&count).Error
 	return count, err
+}
+
+func (r *lostDocumentRepository) GetMonthlyIssuanceForYear(year int) ([]MonthlyCount, error) {
+	var results []MonthlyCount
+	yearSel := r.selectYear("tanggal_laporan")
+	monthSel := r.selectMonth("tanggal_laporan")
+	err := r.db.Model(&models.LostDocument{}).
+		Select(fmt.Sprintf("%s as year, %s as month, COUNT(id) as count", yearSel, monthSel)).
+		Where(fmt.Sprintf("%s = ?", yearSel), year).
+		Group("year, month").
+		Order("month asc").
+		Scan(&results).Error
+	return results, err
+}
+
+func (r *lostDocumentRepository) GetItemCompositionStats() ([]dto.ItemCompositionStat, error) {
+	var results []dto.ItemCompositionStat
+	err := r.db.Model(&models.LostItem{}).
+		Select("lost_items.nama_barang, COUNT(lost_items.id) as count").
+		Joins("JOIN lost_documents ON lost_documents.id = lost_items.lost_document_id").
+		Where(fmt.Sprintf("%s = ?", r.selectYear("lost_documents.tanggal_laporan")), time.Now().Year()).
+		Group("lost_items.nama_barang").
+		Order("count desc").
+		Scan(&results).Error
+	return results, err
 }
 
 func (r *lostDocumentRepository) FindExpiringDocumentsForUser(userID uint, start time.Time, end time.Time) ([]models.LostDocument, error) {
