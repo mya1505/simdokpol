@@ -3,9 +3,9 @@ package utils
 import (
 	"bytes"
 	"fmt"
-	"path/filepath"
+	"log"
 	"simdokpol/internal/dto"
-	// "simdokpol/internal/models" // <-- PERBAIKAN: HAPUS BARIS INI
+	"simdokpol/web" // <-- PENTING: Import package web untuk akses Assets
 	"strconv"
 	"strings"
 	"time"
@@ -47,6 +47,18 @@ func GenerateAggregateReportPDF(data *dto.AggregateReportData, config *dto.AppCo
 		loc:    loc,
 		pageN:  0,
 	}
+	
+	// --- SETUP LOGO DARI EMBED (FIX BUG CORRUPT PDF) ---
+	// Baca file logo dari memori (Embed FS), bukan dari disk fisik
+	logoBytes, err := web.Assets.ReadFile("static/img/logo.png")
+	if err == nil {
+		// Register gambar ke PDF engine dengan nama alias "logo_embed"
+		logoReader := bytes.NewReader(logoBytes)
+		r.pdf.RegisterImageOptionsReader("logo_embed", gofpdf.ImageOptions{ImageType: "PNG"}, logoReader)
+	} else {
+		log.Printf("WARNING REPORT PDF: Gagal load logo dari embed: %v", err)
+	}
+	// ---------------------------------------------------
 
 	r.addPage() // Tambah halaman pertama
 
@@ -60,12 +72,16 @@ func GenerateAggregateReportPDF(data *dto.AggregateReportData, config *dto.AppCo
 
 	// Finalisasi
 	var buffer bytes.Buffer
-	err := r.pdf.Output(&buffer)
+	err = r.pdf.Output(&buffer)
 	if err != nil {
-		// Jika terjadi error, kembalikan buffer error
+		// Jika masih error, log ke terminal dan return buffer kosong/error text
+		log.Printf("CRITICAL PDF ERROR: %v", err)
+		// Reset buffer dan tulis pesan error sederhana agar user tau
+		buffer.Reset()
+		r.pdf = gofpdf.New("P", "mm", "A4", "")
 		r.pdf.AddPage()
-		r.pdf.SetFont("Courier", "B", 16)
-		r.pdf.Cell(0, 10, "Gagal membuat PDF: "+err.Error())
+		r.pdf.SetFont("Courier", "B", 12)
+		r.pdf.Cell(0, 10, "Gagal generate PDF: "+err.Error())
 		r.pdf.Output(&buffer)
 	}
 
@@ -80,9 +96,10 @@ func (r *reportPdfGenerator) addPage() {
 	r.pdf.SetMargins(pdfMarginLeft, pdfMarginTop, pdfMarginRight)
 	r.pdf.SetAutoPageBreak(true, pdfMarginBottom)
 
-	// --- 1. KOP SURAT ---
-	logoPath := filepath.Join(r.exeDir, "web", "static", "img", "logo.png")
-	r.pdf.Image(logoPath, pdfMarginLeft, pdfMarginTop, 15, 0, false, "", 0, "")
+	// --- 1. KOP SURAT (LOGO DARI EMBED) ---
+	// Gunakan nama alias "logo_embed" yang sudah diregister di awal
+	// Koordinat X, Y, W, H
+	r.pdf.Image("logo_embed", pdfMarginLeft, pdfMarginTop, 15, 0, false, "", 0, "")
 	
 	r.pdf.SetFont("Courier", "B", 10)
 	kopWidth, _ := r.pdf.GetPageSize()
@@ -96,9 +113,9 @@ func (r *reportPdfGenerator) addPage() {
 	r.pdf.SetFont("Courier", "B", 11)
 	r.pdf.MultiCell(kopWidth, 4, r.config.KopBaris3, "", "C", false)
 
-	// Garis
+	// Garis KOP
 	yPos := r.pdf.GetY()
-	if yPos < pdfMarginTop+15 { yPos = pdfMarginTop + 15 } // Pastikan Y pos setelah logo
+	if yPos < pdfMarginTop+15 { yPos = pdfMarginTop + 15 } // Pastikan Y pos setelah logo minimal
 	r.pdf.SetLineWidth(0.5)
 	r.pdf.Line(pdfMarginLeft, yPos+1, 210-pdfMarginRight, yPos+1)
 	r.pdf.SetLineWidth(0.2)
@@ -120,6 +137,7 @@ func (r *reportPdfGenerator) addPage() {
 // drawReportTitle menggambar judul laporan
 func (r *reportPdfGenerator) drawReportTitle() {
 	r.pdf.SetFont("Courier", "BU", 12)
+	r.pdf.SetTextColor(0, 0, 0) // Reset warna ke hitam
 	r.pdf.CellFormat(0, pdfLineHeight*2, "LAPORAN AGREGAT DOKUMEN", "", 1, "C", false, 0, "")
 	
 	r.pdf.SetFont("Courier", "", 10)
@@ -229,7 +247,7 @@ func (r *reportPdfGenerator) drawDocumentListTable() {
 			// Cek jika butuh halaman baru
 			if r.pdf.GetY()+pdfLineHeight*1.5 > (297 - pdfMarginBottom) {
 				r.addPage()
-				r.pdf.Ln(pdfLineHeight) // Spasi dari KOP
+				r.pdf.Ln(pdfLineHeight) 
 				drawHeader()
 				r.pdf.SetFont("Courier", "", 8)
 			}
@@ -246,7 +264,7 @@ func (r *reportPdfGenerator) drawDocumentListTable() {
 
 // drawSignatureBlock menggambar blok tanda tangan
 func (r *reportPdfGenerator) drawSignatureBlock() {
-	// Cek jika butuh halaman baru
+	// Cek jika butuh halaman baru agar tanda tangan tidak terpotong
 	if r.pdf.GetY()+50 > (297 - pdfMarginBottom) {
 		r.addPage()
 		r.pdf.Ln(pdfLineHeight * 2)
@@ -264,15 +282,15 @@ func (r *reportPdfGenerator) drawSignatureBlock() {
 	r.pdf.SetFont("Courier", "B", 10)
 	r.pdf.MultiCell(70, pdfLineHeight, fmt.Sprintf("a.n. KEPALA KEPOLISIAN %s", strings.ToUpper(r.config.KopBaris3)), "", "C", false)
 	r.pdf.SetX(120)
-	r.pdf.MultiCell(70, pdfLineHeight, "KANIT SPKT I", "", "C", false) // Asumsi
+	r.pdf.MultiCell(70, pdfLineHeight, "KANIT SPKT", "", "C", false) // Jabatan bisa dibuat dinamis nanti
 	
 	r.pdf.Ln(pdfLineHeight * 3) // Spasi tanda tangan
 
-	// Nama & NRP
+	// Nama & NRP (Placeholder - bisa diambil dari config/user login jika perlu)
 	r.pdf.SetX(120)
 	r.pdf.SetFont("Courier", "BU", 10)
-	r.pdf.MultiCell(70, pdfLineHeight, "NAMA PEJABAT (DEFAULT)", "", "C", false) // TODO: Buat dinamis jika perlu
+	r.pdf.MultiCell(70, pdfLineHeight, "( .............................. )", "", "C", false)
 	r.pdf.SetX(120)
 	r.pdf.SetFont("Courier", "", 10)
-	r.pdf.MultiCell(70, pdfLineHeight, "PANGKAT / NRP. 12345678", "", "C", false)
+	r.pdf.MultiCell(70, pdfLineHeight, "NRP. .........................", "", "C", false)
 }
