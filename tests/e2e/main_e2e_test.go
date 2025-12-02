@@ -11,13 +11,14 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time" // <-- SUDAH DIPASTIKAN ADA
 
 	"github.com/stretchr/testify/assert"
 )
 
 const (
-	baseURL = "http://localhost:8080"
-	// FIX: Samakan dengan default di internal/services/license_service.go
+	baseURL       = "http://localhost:8080"
+	// Secret key default untuk dev/test environment
 	testSecretKey = "JANGAN_PAKAI_DEFAULT_KEY_INI_BAHAYA" 
 )
 
@@ -80,6 +81,7 @@ func waitForServer(t *testing.T) {
 }
 
 func performSetup(t *testing.T) {
+	// FIX: Gunakan payload DSN kosong agar backend menggunakan default path
 	payload := map[string]string{
 		"db_dialect": "sqlite", 
 		"db_dsn": "", 
@@ -145,7 +147,6 @@ func performLicenseActivation(t *testing.T, token string) {
 	hwid := hwidResp["hardware_id"]
 	assert.NotEmpty(t, hwid, "HWID tidak boleh kosong")
 
-	// Generate Key (HMAC Logic)
 	h := hmac.New(sha256.New, []byte(testSecretKey))
 	h.Write([]byte(hwid))
 	hash := h.Sum(nil)
@@ -253,7 +254,7 @@ func performCreateDocument(t *testing.T, token string) {
 	payload := map[string]interface{}{
 		"nama_lengkap": "WARGA TEST E2E",
 		"tempat_lahir": "JAKARTA",
-		"tanggal_lahir": "1990-01-01",
+		"tanggal_lahir": "1990-01-01", // Format YYYY-MM-DD
 		"jenis_kelamin": "Laki-laki",
 		"agama": "Islam",
 		"pekerjaan": "Wiraswasta",
