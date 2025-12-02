@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 	"simdokpol/internal/dto"
-	"simdokpol/web" // <-- PENTING: Import package web untuk akses Assets
+	"simdokpol/web"
 	"strconv"
 	"strings"
 	"time"
@@ -13,16 +13,25 @@ import (
 	"github.com/jung-kurt/gofpdf"
 )
 
-// Definisikan konstanta untuk PDF
+// Konstanta Layout (Disamakan dengan pdf_generator.go)
 const (
-	pdfMarginLeft   = 15.0
+	pdfMarginLeft   = 20.0
 	pdfMarginTop    = 15.0
-	pdfMarginRight  = 15.0
-	pdfMarginBottom = 20.0
-	pdfLineHeight   = 5.0
+	pdfMarginRight  = 20.0
+	pdfMarginBottom = 15.0
+	
+	lineHeightKop   = 3.8
+	lineHeight      = 4.2
+	
+	// Posisi Logo di tengah halaman (sesuai pdf_generator.go)
+	logoX           = 99.0
+	logoY           = 42.0
+	logoW           = 12.0
+	
+	// Awal konten setelah header
+	contentStartY   = 56.0
 )
 
-// reportPdfGenerator adalah struct helper untuk mengelola state PDF
 type reportPdfGenerator struct {
 	pdf    *gofpdf.Fpdf
 	config *dto.AppConfig
@@ -32,7 +41,7 @@ type reportPdfGenerator struct {
 	pageN  int
 }
 
-// GenerateAggregateReportPDF adalah fungsi publik utama
+// GenerateAggregateReportPDF membuat laporan dengan styling yang seragam dengan surat satuan
 func GenerateAggregateReportPDF(data *dto.AggregateReportData, config *dto.AppConfig, exeDir string) (*bytes.Buffer, string) {
 	loc, _ := time.LoadLocation(config.ZonaWaktu)
 	if loc == nil {
@@ -47,22 +56,19 @@ func GenerateAggregateReportPDF(data *dto.AggregateReportData, config *dto.AppCo
 		loc:    loc,
 		pageN:  0,
 	}
-	
-	// --- SETUP LOGO DARI EMBED (FIX BUG CORRUPT PDF) ---
-	// Baca file logo dari memori (Embed FS), bukan dari disk fisik
+
+	// Setup Embed Logo
 	logoBytes, err := web.Assets.ReadFile("static/img/logo.png")
 	if err == nil {
-		// Register gambar ke PDF engine dengan nama alias "logo_embed"
 		logoReader := bytes.NewReader(logoBytes)
 		r.pdf.RegisterImageOptionsReader("logo_embed", gofpdf.ImageOptions{ImageType: "PNG"}, logoReader)
 	} else {
-		log.Printf("WARNING REPORT PDF: Gagal load logo dari embed: %v", err)
+		log.Printf("WARNING REPORT PDF: Gagal load logo embed: %v", err)
 	}
-	// ---------------------------------------------------
 
-	r.addPage() // Tambah halaman pertama
+	r.addPage()
 
-	// Mulai menggambar konten
+	// Konten Laporan
 	r.drawReportTitle()
 	r.drawSummaryTable()
 	r.drawOperatorStatsTable()
@@ -70,227 +76,223 @@ func GenerateAggregateReportPDF(data *dto.AggregateReportData, config *dto.AppCo
 	r.drawDocumentListTable()
 	r.drawSignatureBlock()
 
-	// Finalisasi
 	var buffer bytes.Buffer
-	err = r.pdf.Output(&buffer)
-	if err != nil {
-		// Jika masih error, log ke terminal dan return buffer kosong/error text
+	if err := r.pdf.Output(&buffer); err != nil {
 		log.Printf("CRITICAL PDF ERROR: %v", err)
-		// Reset buffer dan tulis pesan error sederhana agar user tau
-		buffer.Reset()
-		r.pdf = gofpdf.New("P", "mm", "A4", "")
-		r.pdf.AddPage()
-		r.pdf.SetFont("Courier", "B", 12)
-		r.pdf.Cell(0, 10, "Gagal generate PDF: "+err.Error())
-		r.pdf.Output(&buffer)
+		return nil, ""
 	}
 
 	filename := fmt.Sprintf("Laporan_Agregat_%s_sd_%s.pdf", data.StartDate.Format("20060102"), data.EndDate.Format("20060102"))
 	return &buffer, filename
 }
 
-// addPage adalah helper untuk menambah halaman baru (dengan KOP dan footer)
+// addPage menambahkan halaman dengan Header Style 'Surat Keterangan'
 func (r *reportPdfGenerator) addPage() {
 	r.pageN++
 	r.pdf.AddPage()
 	r.pdf.SetMargins(pdfMarginLeft, pdfMarginTop, pdfMarginRight)
 	r.pdf.SetAutoPageBreak(true, pdfMarginBottom)
 
-	// --- 1. KOP SURAT (LOGO DARI EMBED) ---
-	// Gunakan nama alias "logo_embed" yang sudah diregister di awal
-	// Koordinat X, Y, W, H
-	r.pdf.Image("logo_embed", pdfMarginLeft, pdfMarginTop, 15, 0, false, "", 0, "")
+	// --- 1. KOP SURAT (Gaya Blok Kiri) ---
+	kopWidth := float64(60)
 	
+	// Baris 1 & 2 (Kecil Bold)
+	r.pdf.SetFont("Courier", "B", 9)
+	r.pdf.SetXY(pdfMarginLeft, 20) // Y=20 sesuai pdf_generator
+	r.pdf.MultiCell(kopWidth, lineHeightKop, r.config.KopBaris1, "", "C", false)
+	
+	r.pdf.SetX(pdfMarginLeft)
+	r.pdf.MultiCell(kopWidth, lineHeightKop, r.config.KopBaris2, "", "C", false)
+	
+	// Baris 3 (Besar Bold)
+	r.pdf.SetX(pdfMarginLeft)
 	r.pdf.SetFont("Courier", "B", 10)
-	kopWidth, _ := r.pdf.GetPageSize()
-	kopWidth -= (pdfMarginLeft + pdfMarginRight + 20) // 20 utk spasi logo
+	r.pdf.MultiCell(kopWidth, lineHeightKop, r.config.KopBaris3, "", "C", false)
 	
-	r.pdf.SetX(pdfMarginLeft + 20)
-	r.pdf.MultiCell(kopWidth, 4, r.config.KopBaris1, "", "C", false)
-	r.pdf.SetX(pdfMarginLeft + 20)
-	r.pdf.MultiCell(kopWidth, 4, r.config.KopBaris2, "", "C", false)
-	r.pdf.SetX(pdfMarginLeft + 20)
-	r.pdf.SetFont("Courier", "B", 11)
-	r.pdf.MultiCell(kopWidth, 4, r.config.KopBaris3, "", "C", false)
+	r.pdf.Ln(2)
 
-	// Garis KOP
-	yPos := r.pdf.GetY()
-	if yPos < pdfMarginTop+15 { yPos = pdfMarginTop + 15 } // Pastikan Y pos setelah logo minimal
-	r.pdf.SetLineWidth(0.5)
-	r.pdf.Line(pdfMarginLeft, yPos+1, 210-pdfMarginRight, yPos+1)
+	// Garis Bawah KOP (Hanya sepanjang teks KOP)
+	currentY := r.pdf.GetY()
+	r.pdf.SetLineWidth(0.3)
+	r.pdf.Line(pdfMarginLeft, currentY, pdfMarginLeft+kopWidth, currentY)
 	r.pdf.SetLineWidth(0.2)
-	
-	r.pdf.SetY(yPos + 3) // Pindah ke bawah garis
 
-	// --- 2. FOOTER HALAMAN ---
+	// --- 2. LOGO (Di Tengah) ---
+	// Menggunakan koordinat fix agar sama persis dengan surat satuan
+	r.pdf.Image("logo_embed", logoX, logoY, logoW, 0, false, "", 0, "")
+
+	// --- 3. SETUP AREA KONTEN ---
+	// Pindahkan kursor ke bawah logo untuk mulai menulis konten
+	r.pdf.SetY(contentStartY)
+
+	// Footer Halaman
 	r.pdf.SetFooterFunc(func() {
-		r.pdf.SetY(-pdfMarginBottom + 5) // 15mm dari bawah
+		r.pdf.SetY(-15)
 		r.pdf.SetFont("Courier", "I", 8)
 		r.pdf.SetTextColor(128, 128, 128)
-		// Teks Kiri
-		r.pdf.CellFormat(0, 10, fmt.Sprintf("SIMDOKPOL - Laporan Agregat v%s", r.config.KopBaris3), "", 0, "L", false, 0, "")
-		// Teks Kanan (Nomor Halaman)
 		r.pdf.CellFormat(0, 10, fmt.Sprintf("Halaman %d", r.pageN), "", 0, "R", false, 0, "")
+		r.pdf.SetTextColor(0, 0, 0) // Reset warna
 	})
 }
 
-// drawReportTitle menggambar judul laporan
 func (r *reportPdfGenerator) drawReportTitle() {
 	r.pdf.SetFont("Courier", "BU", 12)
-	r.pdf.SetTextColor(0, 0, 0) // Reset warna ke hitam
-	r.pdf.CellFormat(0, pdfLineHeight*2, "LAPORAN AGREGAT DOKUMEN", "", 1, "C", false, 0, "")
+	r.pdf.CellFormat(0, 6, "LAPORAN AGREGAT DOKUMEN", "", 1, "C", false, 0, "")
 	
 	r.pdf.SetFont("Courier", "", 10)
 	dateStr := fmt.Sprintf("Periode: %s s/d %s",
 		r.data.StartDate.In(r.loc).Format("02 January 2006"),
 		r.data.EndDate.In(r.loc).Format("02 January 2006"),
 	)
-	r.pdf.CellFormat(0, pdfLineHeight, dateStr, "", 1, "C", false, 0, "")
-	r.pdf.Ln(pdfLineHeight)
+	r.pdf.CellFormat(0, 5, dateStr, "", 1, "C", false, 0, "")
+	r.pdf.Ln(8)
 }
 
-// drawSummaryTable menggambar tabel ringkasan
 func (r *reportPdfGenerator) drawSummaryTable() {
 	r.pdf.SetFont("Courier", "B", 11)
-	r.pdf.Cell(0, pdfLineHeight*1.5, "Ringkasan Umum")
-	r.pdf.Ln(pdfLineHeight * 1.5)
+	r.pdf.Cell(0, 8, "Ringkasan Umum")
+	r.pdf.Ln(8)
 
 	r.pdf.SetFont("Courier", "", 10)
 	r.pdf.SetX(pdfMarginLeft + 5)
-	r.pdf.Cell(80, pdfLineHeight, "Total Dokumen Diterbitkan")
-	r.pdf.Cell(10, pdfLineHeight, ":")
+	r.pdf.Cell(60, 6, "Total Dokumen Diterbitkan")
+	r.pdf.Cell(5, 6, ":")
 	r.pdf.SetFont("Courier", "B", 10)
-	r.pdf.Cell(0, pdfLineHeight, fmt.Sprintf("%d Dokumen", r.data.TotalDocuments))
-	r.pdf.Ln(pdfLineHeight * 1.5)
+	r.pdf.Cell(0, 6, fmt.Sprintf("%d Dokumen", r.data.TotalDocuments))
+	r.pdf.Ln(10)
 }
 
-// drawOperatorStatsTable menggambar tabel statistik operator
 func (r *reportPdfGenerator) drawOperatorStatsTable() {
 	r.pdf.SetFont("Courier", "B", 11)
-	r.pdf.Cell(0, pdfLineHeight*1.5, "Statistik Aktivitas Operator")
-	r.pdf.Ln(pdfLineHeight * 1.5)
+	r.pdf.Cell(0, 8, "Statistik Aktivitas Operator")
+	r.pdf.Ln(8)
 	
-	// Header Tabel
+	// Header
 	r.pdf.SetFont("Courier", "B", 9)
-	r.pdf.SetFillColor(230, 230, 230)
-	r.pdf.CellFormat(20, pdfLineHeight*1.5, "No.", "1", 0, "C", true, 0, "")
-	r.pdf.CellFormat(100, pdfLineHeight*1.5, "Nama Operator", "1", 0, "L", true, 0, "")
-	r.pdf.CellFormat(60, pdfLineHeight*1.5, "Jumlah Dokumen", "1", 1, "C", true, 0, "")
+	r.pdf.SetFillColor(240, 240, 240)
+	r.pdf.CellFormat(15, 8, "No.", "1", 0, "C", true, 0, "")
+	r.pdf.CellFormat(100, 8, "Nama Operator", "1", 0, "L", true, 0, "")
+	r.pdf.CellFormat(55, 8, "Jumlah Dokumen", "1", 1, "C", true, 0, "")
 	
-	// Body Tabel
+	// Body
 	r.pdf.SetFont("Courier", "", 9)
 	if len(r.data.OperatorStats) == 0 {
-		r.pdf.CellFormat(180, pdfLineHeight*1.5, "Tidak ada aktivitas operator pada rentang tanggal ini.", "1", 1, "C", false, 0, "")
+		r.pdf.CellFormat(170, 8, "Tidak ada data.", "1", 1, "C", false, 0, "")
 	} else {
 		for i, stat := range r.data.OperatorStats {
-			r.pdf.CellFormat(20, pdfLineHeight*1.5, strconv.Itoa(i+1), "1", 0, "C", false, 0, "")
-			r.pdf.CellFormat(100, pdfLineHeight*1.5, fmt.Sprintf(" %s", stat.NamaLengkap), "1", 0, "L", false, 0, "")
-			r.pdf.CellFormat(60, pdfLineHeight*1.5, strconv.Itoa(stat.Count), "1", 1, "C", false, 0, "")
+			r.pdf.CellFormat(15, 7, strconv.Itoa(i+1), "1", 0, "C", false, 0, "")
+			r.pdf.CellFormat(100, 7, fmt.Sprintf(" %s", stat.NamaLengkap), "1", 0, "L", false, 0, "")
+			r.pdf.CellFormat(55, 7, strconv.Itoa(stat.Count), "1", 1, "C", false, 0, "")
 		}
 	}
-	r.pdf.Ln(pdfLineHeight)
+	r.pdf.Ln(8)
 }
 
-// drawItemCompositionTable menggambar tabel komposisi barang
 func (r *reportPdfGenerator) drawItemCompositionTable() {
 	r.pdf.SetFont("Courier", "B", 11)
-	r.pdf.Cell(0, pdfLineHeight*1.5, "Statistik Komposisi Barang Hilang")
-	r.pdf.Ln(pdfLineHeight * 1.5)
+	r.pdf.Cell(0, 8, "Statistik Barang Hilang")
+	r.pdf.Ln(8)
 
-	// Header Tabel
+	// Header
 	r.pdf.SetFont("Courier", "B", 9)
-	r.pdf.SetFillColor(230, 230, 230)
-	r.pdf.CellFormat(20, pdfLineHeight*1.5, "No.", "1", 0, "C", true, 0, "")
-	r.pdf.CellFormat(100, pdfLineHeight*1.5, "Jenis Barang", "1", 0, "L", true, 0, "")
-	r.pdf.CellFormat(60, pdfLineHeight*1.5, "Jumlah Laporan", "1", 1, "C", true, 0, "")
+	r.pdf.SetFillColor(240, 240, 240)
+	r.pdf.CellFormat(15, 8, "No.", "1", 0, "C", true, 0, "")
+	r.pdf.CellFormat(100, 8, "Jenis Barang", "1", 0, "L", true, 0, "")
+	r.pdf.CellFormat(55, 8, "Jumlah Laporan", "1", 1, "C", true, 0, "")
 
-	// Body Tabel
+	// Body
 	r.pdf.SetFont("Courier", "", 9)
 	if len(r.data.ItemComposition) == 0 {
-		r.pdf.CellFormat(180, pdfLineHeight*1.5, "Tidak ada laporan barang hilang pada rentang tanggal ini.", "1", 1, "C", false, 0, "")
+		r.pdf.CellFormat(170, 8, "Tidak ada data.", "1", 1, "C", false, 0, "")
 	} else {
 		for i, stat := range r.data.ItemComposition {
-			r.pdf.CellFormat(20, pdfLineHeight*1.5, strconv.Itoa(i+1), "1", 0, "C", false, 0, "")
-			r.pdf.CellFormat(100, pdfLineHeight*1.5, fmt.Sprintf(" %s", stat.NamaBarang), "1", 0, "L", false, 0, "")
-			r.pdf.CellFormat(60, pdfLineHeight*1.5, strconv.Itoa(stat.Count), "1", 1, "C", false, 0, "")
+			r.pdf.CellFormat(15, 7, strconv.Itoa(i+1), "1", 0, "C", false, 0, "")
+			r.pdf.CellFormat(100, 7, fmt.Sprintf(" %s", stat.NamaBarang), "1", 0, "L", false, 0, "")
+			r.pdf.CellFormat(55, 7, strconv.Itoa(stat.Count), "1", 1, "C", false, 0, "")
 		}
 	}
-	r.pdf.Ln(pdfLineHeight)
+	r.pdf.Ln(8)
 }
 
-// drawDocumentListTable menggambar tabel daftar dokumen (bisa multi-halaman)
 func (r *reportPdfGenerator) drawDocumentListTable() {
-	r.addPage() // Mulai daftar dokumen di halaman baru
+	// Paksa halaman baru untuk tabel rincian agar rapi
+	r.addPage()
+	
 	r.pdf.SetFont("Courier", "B", 11)
-	r.pdf.Cell(0, pdfLineHeight*1.5, "Daftar Lengkap Dokumen Diterbitkan")
-	r.pdf.Ln(pdfLineHeight * 1.5)
+	r.pdf.Cell(0, 8, "Rincian Dokumen")
+	r.pdf.Ln(8)
 
-	// Header Tabel
 	drawHeader := func() {
 		r.pdf.SetFont("Courier", "B", 8)
-		r.pdf.SetFillColor(230, 230, 230)
-		r.pdf.CellFormat(10, pdfLineHeight*1.5, "No", "1", 0, "C", true, 0, "")
-		r.pdf.CellFormat(25, pdfLineHeight*1.5, "Tgl Laporan", "1", 0, "C", true, 0, "")
-		r.pdf.CellFormat(55, pdfLineHeight*1.5, "Nomor Surat", "1", 0, "L", true, 0, "")
-		r.pdf.CellFormat(45, pdfLineHeight*1.5, "Pemohon", "1", 0, "L", true, 0, "")
-		r.pdf.CellFormat(45, pdfLineHeight*1.5, "Operator", "1", 1, "L", true, 0, "")
+		r.pdf.SetFillColor(240, 240, 240)
+		r.pdf.CellFormat(10, 8, "No", "1", 0, "C", true, 0, "")
+		r.pdf.CellFormat(25, 8, "Tanggal", "1", 0, "C", true, 0, "")
+		r.pdf.CellFormat(50, 8, "Nomor Surat", "1", 0, "L", true, 0, "")
+		r.pdf.CellFormat(45, 8, "Pemohon", "1", 0, "L", true, 0, "")
+		r.pdf.CellFormat(40, 8, "Operator", "1", 1, "L", true, 0, "")
 	}
 	
 	drawHeader()
 
-	// Body Tabel
 	r.pdf.SetFont("Courier", "", 8)
 	if len(r.data.DocumentList) == 0 {
-		r.pdf.CellFormat(180, pdfLineHeight*1.5, "Tidak ada dokumen diterbitkan pada rentang tanggal ini.", "1", 1, "C", false, 0, "")
+		r.pdf.CellFormat(170, 8, "Tidak ada dokumen.", "1", 1, "C", false, 0, "")
 	} else {
 		for i, doc := range r.data.DocumentList {
-			// Cek jika butuh halaman baru
-			if r.pdf.GetY()+pdfLineHeight*1.5 > (297 - pdfMarginBottom) {
+			// Cek sisa halaman, jika kurang buat halaman baru
+			if r.pdf.GetY() > 270 {
 				r.addPage()
-				r.pdf.Ln(pdfLineHeight) 
+				r.pdf.Ln(5)
 				drawHeader()
 				r.pdf.SetFont("Courier", "", 8)
 			}
 			
-			r.pdf.CellFormat(10, pdfLineHeight*1.5, strconv.Itoa(i+1), "1", 0, "C", false, 0, "")
-			r.pdf.CellFormat(25, pdfLineHeight*1.5, doc.TanggalLaporan.In(r.loc).Format("02-01-2006"), "1", 0, "C", false, 0, "")
-			r.pdf.CellFormat(55, pdfLineHeight*1.5, fmt.Sprintf(" %s", doc.NomorSurat), "1", 0, "L", false, 0, "")
-			r.pdf.CellFormat(45, pdfLineHeight*1.5, fmt.Sprintf(" %s", doc.Resident.NamaLengkap), "1", 0, "L", false, 0, "")
-			r.pdf.CellFormat(45, pdfLineHeight*1.5, fmt.Sprintf(" %s", doc.Operator.NamaLengkap), "1", 1, "L", false, 0, "")
+			r.pdf.CellFormat(10, 6, strconv.Itoa(i+1), "1", 0, "C", false, 0, "")
+			r.pdf.CellFormat(25, 6, doc.TanggalLaporan.In(r.loc).Format("02-01-2006"), "1", 0, "C", false, 0, "")
+			r.pdf.CellFormat(50, 6, fmt.Sprintf(" %s", doc.NomorSurat), "1", 0, "L", false, 0, "")
+			
+			// Truncate nama jika terlalu panjang
+			pemohon := doc.Resident.NamaLengkap
+			if len(pemohon) > 22 { pemohon = pemohon[:22] + "..." }
+			r.pdf.CellFormat(45, 6, fmt.Sprintf(" %s", pemohon), "1", 0, "L", false, 0, "")
+			
+			operator := doc.Operator.NamaLengkap
+			if len(operator) > 18 { operator = operator[:18] + "..." }
+			r.pdf.CellFormat(40, 6, fmt.Sprintf(" %s", operator), "1", 1, "L", false, 0, "")
 		}
 	}
-	r.pdf.Ln(pdfLineHeight)
+	r.pdf.Ln(8)
 }
 
-// drawSignatureBlock menggambar blok tanda tangan
 func (r *reportPdfGenerator) drawSignatureBlock() {
-	// Cek jika butuh halaman baru agar tanda tangan tidak terpotong
-	if r.pdf.GetY()+50 > (297 - pdfMarginBottom) {
+	// Cek sisa halaman
+	if r.pdf.GetY() > 240 {
 		r.addPage()
-		r.pdf.Ln(pdfLineHeight * 2)
 	}
 
 	r.pdf.SetFont("Courier", "", 10)
 	
-	// Tanggal
-	r.pdf.SetX(120)
-	r.pdf.MultiCell(70, pdfLineHeight, fmt.Sprintf("%s, %s", r.config.TempatSurat, time.Now().In(r.loc).Format("02 January 2006")), "", "C", false)
-	r.pdf.Ln(2)
-
-	// Jabatan
-	r.pdf.SetX(120)
-	r.pdf.SetFont("Courier", "B", 10)
-	r.pdf.MultiCell(70, pdfLineHeight, fmt.Sprintf("a.n. KEPALA KEPOLISIAN %s", strings.ToUpper(r.config.KopBaris3)), "", "C", false)
-	r.pdf.SetX(120)
-	r.pdf.MultiCell(70, pdfLineHeight, "KANIT SPKT", "", "C", false) // Jabatan bisa dibuat dinamis nanti
+	// Posisi kanan untuk TTD
+	xPos := 120.0
 	
-	r.pdf.Ln(pdfLineHeight * 3) // Spasi tanda tangan
+	r.pdf.SetX(xPos)
+	r.pdf.MultiCell(70, 5, fmt.Sprintf("%s, %s", r.config.TempatSurat, time.Now().In(r.loc).Format("02 January 2006")), "", "C", false)
+	r.pdf.Ln(1)
 
-	// Nama & NRP (Placeholder - bisa diambil dari config/user login jika perlu)
-	r.pdf.SetX(120)
+	r.pdf.SetX(xPos)
+	r.pdf.SetFont("Courier", "B", 10)
+	r.pdf.MultiCell(70, 5, fmt.Sprintf("a.n. KEPALA KEPOLISIAN %s", strings.ToUpper(r.config.KopBaris3)), "", "C", false)
+	
+	r.pdf.SetX(xPos)
+	r.pdf.MultiCell(70, 5, "KANIT SPKT", "", "C", false)
+	
+	r.pdf.Ln(20) // Ruang Tanda Tangan
+
+	r.pdf.SetX(xPos)
 	r.pdf.SetFont("Courier", "BU", 10)
-	r.pdf.MultiCell(70, pdfLineHeight, "( .............................. )", "", "C", false)
-	r.pdf.SetX(120)
+	r.pdf.MultiCell(70, 5, "( .............................. )", "", "C", false)
+	
+	r.pdf.SetX(xPos)
 	r.pdf.SetFont("Courier", "", 10)
-	r.pdf.MultiCell(70, pdfLineHeight, "NRP. .........................", "", "C", false)
+	r.pdf.MultiCell(70, 5, "NRP. .........................", "", "C", false)
 }
