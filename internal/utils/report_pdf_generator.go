@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"math" // <-- Tambah import Math
 	"simdokpol/internal/dto"
 	"simdokpol/web"
 	"strconv"
@@ -13,7 +14,6 @@ import (
 	"github.com/jung-kurt/gofpdf"
 )
 
-// Konstanta Layout (Disamakan dengan pdf_generator.go)
 const (
 	pdfMarginLeft   = 20.0
 	pdfMarginTop    = 15.0
@@ -23,12 +23,10 @@ const (
 	lineHeightKop   = 3.8
 	lineHeight      = 4.2
 	
-	// Posisi Logo di tengah halaman (sesuai pdf_generator.go)
 	logoX           = 99.0
 	logoY           = 42.0
 	logoW           = 12.0
 	
-	// Awal konten setelah header
 	contentStartY   = 56.0
 )
 
@@ -41,7 +39,6 @@ type reportPdfGenerator struct {
 	pageN  int
 }
 
-// GenerateAggregateReportPDF membuat laporan dengan styling yang seragam dengan surat satuan
 func GenerateAggregateReportPDF(data *dto.AggregateReportData, config *dto.AppConfig, exeDir string) (*bytes.Buffer, string) {
 	loc, _ := time.LoadLocation(config.ZonaWaktu)
 	if loc == nil {
@@ -57,7 +54,7 @@ func GenerateAggregateReportPDF(data *dto.AggregateReportData, config *dto.AppCo
 		pageN:  0,
 	}
 
-	// Setup Embed Logo
+	// Load Logo
 	logoBytes, err := web.Assets.ReadFile("static/img/logo.png")
 	if err == nil {
 		logoReader := bytes.NewReader(logoBytes)
@@ -68,7 +65,6 @@ func GenerateAggregateReportPDF(data *dto.AggregateReportData, config *dto.AppCo
 
 	r.addPage()
 
-	// Konten Laporan
 	r.drawReportTitle()
 	r.drawSummaryTable()
 	r.drawOperatorStatsTable()
@@ -86,19 +82,39 @@ func GenerateAggregateReportPDF(data *dto.AggregateReportData, config *dto.AppCo
 	return &buffer, filename
 }
 
-// addPage menambahkan halaman dengan Header Style 'Surat Keterangan'
 func (r *reportPdfGenerator) addPage() {
 	r.pageN++
 	r.pdf.AddPage()
 	r.pdf.SetMargins(pdfMarginLeft, pdfMarginTop, pdfMarginRight)
 	r.pdf.SetAutoPageBreak(true, pdfMarginBottom)
 
-	// --- 1. KOP SURAT (Gaya Blok Kiri) ---
-	kopWidth := float64(60)
+	// --- LOGIKA DINAMIS LEBAR KOP ---
+	// 1. Set font terbesar yang digunakan di KOP untuk pengukuran (Bold 10)
+	r.pdf.SetFont("Courier", "B", 10)
+
+	// 2. Ukur panjang masing-masing baris
+	w1 := r.pdf.GetStringWidth(r.config.KopBaris1)
+	w2 := r.pdf.GetStringWidth(r.config.KopBaris2)
+	w3 := r.pdf.GetStringWidth(r.config.KopBaris3)
+
+	// 3. Ambil yang paling panjang
+	maxWidth := math.Max(w1, math.Max(w2, w3))
+
+	// 4. Tambahkan padding dan Batasan
+	// Minimal 60mm, Maksimal 75mm (agar tidak menabrak logo di X=99)
+	kopWidth := maxWidth + 2.0 // Padding 2mm
 	
+	if kopWidth < 60.0 {
+		kopWidth = 60.0
+	}
+	if kopWidth > 75.0 {
+		kopWidth = 75.0 // Cap di 75mm agar tidak overlap logo
+	}
+	// --------------------------------
+
 	// Baris 1 & 2 (Kecil Bold)
 	r.pdf.SetFont("Courier", "B", 9)
-	r.pdf.SetXY(pdfMarginLeft, 20) // Y=20 sesuai pdf_generator
+	r.pdf.SetXY(pdfMarginLeft, 20)
 	r.pdf.MultiCell(kopWidth, lineHeightKop, r.config.KopBaris1, "", "C", false)
 	
 	r.pdf.SetX(pdfMarginLeft)
@@ -111,27 +127,23 @@ func (r *reportPdfGenerator) addPage() {
 	
 	r.pdf.Ln(2)
 
-	// Garis Bawah KOP (Hanya sepanjang teks KOP)
+	// Garis Bawah KOP (Dinamis mengikuti lebar kopWidth)
 	currentY := r.pdf.GetY()
 	r.pdf.SetLineWidth(0.3)
 	r.pdf.Line(pdfMarginLeft, currentY, pdfMarginLeft+kopWidth, currentY)
 	r.pdf.SetLineWidth(0.2)
 
-	// --- 2. LOGO (Di Tengah) ---
-	// Menggunakan koordinat fix agar sama persis dengan surat satuan
+	// Logo (Tetap di tengah)
 	r.pdf.Image("logo_embed", logoX, logoY, logoW, 0, false, "", 0, "")
 
-	// --- 3. SETUP AREA KONTEN ---
-	// Pindahkan kursor ke bawah logo untuk mulai menulis konten
 	r.pdf.SetY(contentStartY)
 
-	// Footer Halaman
 	r.pdf.SetFooterFunc(func() {
 		r.pdf.SetY(-15)
 		r.pdf.SetFont("Courier", "I", 8)
 		r.pdf.SetTextColor(128, 128, 128)
 		r.pdf.CellFormat(0, 10, fmt.Sprintf("Halaman %d", r.pageN), "", 0, "R", false, 0, "")
-		r.pdf.SetTextColor(0, 0, 0) // Reset warna
+		r.pdf.SetTextColor(0, 0, 0)
 	})
 }
 
@@ -167,14 +179,12 @@ func (r *reportPdfGenerator) drawOperatorStatsTable() {
 	r.pdf.Cell(0, 8, "Statistik Aktivitas Operator")
 	r.pdf.Ln(8)
 	
-	// Header
 	r.pdf.SetFont("Courier", "B", 9)
 	r.pdf.SetFillColor(240, 240, 240)
 	r.pdf.CellFormat(15, 8, "No.", "1", 0, "C", true, 0, "")
 	r.pdf.CellFormat(100, 8, "Nama Operator", "1", 0, "L", true, 0, "")
 	r.pdf.CellFormat(55, 8, "Jumlah Dokumen", "1", 1, "C", true, 0, "")
 	
-	// Body
 	r.pdf.SetFont("Courier", "", 9)
 	if len(r.data.OperatorStats) == 0 {
 		r.pdf.CellFormat(170, 8, "Tidak ada data.", "1", 1, "C", false, 0, "")
@@ -193,14 +203,12 @@ func (r *reportPdfGenerator) drawItemCompositionTable() {
 	r.pdf.Cell(0, 8, "Statistik Barang Hilang")
 	r.pdf.Ln(8)
 
-	// Header
 	r.pdf.SetFont("Courier", "B", 9)
 	r.pdf.SetFillColor(240, 240, 240)
 	r.pdf.CellFormat(15, 8, "No.", "1", 0, "C", true, 0, "")
 	r.pdf.CellFormat(100, 8, "Jenis Barang", "1", 0, "L", true, 0, "")
 	r.pdf.CellFormat(55, 8, "Jumlah Laporan", "1", 1, "C", true, 0, "")
 
-	// Body
 	r.pdf.SetFont("Courier", "", 9)
 	if len(r.data.ItemComposition) == 0 {
 		r.pdf.CellFormat(170, 8, "Tidak ada data.", "1", 1, "C", false, 0, "")
@@ -215,7 +223,6 @@ func (r *reportPdfGenerator) drawItemCompositionTable() {
 }
 
 func (r *reportPdfGenerator) drawDocumentListTable() {
-	// Paksa halaman baru untuk tabel rincian agar rapi
 	r.addPage()
 	
 	r.pdf.SetFont("Courier", "B", 11)
@@ -239,7 +246,6 @@ func (r *reportPdfGenerator) drawDocumentListTable() {
 		r.pdf.CellFormat(170, 8, "Tidak ada dokumen.", "1", 1, "C", false, 0, "")
 	} else {
 		for i, doc := range r.data.DocumentList {
-			// Cek sisa halaman, jika kurang buat halaman baru
 			if r.pdf.GetY() > 270 {
 				r.addPage()
 				r.pdf.Ln(5)
@@ -251,7 +257,6 @@ func (r *reportPdfGenerator) drawDocumentListTable() {
 			r.pdf.CellFormat(25, 6, doc.TanggalLaporan.In(r.loc).Format("02-01-2006"), "1", 0, "C", false, 0, "")
 			r.pdf.CellFormat(50, 6, fmt.Sprintf(" %s", doc.NomorSurat), "1", 0, "L", false, 0, "")
 			
-			// Truncate nama jika terlalu panjang
 			pemohon := doc.Resident.NamaLengkap
 			if len(pemohon) > 22 { pemohon = pemohon[:22] + "..." }
 			r.pdf.CellFormat(45, 6, fmt.Sprintf(" %s", pemohon), "1", 0, "L", false, 0, "")
@@ -265,14 +270,11 @@ func (r *reportPdfGenerator) drawDocumentListTable() {
 }
 
 func (r *reportPdfGenerator) drawSignatureBlock() {
-	// Cek sisa halaman
 	if r.pdf.GetY() > 240 {
 		r.addPage()
 	}
 
 	r.pdf.SetFont("Courier", "", 10)
-	
-	// Posisi kanan untuk TTD
 	xPos := 120.0
 	
 	r.pdf.SetX(xPos)
@@ -284,9 +286,9 @@ func (r *reportPdfGenerator) drawSignatureBlock() {
 	r.pdf.MultiCell(70, 5, fmt.Sprintf("a.n. KEPALA KEPOLISIAN %s", strings.ToUpper(r.config.KopBaris3)), "", "C", false)
 	
 	r.pdf.SetX(xPos)
-	r.pdf.MultiCell(70, 5, "KANIT SPKT", "", "C", false)
+	r.pdf.MultiCell(70, 5, "KANIT SPKT", "", "C", false) 
 	
-	r.pdf.Ln(20) // Ruang Tanda Tangan
+	r.pdf.Ln(20)
 
 	r.pdf.SetX(xPos)
 	r.pdf.SetFont("Courier", "BU", 10)
