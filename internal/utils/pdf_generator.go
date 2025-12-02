@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"math" // <-- Tambah Import Math
 	"simdokpol/internal/dto"
 	"simdokpol/internal/models"
-	"simdokpol/web" // Import package web (Embed)
+	"simdokpol/web" 
 	"strings"
 
 	"github.com/jung-kurt/gofpdf"
@@ -16,8 +17,8 @@ import (
 func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, exeDir string) (*bytes.Buffer, string) {
 	pdf := gofpdf.New("P", "mm", "A4", "")
 	pdf.AddPage()
-	pdf.SetMargins(20, 15, 20) // Atur margin Kiri, Atas, Kanan
-	pdf.SetAutoPageBreak(true, 15) // Margin Bawah
+	pdf.SetMargins(20, 15, 20)
+	pdf.SetAutoPageBreak(true, 15)
 
 	const (
 		lineHeight       = 4.2
@@ -25,60 +26,81 @@ func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, ex
 		spasiTtd         = 10
 		spasiTtdBermohon = 10
 		lineHeightItem   = 4
+		logoX            = 99.0 // Posisi X Logo (Tengah)
 	)
 
-	// --- LOAD LOGO DARI EMBED (SINGLE BINARY SAFE) ---
+	// --- LOAD LOGO DARI EMBED ---
 	logoBytes, err := web.Assets.ReadFile("static/img/logo.png")
 	if err == nil {
-		// Register gambar dari memory ke PDF engine
 		logoReader := bytes.NewReader(logoBytes)
 		pdf.RegisterImageOptionsReader("logo.png", gofpdf.ImageOptions{ImageType: "PNG"}, logoReader)
 	} else {
 		log.Printf("WARNING: Gagal load logo dari embed: %v", err)
 	}
 
-	// Helper untuk styling font
+	// Helper Styling
 	setFont := func(style string, size float64) {
 		pdf.SetFont("Courier", style, size)
 	}
 	
-	// Helper untuk text-align center halaman penuh
 	cellFitCenter := func(h float64, text string) {
 		pageWidth, _ := pdf.GetPageSize()
 		marginL, _, marginR, _ := pdf.GetMargins()
 		printableWidth := pageWidth - marginL - marginR
 		strWidth := pdf.GetStringWidth(text)
-		
-		// Hitung X agar tengah
 		x := marginL + (printableWidth - strWidth) / 2
 		pdf.SetX(x) 
 		pdf.Cell(strWidth, h, text)
 	}
 
-	// --- 1. KOP SURAT ---
-	kopWidth := float64(60)
+	// --- 1. KOP SURAT (DINAMIS) ---
 	
+	// Hitung Lebar Maksimal Teks KOP
+	setFont("B", 10) // Gunakan font terbesar di KOP untuk pengukuran
+	w1 := pdf.GetStringWidth(config.KopBaris1)
+	w2 := pdf.GetStringWidth(config.KopBaris2)
+	w3 := pdf.GetStringWidth(config.KopBaris3)
+
+	// Cari yang paling panjang
+	maxTextWidth := math.Max(w1, math.Max(w2, w3))
+
+	// Tambah padding & batasi (Min 60mm, Max 75mm agar tidak nabrak logo)
+	kopWidth := maxTextWidth + 2.0
+	if kopWidth < 60.0 {
+		kopWidth = 60.0
+	}
+	if kopWidth > 75.0 {
+		kopWidth = 75.0 // Mentok di 75mm biar aman dari logo di X=99
+	}
+
+	// Render KOP
 	setFont("B", 9)
 	pdf.SetY(20)
 	pdf.SetX(20)
 	pdf.MultiCell(kopWidth, lineHeightKop, config.KopBaris1, "", "C", false)
+	
 	pdf.SetX(20)
 	pdf.MultiCell(kopWidth, lineHeightKop, config.KopBaris2, "", "C", false)
+	
 	pdf.SetX(20)
 	setFont("B", 10)
 	pdf.MultiCell(kopWidth, lineHeightKop, config.KopBaris3, "", "C", false)
+	
 	pdf.Ln(2)
 
+	// Garis Bawah KOP (Dinamis mengikuti lebar)
 	currentY := pdf.GetY()
 	pdf.SetLineWidth(0.3)
 	pdf.Line(20, currentY, 20+kopWidth, currentY)
 	pdf.SetLineWidth(0.2)
 	pdf.Ln(2)
 
-	// --- 2. LOGO ---
+	// --- 2. LOGO (POSISI FIX DI TENGAH) ---
 	if err == nil {
-		pdf.Image("logo.png", 99, 42, 12, 0, false, "", 0, "")
+		pdf.Image("logo.png", logoX, 42, 12, 0, false, "", 0, "")
 	}
+	
+	// Geser Y ke bawah Header
 	pdf.SetY(56)
 	
 	// --- 3. JUDUL DOKUMEN ---
@@ -139,7 +161,6 @@ func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, ex
 	pdf.MultiCell(170, lineHeight, fmt.Sprintf("Yang bersangkutan tersebut di atas benar telah datang di Kantor %s dan melaporkan bahwa telah kehilangan surat berharga berupa :", config.NamaKantor), "", "J", false)
 	pdf.Ln(3)
 
-	// Daftar barang
 	for i, item := range doc.LostItems {
 		pdf.SetX(30)
 		line := fmt.Sprintf("- 1 (Buah) %s Dengan Keterangan : %s A.n Pelapor", strings.ToUpper(item.NamaBarang), item.Deskripsi)
@@ -151,12 +172,12 @@ func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, ex
 	}
 	pdf.Ln(3)
 
-	// --- 7. PARAGRAF PENUTUP (Lokasi Hilang) ---
+	// --- 7. PARAGRAF PENUTUP ---
 	pdf.SetX(20)
 	pdf.MultiCell(170, lineHeight, fmt.Sprintf("---- Surat/kartu tersebut hilang di sekitar %s, dan sudah dilakukan pencarian namun sampai dikeluarkan Surat Keterangan ini belum ditemukan.", doc.LokasiHilang), "", "J", false)
 	pdf.Ln(3)
 
-	// --- 8. BLOK YANG BERMOHON (Kanan) ---
+	// --- 8. BLOK YANG BERMOHON ---
 	pdf.SetX(120)
 	pdf.MultiCell(70, lineHeight, "Yang Bermohon", "", "C", false)
 	pdf.Ln(spasiTtdBermohon)
@@ -165,7 +186,7 @@ func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, ex
 	pdf.MultiCell(70, lineHeight, strings.ToUpper(doc.Resident.NamaLengkap), "", "C", false)
 	yPosAfterBermohon := pdf.GetY()
 
-	// --- 9. PARAGRAF PENUTUP 2 ---
+	// --- 9. PENUTUP AKHIR ---
 	setFont("", 11)
 	pdf.SetY(yPosAfterBermohon)
 	pdf.Ln(3)
@@ -199,9 +220,7 @@ func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, ex
 	pdf.MultiCell(165, lineHeightItem, "3. Surat Keterangan ini bukan sebagai pengganti surat yang hilang tetapi berguna untuk mengurus kembali surat yang hilang.", "", "L", false)
 	pdf.Ln(3)
 
-	// --- 11. BLOK TANDA TANGAN BAWAH ---
-	
-	// Tanggal
+	// --- 11. TANDA TANGAN ---
 	pdf.SetX(120)
 	pdf.MultiCell(70, lineHeight, fmt.Sprintf("%s, %s", config.TempatSurat, doc.TanggalLaporan.Format("02 January 2006")), "", "C", false)
 	pdf.Ln(2)
@@ -218,7 +237,7 @@ func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, ex
 		jabatanPelapor = fmt.Sprintf("%s %s", jabatanPelapor, doc.PetugasPelapor.Regu)
 	}
 
-	// Kolom Kiri (Pejabat Persetuju)
+	// Kiri
 	pdf.SetY(yPosTtd)
 	pdf.SetX(20)
 	setFont("B", 9)
@@ -233,7 +252,7 @@ func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, ex
 	pdf.SetX(20)
 	pdf.MultiCell(85, lineHeightKop, fmt.Sprintf("%s / NRP %s", strings.ToUpper(doc.PejabatPersetuju.Pangkat), doc.PejabatPersetuju.NRP), "", "C", false)
 
-	// Kolom Kanan (Penerima Laporan)
+	// Kanan
 	pdf.SetY(yPosTtd)
 	pdf.SetX(120)
 	setFont("B", 9)
@@ -248,7 +267,6 @@ func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, ex
 	pdf.SetX(120)
 	pdf.MultiCell(70, lineHeightKop, fmt.Sprintf("%s / NRP %s", strings.ToUpper(doc.PetugasPelapor.Pangkat), doc.PetugasPelapor.NRP), "", "C", false)
 
-	// --- FINALISASI ---
 	var buffer bytes.Buffer
 	err = pdf.Output(&buffer)
 	if err != nil {
