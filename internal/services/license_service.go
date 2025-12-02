@@ -26,7 +26,7 @@ const (
 	EnvLicenseKey           = "LICENSE_KEY"
 )
 
-var AppSecretKeyString = "SIMDOKPOL_SECRET_KEY_2025"
+var AppSecretKeyString = "JANGAN_PAKAI_DEFAULT_KEY_INI_BAHAYA"
 
 var (
 	ErrLicenseInvalid = errors.New("kunci lisensi tidak valid untuk mesin ini")
