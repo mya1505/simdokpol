@@ -264,7 +264,7 @@ func main() {
 	admin.POST("/api/backups", backupController.CreateBackup)
 	admin.POST("/api/restore", backupController.RestoreBackup)
 	admin.POST("/api/settings/migrate", configController.MigrateDatabase)
-	admin.POST("/api/settings/install-cert", settingsController.InstallCertificate)
+	admin.GET("/api/settings/download-cert", settingsController.DownloadCertificate)
 	admin.GET("/api/audit-logs", auditController.FindAll)
 	admin.GET("/api/audit-logs/export", auditController.Export)
 	admin.GET("/audit-logs", func(c *gin.Context) {

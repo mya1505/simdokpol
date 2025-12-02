@@ -19,7 +19,7 @@ $(document).ready(function() {
         }
     });
 
-    // 2. Cek Status Lisensi
+    // 2. Cek Status Lisensi (Untuk Update UI)
     function checkLicenseStatus() {
         $.ajax({
             url: "/api/settings", 
@@ -40,16 +40,14 @@ $(document).ready(function() {
             }
         });
     }
-    
-    // Delay sedikit agar transisi terlihat halus
     setTimeout(checkLicenseStatus, 500);
 
-    // 3. Handler Submit
+    // 3. Handler Submit Aktivasi
     $form.on('submit', function(e) {
         e.preventDefault();
         const key = $input.val().trim();
         
-        if (key.length < 20) { // Minimal check panjang key
+        if (key.length < 20) { 
             Swal.fire('Format Salah', 'Serial Key tampaknya terlalu pendek.', 'warning');
             return;
         }
@@ -63,14 +61,22 @@ $(document).ready(function() {
             contentType: "application/json",
             data: JSON.stringify({ key: key }),
             success: function(response) {
+                let timerInterval;
                 Swal.fire({
                     icon: 'success',
                     title: 'Aktivasi Berhasil!',
-                    text: 'Selamat! Fitur Pro telah aktif.',
-                    showConfirmButton: false,
-                    timer: 2000
+                    html: 'Fitur Pro terbuka. Sistem sedang dimuat ulang...<br>Mohon tunggu.',
+                    allowOutsideClick: false,
+                    timer: 5000, // 5 Detik waktu restart
+                    timerProgressBar: true,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    },
+                    willClose: () => {
+                        clearInterval(timerInterval);
+                    }
                 }).then(() => {
-                    window.location.reload();
+                    window.location.reload(); // Reload halaman
                 });
             },
             error: function(jqXHR) {

@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"simdokpol/internal/dto"
 	"simdokpol/internal/services"
+	"simdokpol/internal/utils" // <-- Tambah Import Utils
+	"time"                     // <-- Tambah Import Time
 
 	"github.com/gin-gonic/gin"
 )
@@ -16,8 +18,8 @@ type LicenseController struct {
 }
 
 func (c *LicenseController) GetHardwareID(ctx *gin.Context) {
-    hwid := c.service.GetHardwareID()
-    ctx.JSON(http.StatusOK, gin.H{"hardware_id": hwid})
+	hwid := c.service.GetHardwareID()
+	ctx.JSON(http.StatusOK, gin.H{"hardware_id": hwid})
 }
 
 func NewLicenseController(service services.LicenseService, auditService services.AuditLogService) *LicenseController {
@@ -28,16 +30,6 @@ func NewLicenseController(service services.LicenseService, auditService services
 }
 
 // @Summary Aktivasi Lisensi
-// @Description Memvalidasi dan mengaktifkan kunci lisensi (serial key) Pro.
-// @Tags License
-// @Accept json
-// @Produce json
-// @Param key body dto.LicenseRequest true "Kunci Lisensi"
-// @Success 200 {object} map[string]string "Pesan Sukses"
-// @Failure 400 {object} map[string]string "Error: Input tidak valid"
-// @Failure 401 {object} map[string]string "Error: Lisensi tidak valid"
-// @Failure 500 {object} map[string]string "Error: Terjadi kesalahan pada server"
-// @Security BearerAuth
 // @Router /license/activate [post]
 func (c *LicenseController) ActivateLicense(ctx *gin.Context) {
 	var req dto.LicenseRequest
@@ -59,5 +51,13 @@ func (c *LicenseController) ActivateLicense(ctx *gin.Context) {
 		return
 	}
 
-	APIResponse(ctx, http.StatusOK, "Lisensi berhasil diaktifkan!", license)
+	// --- FITUR BARU: AUTO RESTART ---
+	go func() {
+		time.Sleep(2 * time.Second) // Tunggu response terkirim ke frontend
+		log.Println("🔄 Lisensi Aktif. Melakukan Restart Otomatis...")
+		utils.RestartApp()
+	}()
+	// --------------------------------
+
+	APIResponse(ctx, http.StatusOK, "Lisensi berhasil diaktifkan! Sistem akan dimuat ulang...", license)
 }

@@ -76,7 +76,6 @@ $(document).ready(function () {
     }
     loadSettings();
 
-    // --- TOGGLE UI DATABASE ---
     function toggleDBSettings(dialect) {
         if (dialect === 'sqlite') {
             $('#sqlite-settings').slideDown(); $('#server-db-settings').slideUp();
@@ -85,14 +84,13 @@ $(document).ready(function () {
             $('#sqlite-settings').slideUp(); $('#server-db-settings').slideDown();
             $('#backup-btn, #restore-btn, #restore-file').prop('disabled', true);
             $('#settings-pg-ssl-group').slideDown();
-            
             if (dialect === 'mysql') $('#db_port').attr('placeholder', '3306');
             else if (dialect === 'postgres') $('#db_port').attr('placeholder', '5432');
         }
     }
     $('#db_dialect').change(function() { toggleDBSettings($(this).val()); });
 
-    // --- HELPER UNTUK RESTART OTOMATIS ---
+    // --- HELPER RESTART ---
     function handleRestartSequence(isRequired) {
         if (isRequired) {
             let timerInterval;
@@ -111,68 +109,60 @@ $(document).ready(function () {
         }
     }
 
-    // --- SUBMIT CONFIG (GENERAL) DENGAN LOGIC HTTPS ---
+    function submitPartialConfig(data, customSuccessMsg) {
+        Swal.fire({title: 'Menyimpan...', allowOutsideClick: false, didOpen: () => Swal.showLoading()});
+        $.ajax({
+            url: "/api/settings", method: "PUT", contentType: "application/json", data: JSON.stringify(data),
+            success: function(response) {
+                // --- LOGIC BARU: TAWARKAN DOWNLOAD SERTIFIKAT ---
+                if (response.check_https_cert) {
+                    Swal.fire({
+                        title: 'HTTPS Diaktifkan',
+                        html: `
+                            <p class="mb-3">Agar browser tidak menampilkan peringatan "Not Secure", Anda perlu memasang sertifikat.</p>
+                            <div class="text-center mb-3">
+                                <a href="/api/settings/download-cert" class="btn btn-success btn-lg shadow-sm" target="_blank">
+                                    <i class="fas fa-download mr-2"></i> Download Sertifikat (.crt)
+                                </a>
+                            </div>
+                            <p class="small text-muted text-left mb-0" style="line-height: 1.4;">
+                                <strong>Cara Pasang (Windows):</strong><br>
+                                1. Buka file yang didownload.<br>
+                                2. Klik "Install Certificate".<br>
+                                3. Pilih "Local Machine".<br>
+                                4. Pilih "Place all certificates in the following store" -> Browse -> "Trusted Root Certification Authorities".
+                            </p>
+                        `,
+                        icon: 'info',
+                        confirmButtonText: 'Saya Sudah Download, Restart Sekarang',
+                        confirmButtonColor: '#4e73df',
+                        allowOutsideClick: false
+                    }).then((result) => {
+                         // Setelah user konfirmasi, baru trigger restart via frontend (karena backend menunggu)
+                         // Sebenarnya backend sudah auto-restart jika tidak ada interaksi, 
+                         // tapi force reload di sini memastikan UX nyambung.
+                         
+                         // Kita panggil endpoint restart manual atau biarkan auto-restart backend bekerja
+                         handleRestartSequence(response.restart_required);
+                    });
+                } else {
+                    handleRestartSequence(response.restart_required);
+                }
+            },
+            error: function(xhr) { Swal.fire("Gagal", "Error saat menyimpan.", "error"); }
+        });
+    }
+
     $('#general-form').submit(function(e) {
         e.preventDefault();
-        
-        let data = {
+        submitPartialConfig({
             kop_baris_1: $("#kop_baris_1").val(), kop_baris_2: $("#kop_baris_2").val(), kop_baris_3: $("#kop_baris_3").val(),
             nama_kantor: $("#nama_kantor").val(), tempat_surat: $("#tempat_surat").val(),
             format_nomor_surat: $("#format_nomor_surat").val(), nomor_surat_terakhir: $("#nomor_surat_terakhir").val(),
             zona_waktu: $("#zona_waktu").val(), archive_duration_days: $("#archive_duration_days").val(),
             session_timeout: $("#session_timeout").val(), idle_timeout: $("#idle_timeout").val(),
             enable_https: $("#enable_https").is(":checked") ? "true" : "false"
-        };
-
-        Swal.fire({title: 'Menyimpan...', allowOutsideClick: false, didOpen: () => Swal.showLoading()});
-        
-        $.ajax({
-            url: "/api/settings", method: "PUT", contentType: "application/json", data: JSON.stringify(data),
-            success: function(response) {
-                // --- LOGIC BARU: TAWARKAN INSTALL SERTIFIKAT ---
-                if (response.check_https_cert) {
-                    Swal.fire({
-                        title: 'Install Sertifikat Keamanan?',
-                        text: "Agar browser tidak menampilkan layar merah 'Not Secure', sertifikat perlu diinstal ke Windows. Lakukan sekarang?",
-                        icon: 'question',
-                        showCancelButton: true,
-                        confirmButtonText: 'Ya, Install Otomatis',
-                        cancelButtonText: 'Tidak, Nanti Saja',
-                        confirmButtonColor: '#1cc88a'
-                    }).then((result) => {
-                        if (result.isConfirmed) {
-                            // Panggil API Install
-                            Swal.fire({
-                                title: 'Meminta Izin Administrator...',
-                                text: 'Silakan klik "Yes" pada popup Windows yang muncul.',
-                                icon: 'info',
-                                showConfirmButton: false,
-                                allowOutsideClick: false
-                            });
-                            
-                            $.ajax({
-                                url: "/api/settings/install-cert",
-                                method: "POST",
-                                success: function() {
-                                    handleRestartSequence(response.restart_required);
-                                },
-                                error: function() {
-                                    Swal.fire("Gagal", "Instalasi dibatalkan atau gagal.", "error")
-                                        .then(() => handleRestartSequence(response.restart_required));
-                                }
-                            });
-                        } else {
-                            // User pilih No, langsung restart
-                            handleRestartSequence(response.restart_required);
-                        }
-                    });
-                } else {
-                    // Tidak aktifkan HTTPS, langsung proses restart biasa
-                    handleRestartSequence(response.restart_required);
-                }
-            },
-            error: function(xhr) { Swal.fire("Gagal", "Error saat menyimpan.", "error"); }
-        });
+        }, "Pengaturan Umum disimpan.");
     });
 
     $('#database-form').submit(function(e) {
@@ -183,17 +173,10 @@ $(document).ready(function () {
             db_sslmode: $("#db_sslmode").val()
         };
         if(data.db_pass === "") delete data.db_pass;
-        
-        // Database config tidak butuh cek HTTPS cert
-        Swal.fire({title: 'Menyimpan...', allowOutsideClick: false, didOpen: () => Swal.showLoading()});
-        $.ajax({
-            url: "/api/settings", method: "PUT", contentType: "application/json", data: JSON.stringify(data),
-            success: function(response) { handleRestartSequence(response.restart_required); },
-            error: function(xhr) { Swal.fire("Gagal", "Error saat menyimpan DB.", "error"); }
-        });
+        submitPartialConfig(data);
     });
 
-    // --- TEST DB & MIGRASI (SAMA SEPERTI SEBELUMNYA) ---
+    // ... (Sisa script Test DB & Migrasi SAMA PERSIS dengan sebelumnya) ...
     $('#test-db-btn').click(function() {
         let btn = $(this); btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Test...');
         let payload = {

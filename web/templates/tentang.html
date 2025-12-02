@@ -66,15 +66,6 @@
         font-size: 1.2rem;
         word-break: break-all; /* Agar tidak overflow di mobile */
     }
-    
-    /* Serial Key Input */
-    .serial-input {
-        font-family: 'Courier New', Courier, monospace;
-        letter-spacing: 2px;
-        text-align: center;
-        font-size: 1.1rem;
-        text-transform: uppercase;
-    }
 </style>
 
 
@@ -180,6 +171,10 @@
                             </div>
 
                             <div id="license-form-group" style="display: none;">
+                                <div class="text-center mb-3">
+                                    <span class="badge badge-secondary px-3 py-2">VERSI GRATIS</span>
+                                </div>
+                                
                                 <div class="hwid-box mb-4 text-center">
                                     <small class="text-uppercase text-gray-500 font-weight-bold">Hardware ID Anda</small>
                                     <div class="d-flex justify-content-center align-items-center mt-2">
@@ -188,22 +183,15 @@
                                             <i class="fas fa-copy"></i>
                                         </button>
                                     </div>
-                                    <small class="d-block mt-2 text-gray-500">Kirim ID ini ke Admin untuk mendapatkan Serial Key.</small>
+                                    <small class="d-block mt-2 text-gray-500">ID ini digunakan untuk generate lisensi.</small>
                                 </div>
 
-                                <form id="license-form">
-                                    <div class="form-group">
-                                        <label class="small font-weight-bold text-gray-700">Serial Key Aktivasi</label>
-                                        <input type="text" class="form-control serial-input" 
-                                               id="serial_key" 
-                                               placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX"
-                                               maxlength="29" 
-                                               required>
-                                    </div>
-                                    <button type="submit" class="btn btn-primary btn-block font-weight-bold shadow-sm">
-                                        <i class="fas fa-unlock-alt mr-2"></i>Aktifkan Sekarang
-                                    </button>
-                                </form>
+                                <div class="text-center">
+                                    <p class="small text-gray-600 mb-3">Ingin membuka semua fitur? Lakukan aktivasi sekarang.</p>
+                                    <a href="/upgrade" class="btn btn-primary btn-block font-weight-bold shadow-sm">
+                                        <i class="fas fa-rocket mr-2"></i> Upgrade ke Pro
+                                    </a>
+                                </div>
                             </div>
 
                         </div>
@@ -221,7 +209,7 @@
 {{template "_licenseScript.html" .}}
 
 <script>
-// Script Khusus Halaman Tentang (Tombol Copy & Formatter)
+// Script Khusus Halaman Tentang (Tombol Copy)
 $(document).ready(function() {
     
     // --- FUNGSI UTAMA: COPY HWID DENGAN FALLBACK ---
@@ -231,16 +219,12 @@ $(document).ready(function() {
             return navigator.clipboard.writeText(text);
         } else {
             // Cara Fallback (Aman untuk HTTP)
-            // Membuat textarea sementara, isi data, select, copy, lalu hapus
             let textArea = document.createElement("textarea");
             textArea.value = text;
-            
-            // Pastikan textarea tidak terlihat
             textArea.style.position = "fixed";
             textArea.style.left = "-9999px";
             textArea.style.top = "0";
             document.body.appendChild(textArea);
-            
             textArea.focus();
             textArea.select();
             
@@ -266,7 +250,6 @@ $(document).ready(function() {
         const hwid = $('#hardware-id-val').text();
         if (hwid && hwid !== '...' && hwid !== 'ERROR') {
             copyToClipboard(hwid).then(function() {
-                // Efek Sukses
                 const $btn = $('#copy-hwid-btn');
                 const originalHtml = $btn.html();
                 
@@ -297,19 +280,6 @@ $(document).ready(function() {
                 });
             });
         }
-    });
-    
-    // Auto-format input serial key (tambah dash otomatis)
-    $('#serial_key').on('input', function() {
-        let val = $(this).val().toUpperCase().replace(/[^A-Z2-7]/g, ''); // Base32 chars only
-        let formatted = '';
-        for(let i = 0; i < val.length; i++) {
-            if(i > 0 && i % 5 === 0) {
-                formatted += '-';
-            }
-            formatted += val[i];
-        }
-        $(this).val(formatted);
     });
 });
 </script>

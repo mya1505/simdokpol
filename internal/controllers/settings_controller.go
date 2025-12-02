@@ -3,9 +3,11 @@ package controllers
 import (
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"simdokpol/internal/models"
 	"simdokpol/internal/services"
-	"simdokpol/internal/utils" // Pastikan import utils ada
+	"simdokpol/internal/utils"
 	"strings"
 	"time"
 
@@ -41,7 +43,7 @@ func (c *SettingsController) UpdateSettings(ctx *gin.Context) {
 		return
 	}
 
-	// Validasi keamanan Path Traversal
+	// Validasi keamanan
 	if path, exists := settings["backup_path"]; exists {
 		if strings.Contains(path, "..") {
 			APIError(ctx, http.StatusBadRequest, "Path tidak valid.")
@@ -68,7 +70,7 @@ func (c *SettingsController) UpdateSettings(ctx *gin.Context) {
 	// --- LOGIC DETEKSI RESTART ---
 	restartRequired := false
 	criticalKeys := []string{"db_dialect", "db_host", "db_port", "db_name", "db_user", "db_pass", "db_dsn", "db_sslmode", "enable_https"}
-
+	
 	for _, key := range criticalKeys {
 		if _, exists := settings[key]; exists {
 			restartRequired = true
@@ -76,12 +78,10 @@ func (c *SettingsController) UpdateSettings(ctx *gin.Context) {
 		}
 	}
 
-	// --- LOGIC DETEKSI HTTPS AKTIF ---
-	// Cek apakah user baru saja mengaktifkan HTTPS (dari sebelumnya mati/tidak ada)
-	// Kita kirim flag 'check_https_cert' ke frontend jika enable_https = "true"
-	askForCertInstall := false
+	// Cek apakah HTTPS baru saja diaktifkan?
+	askForCert := false
 	if val, ok := settings["enable_https"]; ok && val == "true" {
-		askForCertInstall = true
+		askForCert = true
 	}
 
 	if err := c.configService.SaveConfig(settings); err != nil {
@@ -98,9 +98,8 @@ func (c *SettingsController) UpdateSettings(ctx *gin.Context) {
 	c.auditService.LogActivity(actorID, models.AuditSettingsUpdated, logDetail)
 
 	// --- AUTO RESTART SEQUENCE ---
-	// Hanya restart otomatis JIKA tidak perlu prompt sertifikat.
-	// Jika perlu prompt, frontend yang akan handle restart setelah user klik Yes/No.
-	if restartRequired && !askForCertInstall {
+	// Restart otomatis hanya jika TIDAK perlu interaksi user (seperti download sertifikat)
+	if restartRequired && !askForCert {
 		go func() {
 			time.Sleep(2 * time.Second)
 			log.Println("Melakukan restart otomatis karena perubahan konfigurasi...")
@@ -114,18 +113,24 @@ func (c *SettingsController) UpdateSettings(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{
 		"message":          "Pengaturan berhasil disimpan.",
 		"restart_required": restartRequired,
-		"check_https_cert": askForCertInstall, // <-- Flag Baru
+		"check_https_cert": askForCert,
 	})
 }
 
-// InstallCertificate menghandle request instalasi sertifikat
-// @Router /api/settings/install-cert [post]
-func (c *SettingsController) InstallCertificate(ctx *gin.Context) {
-	// Panggil utilitas sistem
-	if err := utils.InstallCertToSystem(); err != nil {
-		log.Printf("Gagal install sertifikat: %v", err)
-		APIError(ctx, http.StatusInternalServerError, "Gagal menginstal sertifikat. Pastikan Anda klik 'Yes' pada popup Administrator.")
-		return
+// DownloadCertificate mengizinkan user mengunduh file CRT untuk diinstall manual
+// @Router /api/settings/download-cert [get]
+func (c *SettingsController) DownloadCertificate(ctx *gin.Context) {
+	certDir := filepath.Join(utils.GetAppDataDir(), "certs")
+	certPath := filepath.Join(certDir, "server.crt")
+	
+	// Pastikan file ada
+	if _, err := os.Stat(certPath); os.IsNotExist(err) {
+		// Jika belum ada, generate dulu
+		utils.EnsureCertificates()
 	}
-	APIResponse(ctx, http.StatusOK, "Sertifikat berhasil diinstal ke Trusted Root!", nil)
+
+	ctx.Header("Content-Description", "File Transfer")
+	ctx.Header("Content-Disposition", "attachment; filename=simdokpol_cert.crt")
+	ctx.Header("Content-Type", "application/x-x509-ca-cert")
+	ctx.File(certPath)
 }
