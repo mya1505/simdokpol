@@ -2,8 +2,10 @@ package services
 
 import (
 	"fmt"
+	"log"
 	"simdokpol/internal/dto"
 	"simdokpol/internal/models"
+	"strings"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
@@ -14,7 +16,6 @@ import (
 )
 
 type DataMigrationService interface {
-	// Update signature: Tambah channel untuk progress report
 	MigrateDataTo(targetConfig dto.DBTestRequest, actorID uint, progressChan chan<- dto.MigrationProgress) error
 }
 
@@ -33,7 +34,6 @@ func NewDataMigrationService(currentDB *gorm.DB, auditService AuditLogService, c
 }
 
 func (s *dataMigrationService) MigrateDataTo(target dto.DBTestRequest, actorID uint, progressChan chan<- dto.MigrationProgress) error {
-	// Helper kirim progress
 	report := func(step string, pct int, msg string) {
 		if progressChan != nil {
 			progressChan <- dto.MigrationProgress{Step: step, Percent: pct, Message: msg}
@@ -46,6 +46,10 @@ func (s *dataMigrationService) MigrateDataTo(target dto.DBTestRequest, actorID u
 		return fmt.Errorf("gagal koneksi ke target database: %w", err)
 	}
 	
+	// Tutup koneksi saat selesai function ini (agar tidak leak connection)
+	sqlDB, _ := targetDB.DB()
+	defer sqlDB.Close()
+
 	report("schema", 10, "Membuat struktur tabel...")
 	err = targetDB.AutoMigrate(
 		&models.Configuration{}, &models.User{}, &models.Resident{},
@@ -56,8 +60,7 @@ func (s *dataMigrationService) MigrateDataTo(target dto.DBTestRequest, actorID u
 		return fmt.Errorf("gagal membuat tabel di target: %w", err)
 	}
 
-	// --- MATIKAN FOREIGN KEY CHECKS (CRITICAL FIX) ---
-	// Ini mencegah error FK saat insert data yang urutannya mungkin acak atau circular
+	// Matikan FK Checks sementara
 	switch target.DBDialect {
 	case "mysql":
 		targetDB.Exec("SET FOREIGN_KEY_CHECKS = 0")
@@ -66,15 +69,9 @@ func (s *dataMigrationService) MigrateDataTo(target dto.DBTestRequest, actorID u
 		targetDB.Exec("PRAGMA foreign_keys = OFF")
 		defer targetDB.Exec("PRAGMA foreign_keys = ON")
 	case "postgres":
-		// Superuser required. Jika gagal, kita andalkan urutan insert yang benar.
-		// session_replication_role = replica menonaktifkan trigger dan FK check
 		targetDB.Exec("SET session_replication_role = 'replica'")
 		defer targetDB.Exec("SET session_replication_role = 'origin'")
 	}
-
-	// --- PROSES SALIN DATA (FIX: UNSCOPED) ---
-	// Kita gunakan Unscoped() agar data soft-deleted (DeletedAt != NULL) tetap tersalin.
-	// Ini mencegah error FK jika dokumen mereferensi user yang sudah dihapus.
 
 	tables := []struct {
 		Name  string
@@ -84,9 +81,9 @@ func (s *dataMigrationService) MigrateDataTo(target dto.DBTestRequest, actorID u
 		{"Konfigurasi", &models.Configuration{}, 15},
 		{"Lisensi", &models.License{}, 20},
 		{"Template Barang", &models.ItemTemplate{}, 25},
-		{"Pengguna", &models.User{}, 35}, // User dulu
-		{"Penduduk", &models.Resident{}, 45}, // Lalu Resident
-		{"Dokumen", &models.LostDocument{}, 60}, // Baru Dokumen (refer ke User & Resident)
+		{"Pengguna", &models.User{}, 35},
+		{"Penduduk", &models.Resident{}, 45},
+		{"Dokumen", &models.LostDocument{}, 60},
 		{"Barang Hilang", &models.LostItem{}, 80},
 		{"Log Audit", &models.AuditLog{}, 90},
 	}
@@ -105,9 +102,7 @@ func (s *dataMigrationService) MigrateDataTo(target dto.DBTestRequest, actorID u
 }
 
 func (s *dataMigrationService) copyTable(src, dest *gorm.DB, model interface{}) error {
-	// FIX: Tambahkan Unscoped() agar data terhapus tetap tersalin
 	return src.Unscoped().Model(model).FindInBatches(model, 100, func(tx *gorm.DB, batch int) error {
-		// Gunakan Clauses OnConflict DoNothing agar idempotency terjaga
 		return dest.Clauses(clause.OnConflict{DoNothing: true}).Create(tx.Statement.Dest).Error
 	}).Error
 }
@@ -115,6 +110,21 @@ func (s *dataMigrationService) copyTable(src, dest *gorm.DB, model interface{}) 
 func (s *dataMigrationService) openTargetConnection(req dto.DBTestRequest) (*gorm.DB, error) {
 	var dsn string
 	var dialector gorm.Dialector
+
+	// --- FITUR BARU: AUTO CLEAN INPUT ---
+	// Jika user memasukkan "host:port" di kolom host, kita pisahkan otomatis
+	if strings.Contains(req.DBHost, ":") {
+		parts := strings.Split(req.DBHost, ":")
+		if len(parts) == 2 {
+			req.DBHost = parts[0]
+			// Override port hanya jika port input default/kosong, atau user ingin override
+			req.DBPort = parts[1] 
+			log.Printf("INFO: Host mengandung port, dipisahkan otomatis: Host=%s, Port=%s", req.DBHost, req.DBPort)
+		}
+	}
+	// Note: Kalau user input "host5432" (tanpa titik dua), code tidak bisa menebak. 
+	// User harus perbaiki manual.
+	// ------------------------------------
 
 	switch req.DBDialect {
 	case "mysql":
