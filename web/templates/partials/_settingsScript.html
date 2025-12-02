@@ -5,14 +5,14 @@ $(document).ready(function () {
     $("body").on("input", ".auto-titlecase", function () { $(this).val(toTitleCase($(this).val())); });
     function toTitleCase(str) { return str.replace(/\w\S*/g, function(txt) { return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase(); }); }
 
-    // --- LOAD SETTINGS & CEK LICENSE ---
+    // --- LOAD SETTINGS ---
     function loadSettings() {
         $.ajax({
             url: "/api/settings", method: "GET",
             success: function (s) {
                 if (!s) return;
 
-                // UMUM
+                // Form fill
                 $("#kop_baris_1").val(s.kop_baris_1); $("#kop_baris_2").val(s.kop_baris_2); $("#kop_baris_3").val(s.kop_baris_3);
                 $("#nama_kantor").val(s.nama_kantor); $("#tempat_surat").val(s.tempat_surat);
                 $("#format_nomor_surat").val(s.format_nomor_surat); $("#nomor_surat_terakhir").val(s.nomor_surat_terakhir);
@@ -20,20 +20,16 @@ $(document).ready(function () {
                 $("#session_timeout").val(s.session_timeout); $("#idle_timeout").val(s.idle_timeout);
                 $("#enable_https").prop('checked', s.enable_https);
 
-                // DATABASE
+                // DB Config
                 $("#db_dialect").val(s.db_dialect || 'sqlite');
                 $("#db_dsn").val(s.db_dsn);
                 $("#db_host").val(s.db_host); $("#db_port").val(s.db_port);
                 $("#db_name").val(s.db_name); $("#db_user").val(s.db_user);
                 $("#db_sslmode").val(s.db_sslmode || 'disable');
-
-                // BACKUP
                 $("#backup_path").val(s.backup_path);
 
-                // --- LOGIKA LISENSI PRO ---
+                // Logic Pro
                 const isPro = (s.license_status === 'VALID');
-                
-                // Reset State
                 $('#enable_https').prop('disabled', false);
                 $('#https-pro-badge').hide();
                 $('#db_dialect option').prop('disabled', false).each(function() { $(this).text($(this).text().replace(' (Fitur Pro 🔒)', '')); });
@@ -42,15 +38,12 @@ $(document).ready(function () {
                 $('#btn-migrate').html('<i class="fas fa-rocket mr-2"></i> Mulai Migrasi Data').removeClass('btn-secondary').addClass('btn-warning');
 
                 if (!isPro) {
-                    // KUNCI FITUR PRO
                     $('#enable_https').prop('disabled', true);
                     $('#https-pro-badge').show();
-                    
                     if (s.db_dialect === 'sqlite') {
                         $('#db_dialect option[value="mysql"]').prop('disabled', true).text('MySQL (Fitur Pro 🔒)');
                         $('#db_dialect option[value="postgres"]').prop('disabled', true).text('PostgreSQL (Fitur Pro 🔒)');
                     }
-                    
                     $('#migration-form input, #migration-form select').prop('disabled', true);
                     $('#btn-migrate').prop('disabled', true).removeClass('btn-warning').addClass('btn-secondary').html('<i class="fas fa-lock mr-2"></i> Fitur Terkunci (Pro Only)');
                     
@@ -59,19 +52,14 @@ $(document).ready(function () {
                             <div id="pro-migration-alert" class="alert alert-danger border-left-danger shadow-sm">
                                 <div class="d-flex align-items-center">
                                     <div class="mr-3"><i class="fas fa-lock fa-2x"></i></div>
-                                    <div>
-                                        <h5 class="alert-heading font-weight-bold mb-1">Fitur Pro Terkunci</h5>
-                                        <p class="mb-0">Fitur HTTPS, Database Server, dan Migrasi hanya tersedia di versi Pro. Silakan aktivasi lisensi.</p>
-                                    </div>
+                                    <div><h5 class="alert-heading font-weight-bold mb-1">Fitur Pro Terkunci</h5><p class="mb-0">Upgrade ke Pro untuk membuka fitur HTTPS dan Database Server.</p></div>
                                 </div>
                             </div>
                         `);
                     }
                 }
-
                 toggleDBSettings(s.db_dialect || 'sqlite');
-            },
-            error: function() { Swal.fire("Error", "Gagal memuat data.", "error"); }
+            }
         });
     }
     loadSettings();
@@ -90,7 +78,6 @@ $(document).ready(function () {
     }
     $('#db_dialect').change(function() { toggleDBSettings($(this).val()); });
 
-    // --- HELPER RESTART ---
     function handleRestartSequence(isRequired) {
         if (isRequired) {
             let timerInterval;
@@ -98,9 +85,7 @@ $(document).ready(function () {
                 title: 'Sistem Dimulai Ulang', 
                 html: 'Konfigurasi tersimpan. Restart otomatis...<br>Mohon tunggu...', 
                 icon: 'success',
-                timer: 5000, 
-                timerProgressBar: true, 
-                allowOutsideClick: false,
+                timer: 5000, timerProgressBar: true, allowOutsideClick: false,
                 didOpen: () => Swal.showLoading(), 
                 willClose: () => clearInterval(timerInterval)
             }).then(() => window.location.reload());
@@ -109,13 +94,57 @@ $(document).ready(function () {
         }
     }
 
+    // --- DETEKSI OS UNTUK INSTRUKSI SERTIFIKAT ---
+    function getCertInstructions() {
+        const platform = navigator.platform.toLowerCase();
+        const userAgent = navigator.userAgent.toLowerCase();
+        
+        if (platform.indexOf('win') !== -1) {
+            // WINDOWS
+            return `
+                <strong>Cara Pasang (Windows):</strong><br>
+                1. Buka file .crt yang didownload.<br>
+                2. Klik "Install Certificate".<br>
+                3. Pilih "Local Machine" -> Next.<br>
+                4. Pilih "Place all certificates in the following store".<br>
+                5. Browse -> Pilih "Trusted Root Certification Authorities" -> OK -> Next -> Finish.
+            `;
+        } else if (platform.indexOf('linux') !== -1 || userAgent.indexOf('linux') !== -1) {
+            // LINUX (Termasuk Manjaro/Arch/Ubuntu)
+            return `
+                <strong>Cara Pasang (Linux / Manjaro / Ubuntu):</strong><br>
+                1. Buka Terminal di folder Download.<br>
+                2. Copy sertifikat ke trust store:<br>
+                   <code style="background:#eee; padding:2px;">sudo cp simdokpol_cert.crt /usr/local/share/ca-certificates/simdokpol.crt</code><br>
+                   <em>(Untuk Manjaro/Arch: /etc/ca-certificates/trust-source/anchors/)</em><br>
+                3. Update trust database:<br>
+                   <code style="background:#eee; padding:2px;">sudo update-ca-certificates</code><br>
+                   <em>(Untuk Manjaro/Arch: sudo update-ca-trust)</em><br>
+                4. Restart Browser.
+            `;
+        } else if (platform.indexOf('mac') !== -1) {
+            // MACOS
+            return `
+                <strong>Cara Pasang (macOS):</strong><br>
+                1. Klik ganda file .crt untuk membuka Keychain Access.<br>
+                2. Masukkan ke keychain "System".<br>
+                3. Klik kanan sertifikat "SIMDOKPOL Local Server" -> Get Info.<br>
+                4. Buka menu "Trust", set "When using this certificate" menjadi "Always Trust".
+            `;
+        } else {
+            return "Silakan install sertifikat ini ke Trusted Root Store perangkat Anda secara manual.";
+        }
+    }
+
     function submitPartialConfig(data, customSuccessMsg) {
         Swal.fire({title: 'Menyimpan...', allowOutsideClick: false, didOpen: () => Swal.showLoading()});
         $.ajax({
             url: "/api/settings", method: "PUT", contentType: "application/json", data: JSON.stringify(data),
             success: function(response) {
-                // --- LOGIC BARU: TAWARKAN DOWNLOAD SERTIFIKAT ---
+                // --- LOGIC DOWNLOAD CERTIFICATE ---
                 if (response.check_https_cert) {
+                    const instructions = getCertInstructions();
+                    
                     Swal.fire({
                         title: 'HTTPS Diaktifkan',
                         html: `
@@ -125,24 +154,16 @@ $(document).ready(function () {
                                     <i class="fas fa-download mr-2"></i> Download Sertifikat (.crt)
                                 </a>
                             </div>
-                            <p class="small text-muted text-left mb-0" style="line-height: 1.4;">
-                                <strong>Cara Pasang (Windows):</strong><br>
-                                1. Buka file yang didownload.<br>
-                                2. Klik "Install Certificate".<br>
-                                3. Pilih "Local Machine".<br>
-                                4. Pilih "Place all certificates in the following store" -> Browse -> "Trusted Root Certification Authorities".
-                            </p>
+                            <div class="text-left small text-muted bg-light p-3 rounded border">
+                                ${instructions}
+                            </div>
                         `,
                         icon: 'info',
-                        confirmButtonText: 'Saya Sudah Download, Restart Sekarang',
+                        width: '600px',
+                        confirmButtonText: 'Saya Mengerti, Restart Sekarang',
                         confirmButtonColor: '#4e73df',
                         allowOutsideClick: false
                     }).then((result) => {
-                         // Setelah user konfirmasi, baru trigger restart via frontend (karena backend menunggu)
-                         // Sebenarnya backend sudah auto-restart jika tidak ada interaksi, 
-                         // tapi force reload di sini memastikan UX nyambung.
-                         
-                         // Kita panggil endpoint restart manual atau biarkan auto-restart backend bekerja
                          handleRestartSequence(response.restart_required);
                     });
                 } else {
@@ -176,7 +197,7 @@ $(document).ready(function () {
         submitPartialConfig(data);
     });
 
-    // ... (Sisa script Test DB & Migrasi SAMA PERSIS dengan sebelumnya) ...
+    // ... (Sisa script Test DB & Migrasi tetap sama) ...
     $('#test-db-btn').click(function() {
         let btn = $(this); btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Test...');
         let payload = {
@@ -211,7 +232,6 @@ $(document).ready(function () {
         $('#migration-panel').slideUp(); $('#migration-progress-area').slideDown();
         const logBox = $('#mig-log'); const pBar = $('#mig-progress-bar'); const stat = $('#mig-status-text');
         logBox.text("");
-        
         try {
             const res = await fetch("/api/settings/migrate", {
                 method: "POST", headers: {'Content-Type': 'application/json'}, body: JSON.stringify(targetConfig)
@@ -219,19 +239,16 @@ $(document).ready(function () {
             const reader = res.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
-            
             while(true) {
                 const {done, value} = await reader.read();
                 if(done) break;
                 buffer += decoder.decode(value, {stream:true});
                 const lines = buffer.split('\n\n');
                 buffer = lines.pop();
-                
                 for (const line of lines) {
                     if(line.startsWith('event:')) {
                         const type = line.split('\n')[0].replace('event:', '').trim();
                         const data = JSON.parse(line.split('\n')[1].replace('data:', '').trim());
-                        
                         if(type === 'progress') {
                             pBar.css('width', data.percent+'%').text(data.percent+'%');
                             stat.text(data.message);

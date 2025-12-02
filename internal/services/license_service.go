@@ -8,12 +8,14 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"simdokpol/internal/models"
 	"simdokpol/internal/repositories"
 	"simdokpol/internal/utils"
 	"strings"
 	"time"
 
+	"github.com/joho/godotenv" // <-- Pastikan import ini ada
 	"gorm.io/gorm"
 )
 
@@ -24,9 +26,7 @@ const (
 	EnvLicenseKey           = "LICENSE_KEY"
 )
 
-// Kunci Rahasia Aplikasi (Di Production ini harus di-inject via ldflags saat build)
-// Makefile akan menimpa variabel ini.
-var AppSecretKeyString = "JANGAN_PAKAI_DEFAULT_KEY_INI_BAHAYA"
+var AppSecretKeyString = "SIMDOKPOL_SECRET_KEY_2025"
 
 var (
 	ErrLicenseInvalid = errors.New("kunci lisensi tidak valid untuk mesin ini")
@@ -53,7 +53,6 @@ func NewLicenseService(licenseRepo repositories.LicenseRepository, configService
 		configService: configService,
 		auditService:  auditService,
 	}
-	// Cek integritas saat startup
 	svc.verifyRuntimeIntegrity()
 	return svc
 }
@@ -63,22 +62,36 @@ func (s *licenseService) GetHardwareID() string {
 }
 
 func (s *licenseService) verifyRuntimeIntegrity() {
-	// Jika menurut logika IsLicensed() tidak valid, paksa status DB jadi UNLICENSED
 	if !s.IsLicensed() {
 		_ = s.configService.SaveConfig(map[string]string{LicenseStatusKey: LicenseStatusUnlicensed})
 	}
 }
 
-// IsLicensed: Gatekeeper utama dengan Zero Trust
 func (s *licenseService) IsLicensed() bool {
-	// 1. Ambil Key dari Environment (Memori/File)
+	// 1. Ambil Key dari Environment
 	currentKey := os.Getenv(EnvLicenseKey)
 
-	// Jika tidak ada key di environment, anggap tidak berlisensi
+	// --- FIX: FORCE RELOAD .ENV JIKA MEMORY KOSONG ---
+	// Kadang env belum termuat sempurna saat service init. Kita paksa baca file.
 	if currentKey == "" {
-		// Jika DB masih bilang VALID, kita revoke karena suspicious
+		envPath := filepath.Join(utils.GetAppDataDir(), ".env")
+		// Baca manual file .env untuk cari LICENSE_KEY
+		if envMap, err := godotenv.Read(envPath); err == nil {
+			if keyFromFile, exists := envMap[EnvLicenseKey]; exists && keyFromFile != "" {
+				currentKey = keyFromFile
+				// Restore ke memory agar request berikutnya cepat
+				os.Setenv(EnvLicenseKey, currentKey)
+				log.Println("INFO LICENSE: Kunci lisensi dipulihkan dari file .env")
+			}
+		}
+	}
+	// -------------------------------------------------
+
+	if currentKey == "" {
+		// Jika masih kosong, cek DB. Jika DB Valid tapi Key hilang -> REVOKE (Security)
 		status, _ := s.GetLicenseStatus()
 		if status == LicenseStatusValid {
+			log.Println("SECURITY: Status DB Valid tapi Key hilang. Revoking...")
 			_ = s.RevokeLicense()
 		}
 		return false
@@ -86,15 +99,11 @@ func (s *licenseService) IsLicensed() bool {
 
 	// 2. Verifikasi Kriptografi
 	hwid := s.GetHardwareID()
-	// Generate hash yang diharapkan (tanpa format dash)
 	expectedSignature := generateSignatureRaw(hwid)
-
-	// Bersihkan input key (buang dash, spasi, uppercase)
 	cleanInputKey := strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(currentKey, "-", ""), " ", ""))
 
-	// Bandingkan
 	if cleanInputKey == expectedSignature {
-		// Valid! Pastikan DB sync
+		// Valid! Sync DB jika perlu
 		status, _ := s.GetLicenseStatus()
 		if status != LicenseStatusValid {
 			_ = s.configService.SaveConfig(map[string]string{LicenseStatusKey: LicenseStatusValid})
@@ -102,18 +111,16 @@ func (s *licenseService) IsLicensed() bool {
 		return true
 	}
 
-	// 3. Tidak Valid (Key ada tapi salah)
-	log.Printf("SECURITY: Key invalid terdeteksi. Revoking status Pro.")
+	// 3. Tidak Valid
+	log.Printf("SECURITY: Key invalid terdeteksi. Revoking.")
 	_ = s.RevokeLicense()
 	return false
 }
 
 func (s *licenseService) RevokeLicense() error {
-	// Set DB ke UNLICENSED
 	if err := s.configService.SaveConfig(map[string]string{LicenseStatusKey: LicenseStatusUnlicensed}); err != nil {
 		return err
 	}
-	// Bersihkan Env var
 	os.Setenv(EnvLicenseKey, "")
 	_ = utils.UpdateEnvFile(map[string]string{EnvLicenseKey: ""})
 	return nil
@@ -134,13 +141,10 @@ func (s *licenseService) GetLicenseStatus() (string, error) {
 }
 
 func (s *licenseService) ActivateLicense(inputKey string, actorID uint) (*models.License, error) {
-	// Bersihkan input
 	cleanInputKey := strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(inputKey, "-", ""), " ", ""))
-
 	hwid := s.GetHardwareID()
 	expectedSignature := generateSignatureRaw(hwid)
 
-	// Validasi
 	if cleanInputKey != expectedSignature {
 		if actorID != 0 {
 			s.auditService.LogActivity(actorID, "GAGAL AKTIVASI", fmt.Sprintf("Key salah. HWID: %s", hwid))
@@ -159,7 +163,6 @@ func (s *licenseService) ActivateLicense(inputKey string, actorID uint) (*models
 		Notes:         fmt.Sprintf("Aktivasi sukses. HWID: %s", hwid),
 	}
 
-	// Simpan/Update tabel license
 	existing, _ := s.licenseRepo.GetLicense(cleanInputKey)
 	if existing != nil {
 		existing.Status = LicenseStatusValid
@@ -170,34 +173,32 @@ func (s *licenseService) ActivateLicense(inputKey string, actorID uint) (*models
 		_ = s.licenseRepo.SaveLicense(license)
 	}
 
-	// Update Config DB
 	if err := s.configService.SaveConfig(map[string]string{LicenseStatusKey: LicenseStatusValid}); err != nil {
 		return nil, fmt.Errorf("gagal update config: %w", err)
 	}
 
-	// Update .env & Memori agar persist
-	// Simpan key ASLI input user (yang ada dash-nya lebih mudah dibaca di file)
-	_ = utils.UpdateEnvFile(map[string]string{EnvLicenseKey: inputKey})
+	// --- FIX: PAKSA TULIS KE FILE .ENV (TANPA SYARAT) ---
+	// Kita tidak pakai if os.Getenv != inputKey, tapi langsung tulis biar yakin
+	if err := utils.UpdateEnvFile(map[string]string{EnvLicenseKey: inputKey}); err != nil {
+		log.Printf("ERROR: Gagal menyimpan lisensi ke file .env: %v", err)
+		// Jangan return error fatal, karena di DB sudah aktif. Cuma warning log.
+	} else {
+		log.Println("SUCCESS: Lisensi tersimpan permanen di file .env")
+	}
 	os.Setenv(EnvLicenseKey, inputKey)
+	// ---------------------------------------------------
 
 	if actorID != 0 {
 		s.auditService.LogActivity(actorID, "AKTIVASI LISENSI", "Lisensi PRO berhasil diaktifkan.")
 	}
-
-	log.Printf("SUCCESS: License activated for HWID: %s", hwid)
 	return license, nil
 }
 
-// generateSignatureRaw: Membuat hash MENTAH (tanpa dash) untuk verifikasi internal
 func generateSignatureRaw(data string) string {
 	h := hmac.New(sha256.New, []byte(AppSecretKeyString))
 	h.Write([]byte(data))
 	hash := h.Sum(nil)
-
-	// Ambil 15 byte pertama
 	truncatedHash := hash[:15]
-	// Encode Base32 (Tanpa Padding)
 	encoded := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(truncatedHash)
-
 	return encoded
 }

@@ -368,11 +368,12 @@ func setupDatabase(cfg *config.Config) (*gorm.DB, error) {
 
 	switch cfg.DBDialect {
 	case "mysql":
-		tlsOption := "false"
-		if cfg.DBSSLMode == "require" {
-			tlsOption = "skip-verify"
-		} else if cfg.DBSSLMode == "verify-full" {
+		var tlsOption string
+		switch cfg.DBSSLMode {
+		case "require", "verify-full":
 			tlsOption = "true"
+		default:
+			tlsOption = "false"
 		}
 		dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local&tls=%s",
 			cfg.DBUser, cfg.DBPass, cfg.DBHost, cfg.DBPort, cfg.DBName, tlsOption)
