@@ -2,85 +2,395 @@
 {{template "_sidebar.html" .}}
 
 <style>
-    .profile-card {
+    .info-card {
         background: #ffffff;
-        border-top: 4px solid #4e73df;
+        border: none;
+        border-radius: 0.5rem;
         box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
-        border-radius: 0.35rem;
-        padding: 2.5rem 2rem;
-        margin-top: 60px;
+        margin-bottom: 1.5rem;
     }
-    .profile-pic {
-        width: 140px; height: 140px; object-fit: cover;
-        border-radius: 50%; border: 5px solid #fff;
-        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-        position: absolute; top: -70px; left: 50%; transform: translateX(-50%);
-        background-color: #fff;
+    
+    .info-card-header {
+        background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
+        border-radius: 0.5rem 0.5rem 0 0;
+        padding: 1rem 1.25rem;
+        border-bottom: none;
     }
-    .social-links a {
-        width: 40px; height: 40px; display: inline-flex;
-        align-items: center; justify-content: center;
-        border-radius: 50%; margin: 0 8px; font-size: 1.2rem;
-        color: #fff; transition: all 0.3s;
+    
+    .info-card-header h6 {
+        color: #ffffff;
+        margin: 0;
+        font-weight: 700;
     }
-    .social-links a:hover { transform: translateY(-3px); }
-    .btn-github { background-color: #333; }
-    .btn-whatsapp { background-color: #25D366; }
-    .btn-email { background-color: #ea4335; }
-    .hwid-box { background-color: #f8f9fc; border: 1px dashed #b7b9cc; border-radius: 0.35rem; padding: 1rem; }
-    .hwid-text { font-family: 'Courier New', monospace; font-weight: 700; color: #4e73df; word-break: break-all; }
+    
+    .app-logo-section {
+        text-align: center;
+        padding: 2rem 1.5rem;
+        background: linear-gradient(180deg, #f8f9fc 0%, #ffffff 50%);
+        border-bottom: 1px solid #e3e6f0;
+    }
+    
+    .app-logo-wrapper {
+        width: 110px;
+        height: 110px;
+        background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
+        border-radius: 25px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 1.25rem;
+        box-shadow: 0 0.5rem 1.5rem rgba(78, 115, 223, 0.3);
+    }
+    
+    .app-logo-wrapper img {
+        width: 65px;
+        filter: brightness(0) invert(1);
+    }
+    
+    .version-badge-inline {
+        background: linear-gradient(135deg, #1cc88a 0%, #13855c 100%);
+        color: #ffffff;
+        padding: 0.375rem 1rem;
+        border-radius: 20px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        display: inline-block;
+        box-shadow: 0 0.125rem 0.5rem rgba(28, 200, 138, 0.3);
+    }
+    
+    .feature-badge {
+        background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
+        color: #ffffff;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-size: 0.813rem;
+        font-weight: 600;
+        display: inline-block;
+        margin: 0.25rem;
+        box-shadow: 0 0.125rem 0.5rem rgba(78, 115, 223, 0.25);
+        transition: transform 0.2s ease;
+    }
+    
+    .feature-badge:hover {
+        transform: translateY(-2px);
+    }
+    
+    .tech-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    
+    .tech-item {
+        padding: 0.875rem 1rem;
+        background: #f8f9fc;
+        border-radius: 0.375rem;
+        margin-bottom: 0.625rem;
+        border-left: 3px solid #4e73df;
+        transition: all 0.2s ease;
+    }
+    
+    .tech-item:hover {
+        background: #eaecf4;
+        transform: translateX(3px);
+    }
+    
+    .tech-label {
+        color: #4e73df;
+        font-weight: 700;
+    }
+    
+    .profile-card {
+        background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
+        border-radius: 0.5rem;
+        padding: 2rem 1.5rem;
+        color: #ffffff;
+        box-shadow: 0 0.15rem 1.75rem 0 rgba(78, 115, 223, 0.3);
+        margin-bottom: 1.5rem;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .profile-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='0.05' fill-rule='evenodd'%3E%3Cpath d='M0 40L40 0H20L0 20M40 40V20L20 40'/%3E%3C/g%3E%3C/svg%3E");
+    }
+    
+    .profile-content {
+        position: relative;
+        z-index: 1;
+        text-align: center;
+    }
+    
+    .profile-avatar {
+        width: 90px;
+        height: 90px;
+        border-radius: 50%;
+        border: 4px solid rgba(255, 255, 255, 0.3);
+        margin: 0 auto 1rem;
+        display: block;
+        object-fit: cover;
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.2);
+        background: #ffffff;
+    }
+    
+    .social-links {
+        display: flex;
+        justify-content: center;
+        gap: 0.625rem;
+        margin-top: 1.25rem;
+    }
+    
+    .social-link {
+        width: 38px;
+        height: 38px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.15);
+        color: #ffffff;
+        transition: all 0.3s ease;
+        text-decoration: none;
+    }
+    
+    .social-link:hover {
+        background: rgba(255, 255, 255, 0.25);
+        transform: translateY(-3px);
+        color: #ffffff;
+    }
+    
+    .license-card {
+        background: #ffffff;
+        border: none;
+        border-radius: 0.5rem;
+        box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+    }
+    
+    .license-card-header {
+        background: linear-gradient(135deg, #1cc88a 0%, #13855c 100%);
+        border-radius: 0.5rem 0.5rem 0 0;
+        padding: 1rem 1.25rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .license-card-header h6 {
+        color: #ffffff;
+        margin: 0;
+        font-weight: 700;
+    }
+    
+    .status-active-section {
+        text-align: center;
+        padding: 2rem 1.5rem;
+    }
+    
+    .status-icon-circle {
+        width: 70px;
+        height: 70px;
+        background: linear-gradient(135deg, #1cc88a 0%, #13855c 100%);
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 1rem;
+        box-shadow: 0 0.5rem 1rem rgba(28, 200, 138, 0.25);
+    }
+    
+    .status-icon-circle i {
+        color: #ffffff;
+        font-size: 2rem;
+    }
+    
+    .hwid-container {
+        background: #f8f9fc;
+        border: 2px dashed #d1d3e2;
+        border-radius: 0.375rem;
+        padding: 1rem;
+        margin-bottom: 1.25rem;
+    }
+    
+    .hwid-label-text {
+        color: #858796;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        display: block;
+        text-align: center;
+        margin-bottom: 0.625rem;
+    }
+    
+    .hwid-value-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+    
+    .hwid-code-text {
+        font-family: 'Courier New', monospace;
+        font-weight: 700;
+        color: #4e73df;
+        background: #ffffff;
+        padding: 0.5rem 0.875rem;
+        border-radius: 0.25rem;
+        font-size: 0.938rem;
+        word-break: break-all;
+        flex: 1;
+        border: 1px solid #e3e6f0;
+    }
+    
+    .copy-hwid-btn {
+        width: 36px;
+        height: 36px;
+        border-radius: 0.25rem;
+        border: 1px solid #4e73df;
+        background: #ffffff;
+        color: #4e73df;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+    }
+    
+    .copy-hwid-btn:hover {
+        background: #4e73df;
+        color: #ffffff;
+    }
+    
+    .upgrade-button {
+        background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
+        border: none;
+        border-radius: 0.375rem;
+        padding: 0.875rem;
+        font-weight: 600;
+        color: #ffffff;
+        width: 100%;
+        transition: all 0.2s ease;
+        box-shadow: 0 0.125rem 0.5rem rgba(78, 115, 223, 0.3);
+        text-decoration: none;
+        display: block;
+        text-align: center;
+    }
+    
+    .upgrade-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 0.25rem 0.75rem rgba(78, 115, 223, 0.4);
+        color: #ffffff;
+        text-decoration: none;
+    }
+    
+    .section-heading {
+        font-size: 0.938rem;
+        font-weight: 700;
+        color: #5a5c69;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .section-heading i {
+        color: #4e73df;
+    }
 </style>
 
 <div id="content-wrapper" class="d-flex flex-column">
     <div id="content">
         {{template "_topbar.html" .}}
+        
         <div class="container-fluid">
-
-            <h1 class="h3 mb-4 text-gray-800">Tentang Aplikasi</h1>
+            <div class="d-sm-flex align-items-center justify-content-between mb-4">
+                <h1 class="h3 mb-0 text-gray-800">Tentang Aplikasi</h1>
+                <span class="version-badge-inline">
+                    <i class="fas fa-code-branch mr-1"></i>{{if .AppVersion}}{{.AppVersion}}{{else}}dev{{end}}
+                </span>
+            </div>
 
             <div class="row">
+                
                 <div class="col-lg-7">
-                    <div class="card shadow mb-4 border-left-primary">
-                        <div class="card-header py-3">
-                            <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-info-circle mr-2"></i>Informasi Sistem</h6>
+                    <div class="info-card">
+                        <div class="info-card-header">
+                            <h6><i class="fas fa-info-circle mr-2"></i>Informasi Sistem</h6>
                         </div>
-                        <div class="card-body">
-                            <div class="text-center mb-4">
-                                <img class="img-fluid" style="width: 8rem;" src="/static/img/logo.png" alt="Logo Polri">
-                                <h4 class="mt-3 font-weight-bold text-gray-800">SIMDOKPOL</h4>
-                                <p class="text-muted mb-0">Sistem Informasi Manajemen Dokumen Kepolisian</p>
-                                <span class="badge badge-primary px-3 py-2 mt-2">Versi {{if .AppVersion}}{{.AppVersion}}{{else}}dev{{end}}</span>
+                        
+                        <div class="app-logo-section">
+                            <div class="app-logo-wrapper">
+                                <img src="/static/img/logo.png" alt="Logo SIMDOKPOL">
                             </div>
-                            
-                            <p class="text-justify">
-                                <strong>SIMDOKPOL</strong> adalah aplikasi desktop modern berbasis web yang dirancang untuk membantu unit kepolisian dalam manajemen dan penerbitan <strong>Surat Keterangan Hilang</strong> secara efisien, cepat, dan aman. Aplikasi ini mendukung deployment dari skala kecil (Laptop tunggal) hingga skala besar (Server/Cloud).
+                            <h4 class="font-weight-bold text-gray-800 mb-1">SIMDOKPOL</h4>
+                            <p class="text-muted mb-0">Sistem Informasi Manajemen Dokumen Kepolisian</p>
+                        </div>
+                        
+                        <div class="card-body">
+                            <p class="text-gray-700 text-justify mb-4">
+                                <strong>SIMDOKPOL</strong> merupakan aplikasi desktop modern berbasis web yang dirancang untuk membantu unit kepolisian dalam manajemen dan penerbitan <strong>Surat Keterangan Hilang</strong> secara efisien, cepat, dan aman. Aplikasi ini mendukung deployment dari skala kecil (laptop tunggal) hingga skala besar (server atau cloud infrastructure).
                             </p>
                             
-                            <div class="row mt-4">
-                                <div class="col-md-6 mb-3">
-                                    <h6 class="font-weight-bold text-primary">Fitur Unggulan</h6>
-                                    <ul class="small text-gray-700 pl-3">
-                                        <li>Setup Wizard & Smart Seeding</li>
-                                        <li>Multi-Database (SQLite/MySQL/PG)</li>
-                                        <li>Cetak PDF Presisi & Laporan Agregat</li>
-                                        <li>Template Barang Dinamis (Drag & Drop)</li>
-                                        <li>Audit Log & Keamanan Berbasis Peran</li>
-                                    </ul>
-                                </div>
-                                <div class="col-md-6">
-                                    <h6 class="font-weight-bold text-primary">Teknologi</h6>
-                                    <ul class="small text-gray-700 pl-3">
-                                        <li><strong>Core:</strong> Golang (Backend) & Gin Framework</li>
-                                        <li><strong>Data:</strong> GORM (ORM) & Excelize</li>
-                                        <li><strong>UI:</strong> Metro Style (Bootstrap 4)</li>
-                                        <li><strong>Security:</strong> HMAC Licensing, JWT, Bcrypt</li>
-                                    </ul>
-                                </div>
+                            <div class="section-heading">
+                                <i class="fas fa-star"></i>
+                                Fitur Unggulan
                             </div>
-
-                            <hr>
-                            <div class="text-center small text-gray-500">
-                                &copy; 2025 SIMDOKPOL. Dikembangkan untuk Unit Kepolisian Indonesia.
+                            <div class="text-center mb-4">
+                                <span class="feature-badge">
+                                    <i class="fas fa-magic mr-1"></i>Setup Wizard
+                                </span>
+                                <span class="feature-badge">
+                                    <i class="fas fa-database mr-1"></i>Multi-Database
+                                </span>
+                                <span class="feature-badge">
+                                    <i class="fas fa-file-pdf mr-1"></i>Cetak PDF Presisi
+                                </span>
+                                <span class="feature-badge">
+                                    <i class="fas fa-box mr-1"></i>Template Dinamis
+                                </span>
+                                <span class="feature-badge">
+                                    <i class="fas fa-shield-alt mr-1"></i>Audit Log
+                                </span>
+                                <span class="feature-badge">
+                                    <i class="fas fa-lock mr-1"></i>Role-Based Security
+                                </span>
+                            </div>
+                            
+                            <div class="section-heading">
+                                <i class="fas fa-cogs"></i>
+                                Teknologi
+                            </div>
+                            <ul class="tech-list">
+                                <li class="tech-item">
+                                    <span class="tech-label">Core:</span>
+                                    <span class="text-gray-700">Golang Backend dengan Gin Framework</span>
+                                </li>
+                                <li class="tech-item">
+                                    <span class="tech-label">Database:</span>
+                                    <span class="text-gray-700">GORM (ORM) & Excelize untuk Excel</span>
+                                </li>
+                                <li class="tech-item">
+                                    <span class="tech-label">Interface:</span>
+                                    <span class="text-gray-700">Metro Style dengan Bootstrap 4</span>
+                                </li>
+                                <li class="tech-item">
+                                    <span class="tech-label">Security:</span>
+                                    <span class="text-gray-700">HMAC Licensing, JWT Authentication, Bcrypt</span>
+                                </li>
+                            </ul>
+                            
+                            <hr class="mt-4 mb-3">
+                            <div class="text-center">
+                                <small class="text-muted">
+                                    <i class="far fa-copyright mr-1"></i>2025 SIMDOKPOL. Dikembangkan untuk Unit Kepolisian Indonesia.
+                                </small>
                             </div>
                         </div>
                     </div>
@@ -88,75 +398,100 @@
 
                 <div class="col-lg-5">
                     
-                    <div class="profile-card mb-4 text-center">
-                        <img class="profile-pic" src="/static/img/panduan/profile-pic.png" onerror="this.src='/static/img/undraw_profile.svg'">
-                        <h4 class="mt-4 mb-1 font-weight-bold text-gray-800">MUHAMMAD YUSUF A.</h4>
-                        <p class="text-primary font-weight-bold small mb-3">Fullstack Developer</p>
-                        <p class="text-gray-600 small px-3">
-                            "Menciptakan solusi digital yang efisien untuk pelayanan publik yang lebih baik."
-                        </p>
-                        <div class="social-links mt-4">
-                            <a href="https://github.com/muhammad1505" target="_blank" class="btn-github"><i class="fab fa-github"></i></a>
-                            <a href="https://wa.me/6282300014685" target="_blank" class="btn-whatsapp"><i class="fab fa-whatsapp"></i></a>
-                            <a href="mailto:emailbaruku50@gmail.com" class="btn-email"><i class="fas fa-envelope"></i></a>
+                    <div class="profile-card">
+                        <div class="profile-content">
+                            <img class="profile-avatar" src="/static/img/panduan/profile-pic.png" onerror="this.src='/static/img/undraw_profile.svg'" alt="Developer">
+                            <h5 class="font-weight-bold mb-1">MUHAMMAD YUSUF A.</h5>
+                            <p class="mb-2" style="opacity: 0.9; font-size: 0.875rem;">Fullstack Developer</p>
+                            <p class="mb-0" style="opacity: 0.85; font-size: 0.875rem;">
+                                "Menciptakan solusi digital yang efisien untuk pelayanan publik yang lebih baik."
+                            </p>
+                            <div class="social-links">
+                                <a href="https://github.com/muhammad1505" target="_blank" class="social-link" title="GitHub">
+                                    <i class="fab fa-github"></i>
+                                </a>
+                                <a href="https://wa.me/6282300014685" target="_blank" class="social-link" title="WhatsApp">
+                                    <i class="fab fa-whatsapp"></i>
+                                </a>
+                                <a href="mailto:emailbaruku50@gmail.com" class="social-link" title="Email">
+                                    <i class="fas fa-envelope"></i>
+                                </a>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="card shadow mb-4 border-bottom-primary">
-                        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                            <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-key mr-2"></i>Status Lisensi</h6>
+                    <div class="license-card">
+                        <div class="license-card-header">
+                            <h6><i class="fas fa-key mr-2"></i>Status Lisensi</h6>
                             <div id="license-status-text">
-                                <span class="spinner-border spinner-border-sm text-primary" role="status"></span>
+                                <span class="spinner-border spinner-border-sm text-white" role="status"></span>
                             </div>
                         </div>
+                        
                         <div class="card-body">
-                            
-                            <div id="license-active-msg" style="display: none;" class="text-center py-3">
-                                <div class="mb-3">
-                                    <span class="fa-stack fa-3x text-success">
-                                        <i class="fas fa-circle fa-stack-2x"></i>
-                                        <i class="fas fa-check fa-stack-1x fa-inverse"></i>
-                                    </span>
+                            <div id="license-active-msg" style="display: none;" class="status-active-section">
+                                <div class="status-icon-circle">
+                                    <i class="fas fa-check"></i>
                                 </div>
-                                <h5 class="font-weight-bold text-gray-800">Versi Professional</h5>
-                                <p class="text-muted mb-0">Fitur Premium Aktif.</p>
+                                <h5 class="font-weight-bold text-gray-800 mb-2">Versi Professional</h5>
+                                <p class="text-muted mb-0">Semua fitur premium telah aktif.</p>
                             </div>
 
                             <div id="license-form-group" style="display: none;">
-                                <div class="hwid-box mb-4 text-center">
-                                    <small class="text-uppercase text-gray-500 font-weight-bold">Hardware ID</small>
-                                    <div class="d-flex justify-content-center align-items-center mt-2">
-                                        <code id="hardware-id-val" class="text-primary font-weight-bold h5 mb-0">...</code>
-                                        <button class="btn btn-sm btn-outline-primary ml-2" id="copy-hwid-btn" title="Salin"><i class="fas fa-copy"></i></button>
+                                <div class="hwid-container">
+                                    <span class="hwid-label-text">
+                                        <i class="fas fa-fingerprint mr-1"></i>Hardware ID
+                                    </span>
+                                    <div class="hwid-value-row">
+                                        <code id="hardware-id-val" class="hwid-code-text">...</code>
+                                        <button class="copy-hwid-btn" id="copy-hwid-btn" title="Salin Hardware ID">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
                                     </div>
                                 </div>
-                                <a href="/upgrade" class="btn btn-primary btn-block font-weight-bold shadow-sm">
-                                    <i class="fas fa-rocket mr-2"></i> Upgrade Sekarang
+                                <a href="/upgrade" class="upgrade-button">
+                                    <i class="fas fa-rocket mr-2"></i>Upgrade ke Professional
                                 </a>
                             </div>
-
                         </div>
                     </div>
 
                 </div>
             </div>
-
         </div>
     </div>
     {{template "_footer.html" .}}
 </div>
 
 {{template "_scripts.html" .}}
-{{template "_licenseScript.html" .}} 
+{{template "_licenseScript.html" .}}
 
 <script>
 $(document).ready(function() {
-    // Helper Copy HWID
     $('#copy-hwid-btn').on('click', function() {
         const hwid = $('#hardware-id-val').text();
         if (hwid && hwid !== '...') {
             navigator.clipboard.writeText(hwid).then(() => {
-                Swal.fire({icon: 'success', title: 'Disalin!', toast: true, position: 'top-end', showConfirmButton: false, timer: 1500});
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Berhasil!',
+                    text: 'Hardware ID telah disalin ke clipboard',
+                    toast: true,
+                    position: 'top-end',
+                    showConfirmButton: false,
+                    timer: 2000,
+                    timerProgressBar: true
+                });
+            }).catch(() => {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Gagal',
+                    text: 'Silakan salin secara manual',
+                    toast: true,
+                    position: 'top-end',
+                    showConfirmButton: false,
+                    timer: 2000
+                });
             });
         }
     });
