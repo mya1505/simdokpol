@@ -25,6 +25,15 @@
         font-weight: 700;
         color: #2e59d9;
     }
+    .step-badge {
+        background-color: #4e73df;
+        color: white;
+        padding: 0.2rem 0.6rem;
+        border-radius: 50%;
+        margin-right: 10px;
+        font-size: 0.9rem;
+        font-weight: bold;
+    }
 </style>
 
 <div id="content-wrapper" class="d-flex flex-column">
@@ -33,86 +42,113 @@
         <div class="container-fluid">
 
             <div class="d-sm-flex align-items-center justify-content-between mb-4">
-                <h1 class="h3 mb-0 text-gray-800">Panduan Pengguna v1.0.9</h1>
+                <h1 class="h3 mb-0 text-gray-800">Panduan Pengguna</h1>
             </div>
 
             <div class="card shadow mb-4 guide-section">
                 <div class="card-body">
                     <h4 class="guide-title">1. Pendahuluan</h4>
-                    <p>Selamat datang di <strong>SIMDOKPOL</strong>. Aplikasi ini dirancang untuk membantu unit pelayanan kepolisian dalam menerbitkan Surat Keterangan Tanda Lapor Kehilangan (SKTLK) secara cepat, akurat, dan tercatat rapi.</p>
+                    <p class="text-justify">
+                        Selamat datang di <strong>SIMDOKPOL</strong> (Sistem Informasi Manajemen Dokumen Kepolisian). 
+                        Aplikasi ini dirancang khusus untuk membantu unit pelayanan kepolisian (SPKT) dalam menerbitkan, mengelola, dan mengarsipkan 
+                        <strong>Surat Keterangan Hilang</strong> (KTP, SIM, STNK, ATM, dll) secara cepat, presisi, dan aman.
+                    </p>
                 </div>
             </div>
 
             <div class="card shadow mb-4 guide-section">
                 <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary">2. Instalasi & Setup Awal</h6></div>
                 <div class="card-body">
-                    <h6 class="font-weight-bold">Tampilan Login & Setup</h6>
-                    <div class="row">
+                    <p>Saat aplikasi pertama kali dijalankan, Anda akan diarahkan ke <strong>Setup Wizard</strong> 5-Langkah:</p>
+                    
+                    <div class="row mt-4">
                         <div class="col-lg-6">
-                             <p>Halaman Login Modern.</p>
-                             <img src="/static/img/panduan/guide-login.png" alt="Login" class="img-panduan">
+                            <h6 class="font-weight-bold text-primary mb-3">Langkah Konfigurasi</h6>
+                            <ul class="list-unstyled">
+                                <li class="mb-3"><span class="step-badge">1</span> <strong>Pilih Database:</strong> Gunakan <em>SQLite</em> untuk penggunaan di satu laptop, atau <em>MySQL/PostgreSQL</em> untuk jaringan kantor (LAN).</li>
+                                <li class="mb-3"><span class="step-badge">2</span> <strong>Koneksi:</strong> Masukkan kredensial database (Host, User, Password) jika memilih mode server.</li>
+                                <li class="mb-3"><span class="step-badge">3</span> <strong>Identitas Instansi:</strong> Isi KOP surat (Kepolisian Negara, Daerah, Resor) dan nama kantor pelayanan.</li>
+                                <li class="mb-3"><span class="step-badge">4</span> <strong>Penomoran:</strong> Tentukan format nomor surat (contoh: <code>SKH/%03d/X/2025</code>) dan nomor urut terakhir.</li>
+                                <li class="mb-3"><span class="step-badge">5</span> <strong>Akun Admin:</strong> Buat akun Super Admin pertama Anda untuk mengelola sistem.</li>
+                            </ul>
                         </div>
-                        <div class="col-lg-6">
-                            <p>Wizard Setup Database.</p>
-                            <img src="/static/img/panduan/guide-setup.png" alt="Setup" class="img-panduan">
+                        <div class="col-lg-6 text-center">
+                            <img src="/static/img/panduan/guide-setup.png" alt="Tampilan Setup" class="img-panduan" onerror="this.style.display='none'">
+                            <small class="text-muted font-italic">Tampilan Wizard Konfigurasi</small>
                         </div>
                     </div>
                 </div>
             </div>
 
             <div class="card shadow mb-4 guide-section">
-                <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary">3. Manajemen Surat Keterangan</h6></div>
+                <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary">3. Penerbitan Surat Keterangan</h6></div>
                 <div class="card-body">
-                    <h5 class="font-weight-bold mt-2">3.1. Dasbor</h5>
-                    <img src="/static/img/panduan/guide-dashboard.png" alt="Dasbor" class="img-panduan">
+                    
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h5 class="font-weight-bold text-gray-800">3.1. Input Data Pemohon</h5>
+                            <p>Masuk ke menu <strong>Buat Surat Baru</strong>. Isi data diri pelapor (Nama, TTL, Alamat) sesuai KTP. Sistem otomatis mengubah huruf menjadi KAPITAL untuk keseragaman.</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h5 class="font-weight-bold text-gray-800">3.2. Data Barang Hilang</h5>
+                            <p>Klik <strong>"Tambah Barang"</strong>. Pilih jenis barang (KTP, SIM, STNK, dll). Form isian akan menyesuaikan secara otomatis (misal: STNK meminta No. Rangka & Mesin, sedangkan ATM meminta Nama Bank).</p>
+                        </div>
+                    </div>
 
-                    <h5 class="font-weight-bold mt-4">3.2. Membuat Surat Baru</h5>
-                    <img src="/static/img/panduan/guide-doc-form.png" alt="Formulir" class="img-panduan">
+                    <div class="text-center">
+                         <img src="/static/img/panduan/guide-doc-form.png" alt="Formulir" class="img-panduan" onerror="this.style.display='none'">
+                    </div>
 
-                    <h5 class="font-weight-bold mt-4">3.3. Daftar & Cetak</h5>
-                    <img src="/static/img/panduan/guide-doc-active.png" alt="Daftar Dokumen" class="img-panduan">
+                    <div class="alert alert-info mt-4">
+                        <i class="fas fa-info-circle mr-2"></i> <strong>Tips:</strong> Anda dapat menambahkan lebih dari satu barang dalam satu surat keterangan.
+                    </div>
                 </div>
             </div>
 
             <div class="card shadow mb-4 guide-section">
-                <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary">4. Manajemen Pengguna (Admin)</h6></div>
+                <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary">4. Cetak & Pengarsipan</h6></div>
                 <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <h6>Daftar Petugas</h6>
-                            <img src="/static/img/panduan/guide-user-list.png" alt="List User" class="img-panduan">
+                    <div class="row align-items-center">
+                        <div class="col-lg-5">
+                            <img src="/static/img/panduan/guide-doc-active.png" alt="Daftar Dokumen" class="img-panduan" onerror="this.style.display='none'">
                         </div>
-                        <div class="col-md-6">
-                            <h6>Tambah Petugas</h6>
-                            <img src="/static/img/panduan/guide-user-add.png" alt="Add User" class="img-panduan">
+                        <div class="col-lg-7 pl-4">
+                            <h5 class="font-weight-bold">Cetak Presisi (PDF)</h5>
+                            <p>Klik tombol <span class="badge badge-info"><i class="fas fa-print"></i> Preview</span> atau <span class="badge badge-danger"><i class="fas fa-file-pdf"></i> PDF</span> di tabel dokumen. Sistem akan menghasilkan file PDF ukuran A4 yang siap cetak dengan tata letak presisi.</p>
+                            
+                            <h5 class="font-weight-bold mt-4">Arsip Otomatis</h5>
+                            <p>Dokumen yang melewati batas waktu (default 15 hari) akan otomatis dipindahkan ke menu <strong>Arsip Dokumen</strong>. Status berubah dari <span class="badge badge-success">DITERBITKAN</span> menjadi <span class="badge badge-secondary">DIARSIPKAN</span>.</p>
                         </div>
                     </div>
                 </div>
             </div>
 
             <div class="card shadow mb-4 guide-section border-left-success">
-                <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-success">5. Fitur Pro (Berlisensi)</h6></div>
-                <div class="card-body">
-                    <h5 class="font-weight-bold">5.1. Laporan Agregat</h5>
-                    <img src="/static/img/panduan/guide-report.png" alt="Laporan" class="img-panduan">
-
-                    <h5 class="font-weight-bold mt-4">5.2. Kustomisasi Template</h5>
-                    <img src="/static/img/panduan/guide-template-list.png" alt="Template List" class="img-panduan">
-                    <img src="/static/img/panduan/guide-template-edit.png" alt="Template Edit" class="img-panduan">
-                </div>
-            </div>
-            
-             <div class="card shadow mb-4 guide-section">
-                <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary">6. Pengaturan Sistem</h6></div>
+                <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-success">5. Fitur Administrasi (Super Admin)</h6></div>
                 <div class="card-body">
                     <div class="row">
-                        <div class="col-md-6">
-                             <h6>Umum & KOP Surat</h6>
-                             <img src="/static/img/panduan/guide-settings-general.png" alt="Settings General" class="img-panduan">
+                        <div class="col-md-4">
+                            <h6 class="font-weight-bold text-dark"><i class="fas fa-users-cog mr-2"></i>Manajemen Pengguna</h6>
+                            <p class="small text-muted">Tambah personel operator baru, reset password, atau non-aktifkan akun petugas yang mutasi.</p>
                         </div>
-                         <div class="col-md-6">
-                             <h6>Database & Backup</h6>
-                             <img src="/static/img/panduan/guide-settings-db.png" alt="Settings DB" class="img-panduan">
+                        <div class="col-md-4">
+                            <h6 class="font-weight-bold text-dark"><i class="fas fa-chart-pie mr-2"></i>Laporan Agregat <span class="badge badge-warning">PRO</span></h6>
+                            <p class="small text-muted">Unduh rekapitulasi bulanan dalam format PDF/Excel yang berisi statistik jumlah surat, kinerja operator, dan tren barang hilang.</p>
+                        </div>
+                        <div class="col-md-4">
+                            <h6 class="font-weight-bold text-dark"><i class="fas fa-puzzle-piece mr-2"></i>Template Barang <span class="badge badge-warning">PRO</span></h6>
+                            <p class="small text-muted">Sesuaikan formulir isian barang secara dinamis. Tambah field baru atau ubah urutan tanpa coding.</p>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <h6 class="font-weight-bold text-dark"><i class="fas fa-exchange-alt mr-2"></i>Migrasi Data <span class="badge badge-warning">PRO</span></h6>
+                            <p class="small text-muted">Pindahkan seluruh data dari Laptop (SQLite) ke Server (MySQL/Postgres) secara otomatis saat unit Anda berkembang.</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="font-weight-bold text-dark"><i class="fas fa-lock mr-2"></i>HTTPS Aman</h6>
+                            <p class="small text-muted">Aktifkan enkripsi SSL di menu Pengaturan untuk mengamankan data di jaringan Wi-Fi kantor.</p>
                         </div>
                     </div>
                 </div>
