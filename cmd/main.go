@@ -47,6 +47,7 @@ var (
 )
 
 func main() {
+	// Initialize environment and logging
 	setupEnvironment()
 	setupLogging()
 
@@ -57,78 +58,299 @@ func main() {
 	log.Printf("📂 Data Dir: %s", appData)
 	log.Println("==========================================")
 
+	// Load configuration
 	cfg := config.LoadConfig()
+	if cfg == nil {
+		log.Fatal("❌ GAGAL MEMUAT KONFIGURASI: Configuration tidak dapat dimuat")
+		return
+	}
+
+	// Setup database with proper error handling
+	log.Println("🔧 Menginisialisasi database...")
 	db, err := setupDatabase(cfg)
 	
 	if err != nil {
 		msg := fmt.Sprintf("GAGAL KONEKSI DATABASE: %v", err)
-		log.Println(msg)
+		log.Printf("❌ %s", msg)
+		
+		// Show alert to user
 		_ = beeep.Alert("SIMDOKPOL Error", msg, "")
-	} else {
-		seedDefaultTemplates(db)
+		
+		// Log detailed error information
+		log.Printf("❌ Database Error Details:")
+		log.Printf("   - Dialect: %s", cfg.DBDialect)
+		log.Printf("   - DSN: %s", cfg.DBDSN)
+		log.Printf("   - Error: %v", err)
+		
+		// Exit application - cannot continue without database
+		log.Fatal("❌ APLIKASI TIDAK DAPAT DILANJUTKAN: Database diperlukan untuk menjalankan aplikasi")
+		return
 	}
 
-	var userRepo repositories.UserRepository
-	var docRepo repositories.LostDocumentRepository
-	var residentRepo repositories.ResidentRepository
-	var configRepo repositories.ConfigRepository
-	var auditRepo repositories.AuditLogRepository
-	var licenseRepo repositories.LicenseRepository
-	var itemTemplateRepo repositories.ItemTemplateRepository
-
-	if db != nil {
-		userRepo = repositories.NewUserRepository(db)
-		docRepo = repositories.NewLostDocumentRepository(db)
-		residentRepo = repositories.NewResidentRepository(db)
-		configRepo = repositories.NewConfigRepository(db)
-		auditRepo = repositories.NewAuditLogRepository(db)
-		licenseRepo = repositories.NewLicenseRepository(db)
-		itemTemplateRepo = repositories.NewItemTemplateRepository(db)
+	// Verify database connection is not nil
+	if db == nil {
+		log.Fatal("❌ KONEKSI DATABASE NULL: Database connection tidak dapat dibuat")
+		return
 	}
+
+	// Test database connection
+	sqlDB, err := db.DB()
+	if err != nil {
+		log.Fatalf("❌ GAGAL MENDAPATKAN DATABASE INSTANCE: %v", err)
+		return
+	}
+
+	if err := sqlDB.Ping(); err != nil {
+		log.Fatalf("❌ GAGAL PING DATABASE: %v", err)
+		return
+	}
+
+	log.Println("✅ Database berhasil terhubung dan siap digunakan")
+
+	// Seed default templates only after successful DB connection
+	seedDefaultTemplates(db)
+
+	// Initialize repositories with nil checks
+	log.Println("🔧 Menginisialisasi repositories...")
+	
+	userRepo := repositories.NewUserRepository(db)
+	if userRepo == nil {
+		log.Fatal("❌ GAGAL MEMBUAT USER REPOSITORY")
+		return
+	}
+
+	docRepo := repositories.NewLostDocumentRepository(db)
+	if docRepo == nil {
+		log.Fatal("❌ GAGAL MEMBUAT DOCUMENT REPOSITORY")
+		return
+	}
+
+	residentRepo := repositories.NewResidentRepository(db)
+	if residentRepo == nil {
+		log.Fatal("❌ GAGAL MEMBUAT RESIDENT REPOSITORY")
+		return
+	}
+
+	configRepo := repositories.NewConfigRepository(db)
+	if configRepo == nil {
+		log.Fatal("❌ GAGAL MEMBUAT CONFIG REPOSITORY")
+		return
+	}
+
+	auditRepo := repositories.NewAuditLogRepository(db)
+	if auditRepo == nil {
+		log.Fatal("❌ GAGAL MEMBUAT AUDIT REPOSITORY")
+		return
+	}
+
+	licenseRepo := repositories.NewLicenseRepository(db)
+	if licenseRepo == nil {
+		log.Fatal("❌ GAGAL MEMBUAT LICENSE REPOSITORY")
+		return
+	}
+
+	itemTemplateRepo := repositories.NewItemTemplateRepository(db)
+	if itemTemplateRepo == nil {
+		log.Fatal("❌ GAGAL MEMBUAT ITEM TEMPLATE REPOSITORY")
+		return
+	}
+
+	log.Println("✅ Repositories berhasil dibuat")
+
+	// Initialize services with proper error handling
+	log.Println("🔧 Menginisialisasi services...")
 
 	auditService := services.NewAuditLogService(auditRepo)
-	configService := services.NewConfigService(configRepo, db)
-	backupService := services.NewBackupService(db, cfg, configService, auditService)
-	licenseService := services.NewLicenseService(licenseRepo, configService, auditService)
-	userService := services.NewUserService(userRepo, auditService, cfg)
-	authService := services.NewAuthService(userRepo, configService)
-	migrationService := services.NewDataMigrationService(db, auditService, configService)
+	if auditService == nil {
+		log.Fatal("❌ GAGAL MEMBUAT AUDIT SERVICE")
+		return
+	}
 
-	exePath, _ := os.Executable()
+	configService := services.NewConfigService(configRepo, db)
+	if configService == nil {
+		log.Fatal("❌ GAGAL MEMBUAT CONFIG SERVICE")
+		return
+	}
+
+	backupService := services.NewBackupService(db, cfg, configService, auditService)
+	if backupService == nil {
+		log.Fatal("❌ GAGAL MEMBUAT BACKUP SERVICE")
+		return
+	}
+
+	// This is the critical line 92 where the original error occurred
+	licenseService := services.NewLicenseService(licenseRepo, configService, auditService)
+	if licenseService == nil {
+		log.Fatal("❌ GAGAL MEMBUAT LICENSE SERVICE")
+		return
+	}
+
+	userService := services.NewUserService(userRepo, auditService, cfg)
+	if userService == nil {
+		log.Fatal("❌ GAGAL MEMBUAT USER SERVICE")
+		return
+	}
+
+	authService := services.NewAuthService(userRepo, configService)
+	if authService == nil {
+		log.Fatal("❌ GAGAL MEMBUAT AUTH SERVICE")
+		return
+	}
+
+	migrationService := services.NewDataMigrationService(db, auditService, configService)
+	if migrationService == nil {
+		log.Fatal("❌ GAGAL MEMBUAT MIGRATION SERVICE")
+		return
+	}
+
+	// Get executable path for services that need it
+	exePath, err := os.Executable()
+	if err != nil {
+		log.Printf("⚠️  Warning: Cannot get executable path: %v", err)
+		exePath = ""
+	}
 	exeDir := filepath.Dir(exePath)
 
 	docService := services.NewLostDocumentService(db, docRepo, residentRepo, userRepo, auditService, configService, configRepo, exeDir)
+	if docService == nil {
+		log.Fatal("❌ GAGAL MEMBUAT DOCUMENT SERVICE")
+		return
+	}
+
 	dashboardService := services.NewDashboardService(docRepo, userRepo, configService)
+	if dashboardService == nil {
+		log.Fatal("❌ GAGAL MEMBUAT DASHBOARD SERVICE")
+		return
+	}
+
 	reportService := services.NewReportService(docRepo, configService, exeDir)
+	if reportService == nil {
+		log.Fatal("❌ GAGAL MEMBUAT REPORT SERVICE")
+		return
+	}
+
 	itemTemplateService := services.NewItemTemplateService(itemTemplateRepo)
+	if itemTemplateService == nil {
+		log.Fatal("❌ GAGAL MEMBUAT ITEM TEMPLATE SERVICE")
+		return
+	}
+
 	dbTestService := services.NewDBTestService()
+	if dbTestService == nil {
+		log.Fatal("❌ GAGAL MEMBUAT DB TEST SERVICE")
+		return
+	}
+
 	updateService := services.NewUpdateService()
+	if updateService == nil {
+		log.Fatal("❌ GAGAL MEMBUAT UPDATE SERVICE")
+		return
+	}
+
+	log.Println("✅ Services berhasil dibuat")
+
+	// Initialize controllers with proper error handling
+	log.Println("🔧 Menginisialisasi controllers...")
 
 	authController := controllers.NewAuthController(authService, configService)
-	userController := controllers.NewUserController(userService)
-	docController := controllers.NewLostDocumentController(docService)
-	dashboardController := controllers.NewDashboardController(dashboardService)
-	configController := controllers.NewConfigController(configService, userService, backupService, migrationService)
-	auditController := controllers.NewAuditLogController(auditService)
-	backupController := controllers.NewBackupController(backupService)
-	settingsController := controllers.NewSettingsController(configService, auditService)
-	licenseController := controllers.NewLicenseController(licenseService, auditService)
-	reportController := controllers.NewReportController(reportService, configService)
-	itemTemplateController := controllers.NewItemTemplateController(itemTemplateService)
-	dbTestController := controllers.NewDBTestController(dbTestService)
-	updateController := controllers.NewUpdateController(updateService, version)
+	if authController == nil {
+		log.Fatal("❌ GAGAL MEMBUAT AUTH CONTROLLER")
+		return
+	}
 
-	if os.Getenv("APP_ENV") == "production" { gin.SetMode(gin.ReleaseMode) }
+	userController := controllers.NewUserController(userService)
+	if userController == nil {
+		log.Fatal("❌ GAGAL MEMBUAT USER CONTROLLER")
+		return
+	}
+
+	docController := controllers.NewLostDocumentController(docService)
+	if docController == nil {
+		log.Fatal("❌ GAGAL MEMBUAT DOCUMENT CONTROLLER")
+		return
+	}
+
+	dashboardController := controllers.NewDashboardController(dashboardService)
+	if dashboardController == nil {
+		log.Fatal("❌ GAGAL MEMBUAT DASHBOARD CONTROLLER")
+		return
+	}
+
+	configController := controllers.NewConfigController(configService, userService, backupService, migrationService)
+	if configController == nil {
+		log.Fatal("❌ GAGAL MEMBUAT CONFIG CONTROLLER")
+		return
+	}
+
+	auditController := controllers.NewAuditLogController(auditService)
+	if auditController == nil {
+		log.Fatal("❌ GAGAL MEMBUAT AUDIT CONTROLLER")
+		return
+	}
+
+	backupController := controllers.NewBackupController(backupService)
+	if backupController == nil {
+		log.Fatal("❌ GAGAL MEMBUAT BACKUP CONTROLLER")
+		return
+	}
+
+	settingsController := controllers.NewSettingsController(configService, auditService)
+	if settingsController == nil {
+		log.Fatal("❌ GAGAL MEMBUAT SETTINGS CONTROLLER")
+		return
+	}
+
+	licenseController := controllers.NewLicenseController(licenseService, auditService)
+	if licenseController == nil {
+		log.Fatal("❌ GAGAL MEMBUAT LICENSE CONTROLLER")
+		return
+	}
+
+	reportController := controllers.NewReportController(reportService, configService)
+	if reportController == nil {
+		log.Fatal("❌ GAGAL MEMBUAT REPORT CONTROLLER")
+		return
+	}
+
+	itemTemplateController := controllers.NewItemTemplateController(itemTemplateService)
+	if itemTemplateController == nil {
+		log.Fatal("❌ GAGAL MEMBUAT ITEM TEMPLATE CONTROLLER")
+		return
+	}
+
+	dbTestController := controllers.NewDBTestController(dbTestService)
+	if dbTestController == nil {
+		log.Fatal("❌ GAGAL MEMBUAT DB TEST CONTROLLER")
+		return
+	}
+
+	updateController := controllers.NewUpdateController(updateService, version)
+	if updateController == nil {
+		log.Fatal("❌ GAGAL MEMBUAT UPDATE CONTROLLER")
+		return
+	}
+
+	log.Println("✅ Controllers berhasil dibuat")
+
+	// Setup Gin router
+	log.Println("🔧 Menginisialisasi web server...")
+
+	if os.Getenv("APP_ENV") == "production" {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
 	r := gin.Default()
 	r.Use(cors.Default())
 	r.Use(gzip.Gzip(gzip.DefaultCompression))
-	r.MaxMultipartMemory = 8 << 20
+	r.MaxMultipartMemory = 8 << 20 // 8 MiB
 
+	// Setup templates
 	funcMap := template.FuncMap{"ToUpper": strings.ToUpper}
 	templ := template.Must(template.New("").Funcs(funcMap).ParseFS(web.Assets, "templates/*.html", "templates/partials/*.html"))
 	r.SetHTMLTemplate(templ)
 	r.StaticFS("/static", web.GetStaticFS())
 
+	// Set global template variables
 	r.Use(func(c *gin.Context) {
 		c.Set("AppVersion", version)
 		decodedChangelog, _ := utils.DecodeBase64(changelogBase64)
@@ -136,43 +358,83 @@ func main() {
 		c.Next()
 	})
 
-	// FIX: Tambahkan settingsController ke pemanggilan fungsi
+	// Setup routes
 	setupRoutes(r, authController, configController, dbTestController, userRepo, configService, 
 		dashboardController, updateController, docService, docController, itemTemplateController, 
 		userController, backupController, auditController, licenseController, licenseService, reportController, settingsController)
 
+	// Setup HTTP server
 	port := os.Getenv("PORT")
-	if port == "" { port = "8080" }
-	srv := &http.Server{Addr: ":" + port, Handler: r}
+	if port == "" {
+		port = "8080"
+	}
 
+	srv := &http.Server{
+		Addr:    ":" + port,
+		Handler: r,
+	}
+
+	// Setup graceful shutdown
 	quitChan := make(chan os.Signal, 1)
 	signal.Notify(quitChan, syscall.SIGINT, syscall.SIGTERM)
 
+	// Setup HTTPS if enabled
 	isHTTPS := os.Getenv("ENABLE_HTTPS") == "true"
 	certFile, keyFile := "", ""
 	if isHTTPS {
-		certFile, keyFile, _ = utils.EnsureCertificates()
+		var err error
+		certFile, keyFile, err = utils.EnsureCertificates()
+		if err != nil {
+			log.Printf("⚠️  HTTPS setup failed: %v", err)
+			isHTTPS = false
+		}
 	}
 
+	// Start server in goroutine
 	go func() {
+		log.Printf("🚀 Starting server on port %s (HTTPS: %v)", port, isHTTPS)
+		
 		if isHTTPS {
 			if err := srv.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
-				log.Fatalf("Server Error: %s\n", err)
+				log.Fatalf("❌ HTTPS Server Error: %s\n", err)
 			}
 		} else {
 			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				log.Fatalf("Server Error: %s\n", err)
+				log.Fatalf("❌ HTTP Server Error: %s\n", err)
 			}
 		}
 	}()
 
-	go func() { <-quitChan; systray.Quit() }()
+	// Setup graceful shutdown handler
+	go func() {
+		<-quitChan
+		log.Println("🛑 Shutdown signal received, stopping server...")
+		systray.Quit()
+	}()
 
-	systray.Run(func() { onReady(isHTTPS, port) }, func() {
+	log.Println("✅ SIMDOKPOL berhasil diinisialisasi, menjalankan system tray...")
+
+	// Run system tray
+	systray.Run(func() { 
+		onReady(isHTTPS, port) 
+	}, func() {
+		log.Println("🛑 Shutting down server...")
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
+		
 		if err := srv.Shutdown(ctx); err != nil {
-			log.Fatal("Shutdown error:", err)
+			log.Printf("❌ Server shutdown error: %v", err)
+		} else {
+			log.Println("✅ Server shutdown successfully")
+		}
+
+		// Close database connection
+		if sqlDB != nil {
+			if err := sqlDB.Close(); err != nil {
+				log.Printf("❌ Database close error: %v", err)
+			} else {
+				log.Println("✅ Database connection closed")
+			}
 		}
 	})
 }
@@ -280,11 +542,24 @@ func setupRoutes(r *gin.Engine, authController *controllers.AuthController, conf
 	pro.DELETE("/api/item-templates/:id", itemTemplateController.Delete)
 }
 
-// Helper Functions
+// Helper Functions with improved error handling
 func setupDatabase(cfg *config.Config) (*gorm.DB, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("configuration is nil")
+	}
+
 	var db *gorm.DB
 	var err error
-	gormConfig := &gorm.Config{Logger: logger.Default.LogMode(logger.Warn)}
+	
+	// Enhanced GORM configuration
+	gormConfig := &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Warn),
+		// Add more resilient configurations
+		DisableForeignKeyConstraintWhenMigrating: false,
+		SkipDefaultTransaction: false,
+	}
+
+	log.Printf("🔧 Connecting to database (dialect: %s)", cfg.DBDialect)
 
 	switch cfg.DBDialect {
 	case "mysql":
@@ -295,34 +570,177 @@ func setupDatabase(cfg *config.Config) (*gorm.DB, error) {
 		case "verify-full":
 			tlsOption = "true"
 		}
-		dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local&tls=%s", cfg.DBUser, cfg.DBPass, cfg.DBHost, cfg.DBPort, cfg.DBName, tlsOption)
+		dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local&tls=%s", 
+			cfg.DBUser, cfg.DBPass, cfg.DBHost, cfg.DBPort, cfg.DBName, tlsOption)
+		
+		log.Printf("🔧 MySQL DSN: %s:***@tcp(%s:%s)/%s", cfg.DBUser, cfg.DBHost, cfg.DBPort, cfg.DBName)
 		db, err = gorm.Open(mysql.Open(dsn), gormConfig)
+		
 	case "postgres":
 		sslMode := cfg.DBSSLMode
-		if sslMode == "" { sslMode = "disable" }
-		dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=Asia/Jakarta", cfg.DBHost, cfg.DBUser, cfg.DBPass, cfg.DBName, cfg.DBPort, sslMode)
+		if sslMode == "" { 
+			sslMode = "disable" 
+		}
+		dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=Asia/Jakarta", 
+			cfg.DBHost, cfg.DBUser, cfg.DBPass, cfg.DBName, cfg.DBPort, sslMode)
+		
+		log.Printf("🔧 PostgreSQL DSN: host=%s user=%s dbname=%s port=%s", cfg.DBHost, cfg.DBUser, cfg.DBName, cfg.DBPort)
 		db, err = gorm.Open(postgres.Open(dsn), gormConfig)
+		
 	default:
+		// SQLite - Enhanced error handling
+		log.Printf("🔧 SQLite DSN: %s", cfg.DBDSN)
+		
+		// Ensure directory exists for SQLite
+		if strings.Contains(cfg.DBDSN, "/") || strings.Contains(cfg.DBDSN, "\\") {
+			dbDir := filepath.Dir(cfg.DBDSN)
+			if err := os.MkdirAll(dbDir, 0755); err != nil {
+				return nil, fmt.Errorf("failed to create SQLite directory %s: %w", dbDir, err)
+			}
+		}
+		
 		db, err = gorm.Open(sqlite.Open(cfg.DBDSN), gormConfig)
-		if err == nil { db.Exec("PRAGMA foreign_keys = ON") }
+		if err == nil {
+			// Enable foreign keys for SQLite
+			db.Exec("PRAGMA foreign_keys = ON")
+			db.Exec("PRAGMA journal_mode = WAL")
+			db.Exec("PRAGMA synchronous = NORMAL")
+		}
 	}
-	if err != nil { return nil, err }
-	sqlDB, _ := db.DB()
-	sqlDB.SetMaxIdleConns(10); sqlDB.SetMaxOpenConns(100); sqlDB.SetConnMaxLifetime(time.Hour)
-	err = db.AutoMigrate(&models.User{}, &models.Resident{}, &models.LostDocument{}, &models.LostItem{}, &models.AuditLog{}, &models.Configuration{}, &models.ItemTemplate{}, &models.License{})
-	if err != nil { return nil, fmt.Errorf("migrasi gagal: %w", err) }
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
+	}
+
+	// Configure connection pool
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get database instance: %w", err)
+	}
+
+	// Improved connection pool settings
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetMaxOpenConns(100)
+	sqlDB.SetConnMaxLifetime(time.Hour)
+
+	// Test connection
+	if err := sqlDB.Ping(); err != nil {
+		return nil, fmt.Errorf("database ping failed: %w", err)
+	}
+
+	log.Println("🔧 Running database migrations...")
+
+	// Enhanced AutoMigrate with better error handling
+	err = db.AutoMigrate(
+		&models.User{},
+		&models.Resident{},
+		&models.LostDocument{},
+		&models.LostItem{},
+		&models.AuditLog{},
+		&models.Configuration{},
+		&models.ItemTemplate{},
+		&models.License{},
+	)
+
+	if err != nil {
+		// Log detailed migration error
+		log.Printf("❌ Migration failed: %v", err)
+		
+		// Check if it's the specific FOREIGN column issue
+		if strings.Contains(err.Error(), "FOREIGN") && strings.Contains(err.Error(), "lost_documents") {
+			log.Println("🔧 Detected FOREIGN column issue in lost_documents table")
+			log.Println("💡 Suggested fix: Delete the corrupted database file and restart the application")
+			log.Printf("💡 Database location: %s", cfg.DBDSN)
+			
+			return nil, fmt.Errorf("database migration failed due to corrupted schema (FOREIGN column issue): %w\n" +
+				"Solution: Delete the database file and restart the application to create a fresh schema", err)
+		}
+		
+		return nil, fmt.Errorf("database migration failed: %w", err)
+	}
+
+	log.Println("✅ Database migrations completed successfully")
 	return db, nil
 }
 
-func setupEnvironment() { envPath := filepath.Join(utils.GetAppDataDir(), ".env"); _ = godotenv.Overload(envPath); _ = godotenv.Load() }
-func setupLogging() { logPath := filepath.Join(utils.GetAppDataDir(), "logs", "simdokpol.log"); _ = os.MkdirAll(filepath.Dir(logPath), 0755); fileLogger := &lumberjack.Logger{Filename: logPath, MaxSize: 10, MaxBackups: 3, MaxAge: 28, Compress: true}; mw := io.MultiWriter(os.Stdout, fileLogger); log.SetOutput(mw) }
-func mustGetConfig(s services.ConfigService) *dto.AppConfig { c, _ := s.GetConfig(); return c }
+func setupEnvironment() {
+	envPath := filepath.Join(utils.GetAppDataDir(), ".env")
+	
+	// Load environment files with error handling
+	if err := godotenv.Overload(envPath); err != nil {
+		log.Printf("⚠️  Cannot load %s: %v", envPath, err)
+	}
+	
+	if err := godotenv.Load(); err != nil {
+		log.Printf("⚠️  Cannot load default .env: %v", err)
+	}
+	
+	log.Printf("🔧 Environment loaded from: %s", envPath)
+}
+
+func setupLogging() {
+	logPath := filepath.Join(utils.GetAppDataDir(), "logs", "simdokpol.log")
+	
+	// Ensure log directory exists
+	if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
+		log.Printf("⚠️  Cannot create log directory: %v", err)
+		return
+	}
+	
+	// Setup log rotation
+	fileLogger := &lumberjack.Logger{
+		Filename:   logPath,
+		MaxSize:    10,   // megabytes
+		MaxBackups: 3,
+		MaxAge:     28,   // days
+		Compress:   true,
+	}
+	
+	// Multi-writer to both console and file
+	mw := io.MultiWriter(os.Stdout, fileLogger)
+	log.SetOutput(mw)
+	
+	// Set log flags for better debugging
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	
+	log.Printf("🔧 Logging configured: %s", logPath)
+}
+
+func mustGetConfig(s services.ConfigService) *dto.AppConfig {
+	if s == nil {
+		log.Printf("⚠️  ConfigService is nil in mustGetConfig")
+		return &dto.AppConfig{} // Return empty config instead of nil
+	}
+	
+	c, err := s.GetConfig()
+	if err != nil {
+		log.Printf("⚠️  Error getting config: %v", err)
+		return &dto.AppConfig{} // Return empty config instead of nil
+	}
+	
+	return c
+}
 
 func seedDefaultTemplates(db *gorm.DB) {
+	if db == nil {
+		log.Printf("⚠️  Database is nil, skipping template seeding")
+		return
+	}
+
 	var count int64
-	db.Model(&models.ItemTemplate{}).Unscoped().Count(&count)
-	if count > 0 { return }
-	log.Println("🔹 Seeding templates...")
+	result := db.Model(&models.ItemTemplate{}).Unscoped().Count(&count)
+	if result.Error != nil {
+		log.Printf("⚠️  Error counting templates: %v", result.Error)
+		return
+	}
+
+	if count > 0 {
+		log.Printf("🔹 Templates already exist (%d), skipping seeding", count)
+		return
+	}
+
+	log.Println("🔹 Seeding default templates...")
+	
 	templates := []models.ItemTemplate{
 		{NamaBarang: "KTP", Urutan: 1, IsActive: true, FieldsConfig: models.JSONFieldArray{{Label: "NIK", Type: "text", DataLabel: "NIK", Regex: "^[0-9]{16}$", RequiredLength: 16, IsNumeric: true, Placeholder: "16 Digit NIK"}}},
 		{NamaBarang: "SIM", Urutan: 2, IsActive: true, FieldsConfig: models.JSONFieldArray{{Label: "Golongan SIM", Type: "select", DataLabel: "Gol", Options: []string{"A", "B I", "B II", "C", "D"}}, {Label: "Nomor SIM", Type: "text", DataLabel: "No. SIM", Regex: "^[0-9]{12,14}$", MinLength: 12, MaxLength: 14, IsNumeric: true}}},
@@ -332,41 +750,84 @@ func seedDefaultTemplates(db *gorm.DB) {
 		{NamaBarang: "ATM", Urutan: 6, IsActive: true, FieldsConfig: models.JSONFieldArray{{Label: "Nama Bank", Type: "select", DataLabel: "Bank", Options: []string{"BRI", "BCA", "Mandiri"}}, {Label: "Nomor Rekening", Type: "text", DataLabel: "No. Rek"}}},
 		{NamaBarang: "LAINNYA", Urutan: 99, IsActive: true, FieldsConfig: models.JSONFieldArray{}},
 	}
-	db.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "nama_barang"}}, DoNothing: true}).Create(&templates)
+
+	result = db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "nama_barang"}},
+		DoNothing: true,
+	}).Create(&templates)
+
+	if result.Error != nil {
+		log.Printf("⚠️  Error seeding templates: %v", result.Error)
+		return
+	}
+
+	log.Printf("✅ Successfully seeded %d templates", len(templates))
 }
 
 func onReady(isHTTPS bool, port string) {
 	iconData := web.GetIconBytes()
-	if len(iconData) > 0 { systray.SetIcon(iconData) } else { systray.SetTitle("SIMDOKPOL") }
+	if len(iconData) > 0 {
+		systray.SetIcon(iconData)
+	} else {
+		systray.SetTitle("SIMDOKPOL")
+	}
+	
 	systray.SetTooltip("SIMDOKPOL Berjalan")
+	
 	mOpen := systray.AddMenuItem("Buka Aplikasi", "Buka di Browser")
 	mVhost := systray.AddMenuItem("Setup Domain (simdokpol.local)", "Konfigurasi Virtual Host")
 	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("Keluar", "Hentikan Server")
 
-	protocol := "http"; if isHTTPS { protocol = "https" }
+	protocol := "http"
+	if isHTTPS {
+		protocol = "https"
+	}
 	
+	// Auto-open browser after server starts
 	go func() {
 		time.Sleep(2 * time.Second)
+		
 		vhost := utils.NewVHostSetup()
-		isVhost, _ := vhost.IsSetup()
+		isVhost, err := vhost.IsSetup()
+		if err != nil {
+			log.Printf("⚠️  VHost setup check error: %v", err)
+		}
+		
 		url := fmt.Sprintf("%s://localhost:%s", protocol, port)
 		if isVhost {
 			url = vhost.GetURL(port)
-			if isHTTPS { url = strings.Replace(url, "http://", "https://", 1) }
+			if isHTTPS {
+				url = strings.Replace(url, "http://", "https://", 1)
+			}
 		}
+		
+		log.Printf("🌐 Opening browser: %s", url)
 		openBrowser(url)
 	}()
 
+	// Handle system tray clicks
 	go func() {
 		for {
 			select {
 			case <-mOpen.ClickedCh:
-				openBrowser(fmt.Sprintf("%s://localhost:%s", protocol, port))
+				url := fmt.Sprintf("%s://localhost:%s", protocol, port)
+				log.Printf("🌐 Manual browser open: %s", url)
+				openBrowser(url)
+				
 			case <-mVhost.ClickedCh:
+				log.Println("🔧 Setting up virtual host...")
 				vhost := utils.NewVHostSetup()
-				if err := vhost.Setup(); err != nil { _ = beeep.Alert("Gagal", "Butuh hak akses Administrator.", "") } else { _ = beeep.Notify("Sukses", "Domain dikonfigurasi!", "") }
+				if err := vhost.Setup(); err != nil {
+					log.Printf("❌ VHost setup failed: %v", err)
+					_ = beeep.Alert("Gagal", "Butuh hak akses Administrator.", "")
+				} else {
+					log.Println("✅ VHost setup successful")
+					_ = beeep.Notify("Sukses", "Domain dikonfigurasi!", "")
+				}
+				
 			case <-mQuit.ClickedCh:
+				log.Println("🛑 User requested quit from system tray")
 				systray.Quit()
 			}
 		}
@@ -375,10 +836,21 @@ func onReady(isHTTPS bool, port string) {
 
 func openBrowser(url string) {
 	var err error
+	
 	switch runtime.GOOS {
-	case "linux": err = exec.Command("xdg-open", url).Start()
-	case "windows": err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
-	case "darwin": err = exec.Command("open", url).Start()
+	case "linux":
+		err = exec.Command("xdg-open", url).Start()
+	case "windows":
+		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	case "darwin":
+		err = exec.Command("open", url).Start()
+	default:
+		err = fmt.Errorf("unsupported platform: %s", runtime.GOOS)
 	}
-	if err != nil { log.Printf("Browser error: %v", err) }
+	
+	if err != nil {
+		log.Printf("❌ Browser open error: %v", err)
+	} else {
+		log.Printf("✅ Browser opened successfully")
+	}
 }
