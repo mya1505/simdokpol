@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"html/template"
 	"io"
@@ -44,14 +45,40 @@ var (
 )
 
 func main() {
+	// --- 1. INISIALISASI SECRETS (WAJIB ADA DI SINI) ---
+	// Cek apakah Secret Key sudah di-inject (misal via LDFLAGS). Jika kosong, ambil dari ENV.
+	if services.AppSecretKeyString == "" {
+		if envKey := os.Getenv("APP_SECRET_KEY"); envKey != "" {
+			services.AppSecretKeyString = envKey
+		} else {
+			// Fallback terakhir (Jangan sampai kosong)
+			services.AppSecretKeyString = "DEV_SECRET_KEY_JANGAN_DIPAKAI_PROD"
+		}
+	}
+
+	if len(services.JWTSecretKey) == 0 {
+		if envJwt := os.Getenv("JWT_SECRET_KEY"); envJwt != "" {
+			services.JWTSecretKey = []byte(envJwt)
+		} else {
+			services.JWTSecretKey = []byte("DEV_JWT_SECRET_KEY")
+		}
+	}
+	// ----------------------------------------------------
+
 	setupEnvironment()
 	setupLogging()
 
 	appData := utils.GetAppDataDir()
+	
+	// --- DEBUG LOG: Print Hash Key untuk Verifikasi ---
+	h := sha256.Sum256([]byte(services.AppSecretKeyString))
+	keyHash := fmt.Sprintf("%x", h[:4]) // Ambil 8 karakter pertama hash
+
 	log.Println("==========================================")
 	log.Printf("🚀 SIMDOKPOL MOBILE - v%s", version)
 	log.Printf("📱 Mode: TERMUX (HEADLESS)")
 	log.Printf("📂 Data Dir: %s", appData)
+	log.Printf("🔑 Secret Key Hash: %s... (Cek ini sama dgn Keygen)", keyHash)
 	log.Println("==========================================")
 
 	cfg := config.LoadConfig()
@@ -100,10 +127,8 @@ func main() {
 	dbTestService := services.NewDBTestService()
 	updateService := services.NewUpdateService()
 
-	// --- FIX DI SINI: Tambahkan argumen 'version' ---
+	// Init Controller dengan argumen 'version' (Fix bug sebelumnya)
 	authController := controllers.NewAuthController(authService, configService, version)
-	// -----------------------------------------------
-
 	userController := controllers.NewUserController(userService)
 	docController := controllers.NewLostDocumentController(docService)
 	dashboardController := controllers.NewDashboardController(dashboardService)
@@ -137,7 +162,7 @@ func main() {
 		c.Next()
 	})
 
-	r.GET("/login", authController.ShowLoginPage) // Gunakan method controller yg baru
+	r.GET("/login", authController.ShowLoginPage)
 	r.POST("/api/login", middleware.LoginRateLimiter.GetLimiterMiddleware(), authController.Login)
 	r.POST("/api/logout", authController.Logout)
 	r.GET("/setup", configController.ShowSetupPage)
@@ -225,6 +250,8 @@ func main() {
 		conf, _ := configService.GetConfig()
 		c.HTML(200, "tentang.html", gin.H{"Title": "Tentang", "CurrentUser": c.MustGet("currentUser"), "AppVersion": version, "Config": conf})
 	})
+
+	// Fix Route: Operator bisa akses list users
 	authorized.GET("/api/users/operators", userController.FindOperators)
 
 	admin := authorized.Group("/")
@@ -240,6 +267,7 @@ func main() {
 	})
 	admin.POST("/api/users", userController.Create)
 	admin.GET("/api/users", userController.FindAll)
+	
 	admin.GET("/api/users/:id", userController.FindByID)
 	admin.PUT("/api/users/:id", userController.Update)
 	admin.DELETE("/api/users/:id", userController.Delete)
