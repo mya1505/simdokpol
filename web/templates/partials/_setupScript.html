@@ -13,6 +13,7 @@ $(document).ready(function() {
         $(this).val(toTitleCase($(this).val()));
     });
 
+    // --- LOGIC TOGGLE PASSWORD (INTIP) ---
     function togglePasswordVisibility(inputId, toggleId) {
         const password = $(inputId);
         const toggle = $(toggleId);
@@ -20,6 +21,7 @@ $(document).ready(function() {
         password.attr('type', type);
         toggle.toggleClass('fa-eye fa-eye-slash');
     }
+
     $('#togglePassword').on('click', function() {
         togglePasswordVisibility('#admin_password', '#togglePassword');
     });
@@ -223,7 +225,6 @@ $(document).ready(function() {
             method: 'POST',
             contentType: 'application/json',
             data: JSON.stringify(formData),
-            // --- FIX: UPDATE SUKSES HANDLER ---
             success: function(response) {
                 let timerInterval;
                 Swal.fire({
@@ -231,7 +232,7 @@ $(document).ready(function() {
                     title: 'Setup Berhasil!',
                     html: 'Sistem sedang dimuat ulang untuk menerapkan konfigurasi.<br>Mohon tunggu sebentar...',
                     allowOutsideClick: false,
-                    timer: 5000, // Tunggu 5 detik (waktu server restart)
+                    timer: 5000, 
                     timerProgressBar: true,
                     didOpen: () => {
                         Swal.showLoading();
@@ -240,11 +241,9 @@ $(document).ready(function() {
                         clearInterval(timerInterval);
                     }
                 }).then(() => {
-                    // Setelah restart selesai, arahkan ke login
                     window.location.href = '/login';
                 });
             },
-            // ----------------------------------
             error: function(jqXHR) {
                 const errorMsg = jqXHR.responseJSON ? jqXHR.responseJSON.error : 'Terjadi kesalahan yang tidak diketahui.';
                 Swal.fire('Gagal', errorMsg, 'error');
@@ -298,7 +297,6 @@ $(document).ready(function() {
             allowOutsideClick: () => !Swal.isLoading()
         }).then((result) => {
             if (result.isConfirmed) {
-                // FIX: Update logika sukses untuk restore juga
                 Swal.fire({
                     title: 'Restore Berhasil!',
                     html: 'Database dipulihkan. Sistem restart otomatis...',

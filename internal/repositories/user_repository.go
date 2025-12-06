@@ -76,9 +76,11 @@ func (r *userRepository) FindByNRP(nrp string) (*models.User, error) {
 }
 
 func (r *userRepository) FindOperators() ([]models.User, error) {
-	var users []models.User
-	err := r.db.Where("peran = ?", "OPERATOR").Order("nama_lengkap asc").Find(&users).Error
-	return users, err
+    var users []models.User
+    // Hapus filter "peran = OPERATOR", kita ambil semua user aktif
+    // Nanti frontend yang filter berdasarkan Jabatan (Kanit/Anggota Jaga)
+    err := r.db.Where("deleted_at IS NULL").Order("nama_lengkap asc").Find(&users).Error
+    return users, err
 }
 
 func (r *userRepository) Update(user *models.User) error {

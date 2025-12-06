@@ -28,6 +28,7 @@ func NewDashboardService(docRepo repositories.LostDocumentRepository, userRepo r
 	}
 }
 
+// --- PERBAIKAN LOGIC NOTIFIKASI ---
 func (s *dashboardService) GetExpiringDocumentsForUser(userID uint, notificationWindowDays int) ([]models.LostDocument, error) {
 	appConfig, err := s.configService.GetConfig()
 	if err != nil { appConfig = &dto.AppConfig{ArchiveDurationDays: 15} } // Default
@@ -42,8 +43,22 @@ func (s *dashboardService) GetExpiringDocumentsForUser(userID uint, notification
 	expiryDateStart := now.Add(-archiveDuration)
 	expiryDateEnd := expiryDateStart.Add(notificationWindow)
 
-	return s.docRepo.FindExpiringDocumentsForUser(userID, expiryDateStart, expiryDateEnd)
+	// 1. Ambil data user yang sedang login
+	user, err := s.userRepo.FindByID(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Logic Percabangan Role
+	if user.Peran == models.RoleSuperAdmin {
+		// Super Admin: Lihat SEMUA notifikasi global
+		return s.docRepo.FindAllExpiringDocuments(expiryDateStart, expiryDateEnd)
+	} else {
+		// Operator: Hanya lihat dokumen miliknya sendiri
+		return s.docRepo.FindExpiringDocumentsForUser(userID, expiryDateStart, expiryDateEnd)
+	}
 }
+// ----------------------------------
 
 func (s *dashboardService) GetDashboardStats() (*dto.DashboardStatsDTO, error) {
 	loc, err := s.configService.GetLocation()
@@ -78,7 +93,6 @@ func (s *dashboardService) GetMonthlyIssuanceChartData() (*dto.ChartDataDTO, err
 	currentYear := time.Now().In(loc).Year()
 
 	counts, err := s.docRepo.GetMonthlyIssuanceForYear(currentYear)
-	// Jika error (misal DB kosong), return data kosong biar frontend gak 500
 	if err != nil {
 		return &dto.ChartDataDTO{
 			Labels: []string{"Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"},
@@ -101,7 +115,6 @@ func (s *dashboardService) GetMonthlyIssuanceChartData() (*dto.ChartDataDTO, err
 func (s *dashboardService) GetItemCompositionPieChartData() (*dto.PieChartDataDTO, error) {
 	stats, err := s.docRepo.GetItemCompositionStats()
 	if err != nil {
-		// Return empty safe data
 		return &dto.PieChartDataDTO{Labels: []string{}, Data: []int{}, BackgroundColors: []string{}}, nil
 	}
 

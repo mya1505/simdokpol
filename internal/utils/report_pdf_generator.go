@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"log"
-	"math" // <-- Tambah import Math
+	"math"
 	"simdokpol/internal/dto"
 	"simdokpol/web"
 	"strconv"
@@ -67,6 +67,11 @@ func GenerateAggregateReportPDF(data *dto.AggregateReportData, config *dto.AppCo
 
 	r.drawReportTitle()
 	r.drawSummaryTable()
+	
+	// --- FITUR BARU: GRAFIK ---
+	r.drawItemBarChart() // <--- Sisipkan Grafik di sini
+	// --------------------------
+
 	r.drawOperatorStatsTable()
 	r.drawItemCompositionTable()
 	r.drawDocumentListTable()
@@ -88,31 +93,17 @@ func (r *reportPdfGenerator) addPage() {
 	r.pdf.SetMargins(pdfMarginLeft, pdfMarginTop, pdfMarginRight)
 	r.pdf.SetAutoPageBreak(true, pdfMarginBottom)
 
-	// --- LOGIKA DINAMIS LEBAR KOP ---
-	// 1. Set font terbesar yang digunakan di KOP untuk pengukuran (Bold 10)
+	// KOP Header
 	r.pdf.SetFont("Courier", "B", 10)
-
-	// 2. Ukur panjang masing-masing baris
 	w1 := r.pdf.GetStringWidth(r.config.KopBaris1)
 	w2 := r.pdf.GetStringWidth(r.config.KopBaris2)
 	w3 := r.pdf.GetStringWidth(r.config.KopBaris3)
-
-	// 3. Ambil yang paling panjang
-	maxWidth := math.Max(w1, math.Max(w2, w3))
-
-	// 4. Tambahkan padding dan Batasan
-	// Minimal 60mm, Maksimal 75mm (agar tidak menabrak logo di X=99)
-	kopWidth := maxWidth + 2.0 // Padding 2mm
+	maxTextWidth := math.Max(w1, math.Max(w2, w3))
 	
-	if kopWidth < 60.0 {
-		kopWidth = 60.0
-	}
-	if kopWidth > 75.0 {
-		kopWidth = 75.0 // Cap di 75mm agar tidak overlap logo
-	}
-	// --------------------------------
+	kopWidth := maxTextWidth + 2.0
+	if kopWidth < 60.0 { kopWidth = 60.0 }
+	if kopWidth > 75.0 { kopWidth = 75.0 }
 
-	// Baris 1 & 2 (Kecil Bold)
 	r.pdf.SetFont("Courier", "B", 9)
 	r.pdf.SetXY(pdfMarginLeft, 20)
 	r.pdf.MultiCell(kopWidth, lineHeightKop, r.config.KopBaris1, "", "C", false)
@@ -120,22 +111,17 @@ func (r *reportPdfGenerator) addPage() {
 	r.pdf.SetX(pdfMarginLeft)
 	r.pdf.MultiCell(kopWidth, lineHeightKop, r.config.KopBaris2, "", "C", false)
 	
-	// Baris 3 (Besar Bold)
 	r.pdf.SetX(pdfMarginLeft)
 	r.pdf.SetFont("Courier", "B", 10)
 	r.pdf.MultiCell(kopWidth, lineHeightKop, r.config.KopBaris3, "", "C", false)
 	
 	r.pdf.Ln(2)
-
-	// Garis Bawah KOP (Dinamis mengikuti lebar kopWidth)
 	currentY := r.pdf.GetY()
 	r.pdf.SetLineWidth(0.3)
 	r.pdf.Line(pdfMarginLeft, currentY, pdfMarginLeft+kopWidth, currentY)
 	r.pdf.SetLineWidth(0.2)
 
-	// Logo (Tetap di tengah)
 	r.pdf.Image("logo_embed", logoX, logoY, logoW, 0, false, "", 0, "")
-
 	r.pdf.SetY(contentStartY)
 
 	r.pdf.SetFooterFunc(func() {
@@ -146,6 +132,74 @@ func (r *reportPdfGenerator) addPage() {
 		r.pdf.SetTextColor(0, 0, 0)
 	})
 }
+
+// --- FITUR BARU: FUNGSI GAMBAR GRAFIK BATANG ---
+func (r *reportPdfGenerator) drawItemBarChart() {
+	// Cek sisa halaman, jika sempit buat halaman baru
+	if r.pdf.GetY() > 200 {
+		r.addPage()
+	}
+	
+	r.pdf.SetFont("Courier", "B", 11)
+	r.pdf.Cell(0, 8, "Grafik Statistik Barang Hilang")
+	r.pdf.Ln(8)
+
+	if len(r.data.ItemComposition) == 0 {
+		r.pdf.SetFont("Courier", "I", 10)
+		r.pdf.Cell(0, 8, "(Tidak ada data untuk ditampilkan)")
+		r.pdf.Ln(10)
+		return
+	}
+
+	// 1. Cari Nilai Tertinggi untuk Skala
+	maxVal := 0
+	for _, item := range r.data.ItemComposition {
+		if item.Count > maxVal {
+			maxVal = item.Count
+		}
+	}
+	if maxVal == 0 { maxVal = 1 } // Prevent divide by zero
+
+	// Konfigurasi Grafik
+	barHeight := 6.0
+	gap := 4.0
+	labelWidth := 40.0 // Lebar area label kiri
+	chartMaxWidth := 120.0 // Lebar maksimal batang
+	
+	r.pdf.SetFont("Courier", "", 9)
+
+	for _, item := range r.data.ItemComposition {
+		// Cek halaman
+		if r.pdf.GetY() > 260 {
+			r.addPage()
+			r.pdf.Ln(10)
+		}
+
+		// Label Kiri
+		r.pdf.CellFormat(labelWidth, barHeight, item.NamaBarang, "", 0, "R", false, 0, "")
+		
+		// Hitung Panjang Batang
+		barWidth := (float64(item.Count) / float64(maxVal)) * chartMaxWidth
+		if barWidth < 1 { barWidth = 1 } // Minimal terlihat dikit
+		
+		// Gambar Batang (Warna Biru Polisi #4e73df)
+		r.pdf.SetFillColor(78, 115, 223) 
+		xPos := r.pdf.GetX() + 2
+		yPos := r.pdf.GetY()
+		r.pdf.Rect(xPos, yPos, barWidth, barHeight, "F")
+		
+		// Tulis Angka di Ujung Batang
+		r.pdf.SetX(xPos + barWidth + 2)
+		r.pdf.SetTextColor(100, 100, 100)
+		r.pdf.Cell(20, barHeight, strconv.Itoa(item.Count))
+		r.pdf.SetTextColor(0, 0, 0) // Reset warna
+
+		r.pdf.Ln(barHeight + gap)
+	}
+	
+	r.pdf.Ln(5) // Spasi bawah
+}
+// ----------------------------------------------------
 
 func (r *reportPdfGenerator) drawReportTitle() {
 	r.pdf.SetFont("Courier", "BU", 12)
@@ -200,7 +254,7 @@ func (r *reportPdfGenerator) drawOperatorStatsTable() {
 
 func (r *reportPdfGenerator) drawItemCompositionTable() {
 	r.pdf.SetFont("Courier", "B", 11)
-	r.pdf.Cell(0, 8, "Statistik Barang Hilang")
+	r.pdf.Cell(0, 8, "Rincian Barang Hilang")
 	r.pdf.Ln(8)
 
 	r.pdf.SetFont("Courier", "B", 9)
@@ -226,7 +280,7 @@ func (r *reportPdfGenerator) drawDocumentListTable() {
 	r.addPage()
 	
 	r.pdf.SetFont("Courier", "B", 11)
-	r.pdf.Cell(0, 8, "Rincian Dokumen")
+	r.pdf.Cell(0, 8, "Daftar Lengkap Dokumen Diterbitkan")
 	r.pdf.Ln(8)
 
 	drawHeader := func() {

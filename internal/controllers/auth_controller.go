@@ -10,19 +10,38 @@ import (
 
 type AuthController struct {
 	service       services.AuthService
-	configService services.ConfigService // Injected
+	configService services.ConfigService
+	currentVersion string // <-- TAMBAH FIELD INI
 }
 
-func NewAuthController(service services.AuthService, configService services.ConfigService) *AuthController {
+// Update Constructor untuk terima version
+func NewAuthController(service services.AuthService, configService services.ConfigService, version string) *AuthController {
 	return &AuthController{
 		service:       service,
 		configService: configService,
+		currentVersion: version,
 	}
 }
 
 type LoginRequest struct {
 	NRP      string `json:"nrp" binding:"required" example:"12345"`
 	Password string `json:"password" binding:"required" example:"password123"`
+}
+
+// ShowLoginPage me-render halaman login dengan data versi
+func (c *AuthController) ShowLoginPage(ctx *gin.Context) {
+	// Cek apakah setup sudah selesai
+	isSetup, _ := c.configService.IsSetupComplete()
+	if !isSetup {
+		ctx.Redirect(http.StatusFound, "/setup")
+		return
+	}
+
+	// Render Login dengan Versi
+	ctx.HTML(http.StatusOK, "login.html", gin.H{
+		"Title":      "Login Masuk",
+		"AppVersion": c.currentVersion, // <-- INJECT VERSI DI SINI
+	})
 }
 
 func (c *AuthController) Login(ctx *gin.Context) {
@@ -38,13 +57,11 @@ func (c *AuthController) Login(ctx *gin.Context) {
 		return
 	}
 
-	// --- LOGIC BARU ---
 	config, _ := c.configService.GetConfig()
 	timeoutSeconds := 28800 // Default 8 jam
 	if config != nil && config.SessionTimeout > 0 {
 		timeoutSeconds = config.SessionTimeout * 60
 	}
-	// ------------------
 
 	isProduction := os.Getenv("APP_ENV") == "production"
 	ctx.SetCookie("token", token, timeoutSeconds, "/", "", isProduction, true)

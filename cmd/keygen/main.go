@@ -12,7 +12,7 @@ import (
 
 // Key default untuk Development (WAJIB SAMA dengan di service)
 var appSecretKey = "JANGAN_PAKAI_DEFAULT_KEY_INI_BAHAYA"
-
+//9b9f3e4e7142eb69ba8c68a33b16924fdfb46a5f3da44721a2502889b254b48d
 func main() {
 	reader := bufio.NewReader(os.Stdin)
 

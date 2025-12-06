@@ -4,6 +4,25 @@ $(document).ready(function() {
         const $counter = $('#notification-counter');
         const $list = $('#notification-list');
 
+        // 1. Ambil Konfigurasi Durasi Arsip dulu dari API
+        $.ajax({
+            url: '/api/config/limits',
+            method: 'GET',
+            success: function(config) {
+                const archiveDurationDays = config.archive_duration_days || 15;
+                
+                // 2. Setelah tahu durasinya, baru ambil data dokumen
+                fetchExpiringDocs(archiveDurationDays, $counter, $list);
+            },
+            error: function() {
+                console.warn("Gagal memuat konfigurasi notifikasi.");
+                // Fallback ke default 15 hari jika gagal
+                fetchExpiringDocs(15, $counter, $list);
+            }
+        });
+    }
+
+    function fetchExpiringDocs(archiveDurationDays, $counter, $list) {
         $.ajax({
             url: '/api/notifications/expiring-documents',
             method: 'GET',
@@ -32,7 +51,6 @@ $(document).ready(function() {
                 $list.empty();
 
                 const now = new Date();
-                const archiveDurationDays = {{ .Config.ArchiveDurationDays }};
 
                 docs.forEach(doc => {
                     const reportDate = new Date(doc.tanggal_laporan);
@@ -44,14 +62,15 @@ $(document).ready(function() {
 
                     let expiryText = '';
                     let iconClass = 'bg-warning';
+                    
                     if (diffDays > 1) {
                         expiryText = `Akan diarsip dalam ${diffDays} hari.`;
-                    } else if (diffDays === 1) {
-                        expiryText = 'Akan diarsip besok.';
+                    } else if (diffDays <= 1 && diffDays >= 0) {
+                        expiryText = 'Segera diarsip (Besok/Hari Ini).';
                         iconClass = 'bg-danger';
                     } else {
-                        expiryText = 'Akan diarsip hari ini.';
-                        iconClass = 'bg-danger';
+                        expiryText = 'Sudah lewat masa aktif.';
+                        iconClass = 'bg-secondary';
                     }
 
                     const notificationItem = `
@@ -64,17 +83,18 @@ $(document).ready(function() {
                             <div>
                                 <div class="small text-gray-500">${new Date(doc.tanggal_laporan).toLocaleDateString('id-ID')}</div>
                                 <span class="font-weight-bold">${doc.nomor_surat}</span><br>
-                                <span>${expiryText}</span>
+                                <span class="small">${expiryText}</span>
                             </div>
                         </a>
                     `;
                     $list.append(notificationItem);
                 });
             },
-            error: function() {
+            error: function(xhr) {
+                console.error("Gagal memuat notifikasi:", xhr.responseText);
                 $list.html(`
                     <a class="dropdown-item d-flex align-items-center" href="#">
-                        <div class="mr-3"><div class="icon-circle bg-danger"><i class="fas fa-exclamation-triangle text-white"></i></div></div>
+                        <div class="mr-3"><div class="icon-circle bg-secondary"><i class="fas fa-exclamation text-white"></i></div></div>
                         <div><span class="font-weight-bold">Gagal memuat notifikasi.</span></div>
                     </a>
                 `);
@@ -84,5 +104,8 @@ $(document).ready(function() {
 
     // Panggil fungsi saat halaman siap
     loadNotifications();
+    
+    // Opsional: Refresh notifikasi setiap 5 menit
+    setInterval(loadNotifications, 300000);
 });
 </script>

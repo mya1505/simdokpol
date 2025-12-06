@@ -17,7 +17,7 @@ import (
 
 	"simdokpol/internal/config"
 	"simdokpol/internal/controllers"
-	"simdokpol/internal/dto" // <-- PENTING: Import DTO sudah ada
+	"simdokpol/internal/dto"
 	"simdokpol/internal/middleware"
 	"simdokpol/internal/models"
 	"simdokpol/internal/repositories"
@@ -25,10 +25,6 @@ import (
 	"simdokpol/internal/utils"
 	"simdokpol/web"
 
-	// --- KHUSUS TERMUX: HAPUS LIBRARY GUI ---
-	// "github.com/gen2brain/beeep"
-	// "github.com/getlantern/systray"
-	
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
@@ -60,12 +56,10 @@ func main() {
 
 	cfg := config.LoadConfig()
 
-	// Setup Database (Tanpa GUI Alert)
 	db, err := setupDatabase(cfg)
 	if err != nil {
 		log.Printf("❌ GAGAL KONEKSI DATABASE: %v. Cek config/restart.", err)
 	} else {
-		// Jalankan Smart Seeding (Data Awal) jika DB connect
 		seedDefaultTemplates(db)
 	}
 
@@ -106,7 +100,10 @@ func main() {
 	dbTestService := services.NewDBTestService()
 	updateService := services.NewUpdateService()
 
-	authController := controllers.NewAuthController(authService, configService)
+	// --- FIX DI SINI: Tambahkan argumen 'version' ---
+	authController := controllers.NewAuthController(authService, configService, version)
+	// -----------------------------------------------
+
 	userController := controllers.NewUserController(userService)
 	docController := controllers.NewLostDocumentController(docService)
 	dashboardController := controllers.NewDashboardController(dashboardService)
@@ -140,8 +137,7 @@ func main() {
 		c.Next()
 	})
 
-	// --- ROUTES (Sama persis dengan versi PC) ---
-	r.GET("/login", func(c *gin.Context) { c.HTML(200, "login.html", gin.H{"Title": "Login"}) })
+	r.GET("/login", authController.ShowLoginPage) // Gunakan method controller yg baru
 	r.POST("/api/login", middleware.LoginRateLimiter.GetLimiterMiddleware(), authController.Login)
 	r.POST("/api/logout", authController.Logout)
 	r.GET("/setup", configController.ShowSetupPage)
@@ -229,6 +225,7 @@ func main() {
 		conf, _ := configService.GetConfig()
 		c.HTML(200, "tentang.html", gin.H{"Title": "Tentang", "CurrentUser": c.MustGet("currentUser"), "AppVersion": version, "Config": conf})
 	})
+	authorized.GET("/api/users/operators", userController.FindOperators)
 
 	admin := authorized.Group("/")
 	admin.Use(middleware.AdminAuthMiddleware())
@@ -243,7 +240,6 @@ func main() {
 	})
 	admin.POST("/api/users", userController.Create)
 	admin.GET("/api/users", userController.FindAll)
-	admin.GET("/api/users/operators", userController.FindOperators)
 	admin.GET("/api/users/:id", userController.FindByID)
 	admin.PUT("/api/users/:id", userController.Update)
 	admin.DELETE("/api/users/:id", userController.Delete)
@@ -285,7 +281,6 @@ func main() {
 	pro.PUT("/api/item-templates/:id", itemTemplateController.Update)
 	pro.DELETE("/api/item-templates/:id", itemTemplateController.Delete)
 
-	// --- STARTUP SEQUENCE KHUSUS TERMUX ---
 	port := os.Getenv("PORT")
 	if port == "" { port = "8080" }
 	
@@ -294,7 +289,6 @@ func main() {
 	quitChan := make(chan os.Signal, 1)
 	signal.Notify(quitChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// HTTPS (Tetap ada, tapi tanpa install otomatis GUI)
 	isHTTPS := os.Getenv("ENABLE_HTTPS") == "true"
 	certFile, keyFile := "", ""
 	if isHTTPS {
@@ -320,7 +314,6 @@ func main() {
 		}
 	}()
 
-	// --- AUTO OPEN BROWSER (TERMUX SUPPORT) ---
 	go func() {
 		time.Sleep(2 * time.Second)
 		url := fmt.Sprintf("http://localhost:%s", port)
@@ -330,7 +323,6 @@ func main() {
 		openBrowserTermux(url)
 	}()
 
-	// --- BLOCKING (Tanpa Systray) ---
 	<-quitChan
 	log.Println("🛑 Shutting down server...")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -340,8 +332,6 @@ func main() {
 	}
 	log.Println("✅ Server stopped.")
 }
-
-// Helper Functions (Duplikat dari main.go agar mandiri)
 
 func setupDatabase(cfg *config.Config) (*gorm.DB, error) {
 	var db *gorm.DB
@@ -411,7 +401,6 @@ func seedDefaultTemplates(db *gorm.DB) {
 }
 
 func openBrowserTermux(url string) {
-	// Gunakan perintah khusus Android
 	if _, err := exec.LookPath("termux-open-url"); err == nil {
 		exec.Command("termux-open-url", url).Start()
 	} else {

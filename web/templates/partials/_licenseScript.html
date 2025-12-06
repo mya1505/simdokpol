@@ -19,10 +19,10 @@ $(document).ready(function() {
         }
     });
 
-    // 2. Cek Status Lisensi (Untuk Update UI)
+    // 2. Cek Status Lisensi (Endpoint Publik - Fix Bug Operator)
     function checkLicenseStatus() {
         $.ajax({
-            url: "/api/settings", 
+            url: "/api/config/limits", // <-- GANTI ENDPOINT DI SINI
             method: "GET",
             success: function (config) {
                 if (config.license_status === 'VALID') {
@@ -67,7 +67,7 @@ $(document).ready(function() {
                     title: 'Aktivasi Berhasil!',
                     html: 'Fitur Pro terbuka. Sistem sedang dimuat ulang...<br>Mohon tunggu.',
                     allowOutsideClick: false,
-                    timer: 5000, // 5 Detik waktu restart
+                    timer: 5000, 
                     timerProgressBar: true,
                     didOpen: () => {
                         Swal.showLoading();
@@ -76,7 +76,7 @@ $(document).ready(function() {
                         clearInterval(timerInterval);
                     }
                 }).then(() => {
-                    window.location.reload(); // Reload halaman
+                    window.location.reload(); 
                 });
             },
             error: function(jqXHR) {

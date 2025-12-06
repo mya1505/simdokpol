@@ -43,17 +43,27 @@ func NewConfigController(
 	}
 }
 
-// @Summary Ambil Batasan Konfigurasi (Publik)
+// @Summary Ambil Batasan Konfigurasi (Publik & License Check)
 // @Router /api/config/limits [get]
 func (c *ConfigController) GetLimits(ctx *gin.Context) {
 	cfg, err := c.configService.GetConfig()
 	if err != nil {
-		ctx.JSON(http.StatusOK, gin.H{"session_timeout": 480, "idle_timeout": 15})
+		// Fallback default
+		ctx.JSON(http.StatusOK, gin.H{
+			"session_timeout":       480,
+			"idle_timeout":          15,
+			"license_status":        "UNLICENSED",
+			"archive_duration_days": 15, // Default aman
+		})
 		return
 	}
+	
 	ctx.JSON(http.StatusOK, gin.H{
-		"session_timeout": cfg.SessionTimeout,
-		"idle_timeout":    cfg.IdleTimeout,
+		"session_timeout":       cfg.SessionTimeout,
+		"idle_timeout":          cfg.IdleTimeout,
+		"license_status":        cfg.LicenseStatus,
+		// TAMBAHAN BARU: Kirim durasi arsip ke frontend
+		"archive_duration_days": cfg.ArchiveDurationDays, 
 	})
 }
 
@@ -121,24 +131,16 @@ func (c *ConfigController) SaveSetup(ctx *gin.Context) {
 		return
 	}
 
-	// 1. NORMALISASI PATH SQLITE AGAR ABSOLUT
-	// Ini kunci perbaikan: pastikan path yang disimpan ke .env nanti adalah path absolut
 	if req.DBDialect == "sqlite" || req.DBDialect == "" {
 		req.DBDialect = "sqlite"
 		if req.DBDSN == "" {
 			req.DBDSN = "simdokpol.db"
 		}
-
-		// Bersihkan prefix "file:" jika ada
 		cleanPath := strings.TrimPrefix(req.DBDSN, "file:")
 		cleanPath = strings.Split(cleanPath, "?")[0]
-
-		// Jika path relatif, tambahkan AppDataDir di depannya
 		if !filepath.IsAbs(cleanPath) {
 			cleanPath = filepath.Join(utils.GetAppDataDir(), cleanPath)
 		}
-
-		// Rebuild DSN dengan path absolut
 		req.DBDSN = cleanPath + "?_foreign_keys=on"
 		log.Printf("INFO SETUP: Database path dinormalisasi ke absolut: %s", req.DBDSN)
 	}
@@ -150,7 +152,6 @@ func (c *ConfigController) SaveSetup(ctx *gin.Context) {
 		return
 	}
 
-	// 2. MIGRASI TABEL
 	if err := targetDB.AutoMigrate(
 		&models.User{}, &models.Resident{}, &models.LostDocument{}, &models.LostItem{},
 		&models.Configuration{}, &models.AuditLog{}, &models.ItemTemplate{}, &models.License{},
@@ -160,7 +161,6 @@ func (c *ConfigController) SaveSetup(ctx *gin.Context) {
 		return
 	}
 
-	// 3. BUAT ADMIN (TRANSAKSI EKSPLISIT)
 	tx := targetDB.Begin()
 	if tx.Error != nil {
 		APIError(ctx, http.StatusInternalServerError, "DB Error Transaction")
@@ -178,7 +178,6 @@ func (c *ConfigController) SaveSetup(ctx *gin.Context) {
 		Regu:        "-",
 	}
 
-	// Gunakan FirstOrCreate agar idempoten
 	if err := tx.Where("nrp = ?", superAdmin.NRP).FirstOrCreate(superAdmin).Error; err != nil {
 		tx.Rollback()
 		log.Printf("ERROR: Create Admin: %v", err)
@@ -197,10 +196,9 @@ func (c *ConfigController) SaveSetup(ctx *gin.Context) {
 	sqlDB, _ := targetDB.DB()
 	sqlDB.Close()
 
-	// 4. SIMPAN KONFIGURASI
 	configData := map[string]string{
 		"DB_DIALECT":            req.DBDialect,
-		"DB_DSN":                req.DBDSN, // Ini sudah absolut sekarang
+		"DB_DSN":                req.DBDSN,
 		"DB_HOST":               req.DBHost,
 		"DB_PORT":               req.DBPort,
 		"DB_USER":               req.DBUser,
@@ -224,9 +222,8 @@ func (c *ConfigController) SaveSetup(ctx *gin.Context) {
 		return
 	}
 
-	// 5. RESTART OTOMATIS
 	go func() {
-		time.Sleep(2 * time.Second) // Beri waktu response terkirim
+		time.Sleep(2 * time.Second)
 		log.Println("✅ Setup Selesai. Melakukan Restart Otomatis...")
 		utils.RestartApp()
 	}()
@@ -234,8 +231,6 @@ func (c *ConfigController) SaveSetup(ctx *gin.Context) {
 	APIResponse(ctx, http.StatusOK, "Setup berhasil. Sistem sedang dimuat ulang...", nil)
 }
 
-// @Summary Migrasi Data (Stream)
-// @Router /api/settings/migrate [post]
 func (c *ConfigController) MigrateDatabase(ctx *gin.Context) {
 	var req dto.DBTestRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {

@@ -3,31 +3,17 @@
     <head>
         <meta charset="utf-8" />
         <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-        <meta
-            name="viewport"
-            content="width=device-width, initial-scale=1, shrink-to-fit=no"
-        />
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
         <title>SIMDOKPOL - {{ .Title }}</title>
         <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico" />
-        <link
-            href="/static/vendor/fontawesome-free/css/all.min.css"
-            rel="stylesheet"
-            type="text/css"
-        />
+        <link href="/static/vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css" />
         <link href="/static/fonts/nunito.css" rel="stylesheet" />
         <link href="/static/css/sb-admin-2.min.css" rel="stylesheet" />
-        <link
-            href="/static/vendor/sweetalert2/sweetalert2.min.css"
-            rel="stylesheet"
-        />
+        <link href="/static/vendor/sweetalert2/sweetalert2.min.css" rel="stylesheet" />
         <link href="/static/css/custom.css" rel="stylesheet" />
         <style>
-            .btn-login {
-                font-size: 0.9rem;
-                letter-spacing: 0.05rem;
-                padding: 0.85rem 1rem;
-                font-weight: 700;
-            }
+            .btn-login { font-size: 0.9rem; letter-spacing: 0.05rem; padding: 0.85rem 1rem; font-weight: 700; }
+            .version-tag { font-size: 0.75rem; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 10px; margin-top: 5px; display: inline-block; color: rgba(255,255,255,0.8); }
         </style>
     </head>
     <body class="bg-gradient-primary">
@@ -40,65 +26,26 @@
                                 <div class="col-lg-12">
                                     <div class="p-5">
                                         <div class="text-center">
-                                            <img
-                                                src="/static/img/logo.png"
-                                                alt="Logo Polri"
-                                                style="
-                                                    max-width: 90px;
-                                                    margin-bottom: 1rem;
-                                                "
-                                            />
-
-                                            <h1 class="h4 text-gray-900 mb-1">
-                                                SIMDOKPOL
-                                            </h1>
-                                            <p class="mb-4 small text-gray-600">
-                                                Sistem Informasi Manajemen
-                                                Dokumen Kepolisian
-                                            </p>
+                                            <img src="/static/img/logo.png" alt="Logo Polri" style="max-width: 90px; margin-bottom: 1rem;" />
+                                            <h1 class="h4 text-gray-900 mb-1">SIMDOKPOL</h1>
+                                            <p class="mb-4 small text-gray-600">Sistem Informasi Manajemen Dokumen Kepolisian</p>
                                         </div>
 
                                         <form class="user" id="login-form">
                                             <div class="form-group">
-                                                <input
-                                                    type="text"
-                                                    class="form-control form-control-user"
-                                                    id="nrp"
-                                                    aria-describedby="nrpHelp"
-                                                    placeholder="Masukkan Nomor Registrasi Pokok (NRP)..."
-                                                    required
-                                                />
+                                                <input type="text" class="form-control form-control-user" id="nrp" placeholder="Masukkan Nomor Registrasi Pokok (NRP)..." required />
                                             </div>
-                                            <div
-                                                class="form-group password-wrapper"
-                                            >
-                                                <input
-                                                    type="password"
-                                                    class="form-control form-control-user"
-                                                    id="password"
-                                                    placeholder="Kata Sandi"
-                                                    required
-                                                />
-                                                <i
-                                                    class="fas fa-eye password-peek"
-                                                    id="togglePassword"
-                                                ></i>
+                                            <div class="form-group password-wrapper">
+                                                <input type="password" class="form-control form-control-user" id="password" placeholder="Kata Sandi" required />
+                                                <i class="fas fa-eye password-peek" id="togglePassword"></i>
                                             </div>
-                                            <button
-                                                type="submit"
-                                                class="btn btn-primary btn-user btn-block btn-login"
-                                            >
+                                            <button type="submit" class="btn btn-primary btn-user btn-block btn-login">
                                                 <i class="fas fa-sign-in-alt mr-2"></i> Login Masuk
                                             </button>
                                         </form>
                                         <hr />
                                         <div class="text-center">
-                                            <a
-                                                class="small"
-                                                href="#"
-                                                id="forgot-password-link"
-                                                >Lupa Kata Sandi?</a
-                                            >
+                                            <a class="small" href="#" id="forgot-password-link">Lupa Kata Sandi?</a>
                                         </div>
                                     </div>
                                 </div>
@@ -106,9 +53,8 @@
                         </div>
                     </div>
                     <div class="text-center mt-3">
-                        <span class="text-white small"
-                            >Copyright &copy; SIMDOKPOL 2025</span
-                        >
+                        <span class="text-white small">Copyright &copy; SIMDOKPOL 2025</span><br>
+                        <span class="version-tag">v{{ if .AppVersion }}{{ .AppVersion }}{{ else }}dev{{ end }}</span>
                     </div>
                 </div>
             </div>

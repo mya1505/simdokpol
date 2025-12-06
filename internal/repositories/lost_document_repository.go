@@ -27,7 +27,12 @@ type LostDocumentRepository interface {
 	CountByDateRange(start time.Time, end time.Time) (int64, error)
 	GetMonthlyIssuanceForYear(year int) ([]MonthlyCount, error)
 	GetItemCompositionStats() ([]dto.ItemCompositionStat, error)
+	
+	// --- FIX NOTIFIKASI: Tambah method ini ---
 	FindExpiringDocumentsForUser(userID uint, expiryDateStart time.Time, expiryDateEnd time.Time) ([]models.LostDocument, error)
+	FindAllExpiringDocuments(expiryDateStart time.Time, expiryDateEnd time.Time) ([]models.LostDocument, error)
+	// ----------------------------------------
+
 	GetItemCompositionStatsInRange(start time.Time, end time.Time) ([]dto.ItemCompositionStat, error)
 	CountByOperatorInRange(start time.Time, end time.Time) ([]dto.OperatorStat, error)
 	FindAllByDateRange(start time.Time, end time.Time) ([]models.LostDocument, error)
@@ -96,12 +101,10 @@ func (r *lostDocumentRepository) FindAllPaged(req dto.DataTableRequest, statusFi
 	return docs, total, filtered, err
 }
 
-// --- FIX: IMPLEMENTASI FindAll UNTUK EXPORT EXCEL ---
 func (r *lostDocumentRepository) FindAll(query string, statusFilter string, archiveDurationDays int) ([]models.LostDocument, error) {
 	var docs []models.LostDocument
 	db := r.db.Model(&models.LostDocument{})
 
-	// 1. Filter Status (Aktif/Arsip)
 	archiveDate := time.Now().Add(-time.Duration(archiveDurationDays) * 24 * time.Hour)
 	if statusFilter == "archived" {
 		db = db.Where("tanggal_laporan <= ?", archiveDate)
@@ -109,25 +112,22 @@ func (r *lostDocumentRepository) FindAll(query string, statusFilter string, arch
 		db = db.Where("tanggal_laporan > ?", archiveDate)
 	}
 
-	// 2. Filter Search (Jika ada query pencarian dari DataTables)
 	if query != "" {
 		searchQuery := fmt.Sprintf("%%%s%%", query)
 		db = db.Joins("JOIN residents ON lost_documents.resident_id = residents.id").
 			Where("lost_documents.nomor_surat LIKE ? OR residents.nama_lengkap LIKE ?", searchQuery, searchQuery)
 	}
 
-	// 3. Preload Data Lengkap (Penting untuk Excel)
 	err := db.Preload("Resident").
-		Preload("LostItems").          // Butuh list barang
+		Preload("LostItems").
 		Preload("Operator").
-		Preload("PetugasPelapor").     // Butuh nama petugas
-		Preload("PejabatPersetuju").   // Butuh nama pejabat
+		Preload("PetugasPelapor").
+		Preload("PejabatPersetuju").
 		Order("lost_documents.tanggal_laporan desc").
 		Find(&docs).Error
 
 	return docs, err
 }
-// ---------------------------------------------------
 
 func (r *lostDocumentRepository) FindByID(id uint) (*models.LostDocument, error) {
 	var doc models.LostDocument
@@ -208,11 +208,23 @@ func (r *lostDocumentRepository) GetItemCompositionStats() ([]dto.ItemCompositio
 	return results, err
 }
 
+// --- METHOD NOTIFIKASI ---
+
+// Untuk Operator: Hanya lihat dokumen miliknya
 func (r *lostDocumentRepository) FindExpiringDocumentsForUser(userID uint, start time.Time, end time.Time) ([]models.LostDocument, error) {
 	var docs []models.LostDocument
 	err := r.db.Where("operator_id = ? AND tanggal_laporan BETWEEN ? AND ?", userID, start, end).Find(&docs).Error
 	return docs, err
 }
+
+// Untuk Super Admin: Lihat SEMUA dokumen yang mau expired
+func (r *lostDocumentRepository) FindAllExpiringDocuments(start time.Time, end time.Time) ([]models.LostDocument, error) {
+	var docs []models.LostDocument
+	// Query tanpa filter operator_id
+	err := r.db.Where("tanggal_laporan BETWEEN ? AND ?", start, end).Find(&docs).Error
+	return docs, err
+}
+// -----------------------
 
 func (r *lostDocumentRepository) GetItemCompositionStatsInRange(start time.Time, end time.Time) ([]dto.ItemCompositionStat, error) {
 	var results []dto.ItemCompositionStat
