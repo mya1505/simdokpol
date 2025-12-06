@@ -10,12 +10,11 @@ $(document).ready(function() {
 
         usersTable = $('#usersTable').DataTable({
             "processing": true,
-            "serverSide": true, // <-- AKTIFKAN SERVER SIDE
+            "serverSide": true, 
             "ajax": {
-                "url": "/api/users", // URL API
+                "url": "/api/users", 
                 "type": "GET",
                 "data": function(d) {
-                    // Kirim parameter status filter tambahan
                     d.status = status;
                 },
                 "error": function(xhr, error, code) {
@@ -29,21 +28,30 @@ $(document).ready(function() {
                     "data": null, 
                     "orderable": false,
                     "render": function (data, type, row, meta) {
-                        // Index Server-Side
                         return meta.row + meta.settings._iDisplayStart + 1;
                     }
                 },
-                { "data": "nama_lengkap", "name": "nama_lengkap" },
-                { "data": "nrp", "name": "nrp" },
-                { "data": "pangkat", "name": "pangkat" },
-                { "data": "jabatan", "name": "jabatan" },
-                { "data": "regu", "render": (data) => data || '-', "orderable": false },
+                // SECURITY FIX: Render Text Murni (Anti-XSS)
+                { "data": "nama_lengkap", "name": "nama_lengkap", "render": $.fn.dataTable.render.text() },
+                { "data": "nrp", "name": "nrp", "render": $.fn.dataTable.render.text() },
+                { "data": "pangkat", "name": "pangkat", "render": $.fn.dataTable.render.text() },
+                { "data": "jabatan", "name": "jabatan", "render": $.fn.dataTable.render.text() },
+                { 
+                    "data": "regu", 
+                    "name": "regu", 
+                    "render": function(data) {
+                        if (!data) return '-';
+                        return $("<div>").text(data).html();
+                    }
+                },
                 { 
                     "data": "peran", 
                     "name": "peran",
                     "render": function(data) {
                         let badgeClass = data === 'SUPER_ADMIN' ? 'badge-danger' : 'badge-info';
-                        return `<span class="badge ${badgeClass}">${data}</span>`;
+                        // Clean role name just in case
+                        const cleanRole = $("<div>").text(data).html();
+                        return `<span class="badge ${badgeClass}">${cleanRole}</span>`;
                     }
                 },
                 { 
@@ -52,21 +60,21 @@ $(document).ready(function() {
                     "render": function(data, type, row) {
                         let editButton = `<a href="/users/${data}/edit" class="btn btn-warning btn-sm" title="Edit"><i class="fas fa-edit"></i><span class="btn-caption">Edit</span></a>`;
                         let actionButton;
-
-                        // Cegah nonaktifkan diri sendiri (Basic check di frontend)
-                        // Backend juga harus handle ini sebenarnya
                         
+                        // Gunakan nama yang sudah di-escape untuk attribute data-name (untuk alert swal)
+                        const safeName = $("<div>").text(row.nama_lengkap).html();
+
                         if (status === 'active') {
-                            actionButton = `<button type="button" class="btn btn-danger btn-sm deactivate-user-btn" data-id="${data}" data-name="${row.nama_lengkap}" title="Nonaktifkan"><i class="fas fa-user-slash"></i><span class="btn-caption">Nonaktifkan</span></button>`;
+                            actionButton = `<button type="button" class="btn btn-danger btn-sm deactivate-user-btn" data-id="${data}" data-name="${safeName}" title="Nonaktifkan"><i class="fas fa-user-slash"></i><span class="btn-caption">Nonaktifkan</span></button>`;
                         } else {
-                            actionButton = `<button type="button" class="btn btn-success btn-sm activate-user-btn" data-id="${data}" data-name="${row.nama_lengkap}" title="Aktifkan"><i class="fas fa-user-check"></i><span class="btn-caption">Aktifkan</span></button>`;
+                            actionButton = `<button type="button" class="btn btn-success btn-sm activate-user-btn" data-id="${data}" data-name="${safeName}" title="Aktifkan"><i class="fas fa-user-check"></i><span class="btn-caption">Aktifkan</span></button>`;
                         }
                         return `<div class="btn-group" role="group">${editButton} ${actionButton}</div>`;
                     }
                 }
             ],
             "language": { "url": "/static/vendor/datatables/Indonesian.json" },
-            "order": [[ 1, "asc" ]], // Default sort by Nama Lengkap
+            "order": [[ 1, "asc" ]], 
             "pageLength": 10,
             "lengthMenu": [[10, 25, 50, 100], [10, 25, 50, 100]]
         });
@@ -102,7 +110,7 @@ $(document).ready(function() {
                     method: 'DELETE',
                     success: function(response) {
                         Swal.fire('Berhasil!', 'Pengguna telah dinonaktifkan.', 'success');
-                        usersTable.ajax.reload(null, false); // Reload tanpa reset paging
+                        usersTable.ajax.reload(null, false); 
                     },
                     error: function(jqXHR) {
                         const msg = jqXHR.responseJSON ? jqXHR.responseJSON.error : 'Gagal.';

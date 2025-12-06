@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/joho/godotenv" // <-- Pastikan import ini ada
+	"github.com/joho/godotenv"
 	"gorm.io/gorm"
 )
 
@@ -26,7 +26,7 @@ const (
 	EnvLicenseKey           = "LICENSE_KEY"
 )
 
-var AppSecretKeyString = "JANGAN_PAKAI_DEFAULT_KEY_INI_BAHAYA"
+// VAR AppSecretKeyString SUDAH DIHAPUS DARI SINI (Pindah ke vars.go)
 
 var (
 	ErrLicenseInvalid = errors.New("kunci lisensi tidak valid untuk mesin ini")
@@ -53,6 +53,13 @@ func NewLicenseService(licenseRepo repositories.LicenseRepository, configService
 		configService: configService,
 		auditService:  auditService,
 	}
+	
+	// Safety Check: Pastikan Key sudah di-inject
+	if AppSecretKeyString == "" {
+		log.Println("⚠️ WARNING: AppSecretKeyString kosong! Menggunakan fallback dev key (TIDAK AMAN UNTUK PRODUCTION).")
+		AppSecretKeyString = "DEV_FALLBACK_KEY_CHANGE_ME"
+	}
+
 	svc.verifyRuntimeIntegrity()
 	return svc
 }
@@ -71,24 +78,19 @@ func (s *licenseService) IsLicensed() bool {
 	// 1. Ambil Key dari Environment
 	currentKey := os.Getenv(EnvLicenseKey)
 
-	// --- FIX: FORCE RELOAD .ENV JIKA MEMORY KOSONG ---
-	// Kadang env belum termuat sempurna saat service init. Kita paksa baca file.
+	// Force Reload .env jika memory kosong
 	if currentKey == "" {
 		envPath := filepath.Join(utils.GetAppDataDir(), ".env")
-		// Baca manual file .env untuk cari LICENSE_KEY
 		if envMap, err := godotenv.Read(envPath); err == nil {
 			if keyFromFile, exists := envMap[EnvLicenseKey]; exists && keyFromFile != "" {
 				currentKey = keyFromFile
-				// Restore ke memory agar request berikutnya cepat
 				os.Setenv(EnvLicenseKey, currentKey)
 				log.Println("INFO LICENSE: Kunci lisensi dipulihkan dari file .env")
 			}
 		}
 	}
-	// -------------------------------------------------
 
 	if currentKey == "" {
-		// Jika masih kosong, cek DB. Jika DB Valid tapi Key hilang -> REVOKE (Security)
 		status, _ := s.GetLicenseStatus()
 		if status == LicenseStatusValid {
 			log.Println("SECURITY: Status DB Valid tapi Key hilang. Revoking...")
@@ -103,7 +105,6 @@ func (s *licenseService) IsLicensed() bool {
 	cleanInputKey := strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(currentKey, "-", ""), " ", ""))
 
 	if cleanInputKey == expectedSignature {
-		// Valid! Sync DB jika perlu
 		status, _ := s.GetLicenseStatus()
 		if status != LicenseStatusValid {
 			_ = s.configService.SaveConfig(map[string]string{LicenseStatusKey: LicenseStatusValid})
@@ -111,7 +112,6 @@ func (s *licenseService) IsLicensed() bool {
 		return true
 	}
 
-	// 3. Tidak Valid
 	log.Printf("SECURITY: Key invalid terdeteksi. Revoking.")
 	_ = s.RevokeLicense()
 	return false
@@ -177,16 +177,13 @@ func (s *licenseService) ActivateLicense(inputKey string, actorID uint) (*models
 		return nil, fmt.Errorf("gagal update config: %w", err)
 	}
 
-	// --- FIX: PAKSA TULIS KE FILE .ENV (TANPA SYARAT) ---
-	// Kita tidak pakai if os.Getenv != inputKey, tapi langsung tulis biar yakin
+	// Paksa tulis ke .env
 	if err := utils.UpdateEnvFile(map[string]string{EnvLicenseKey: inputKey}); err != nil {
 		log.Printf("ERROR: Gagal menyimpan lisensi ke file .env: %v", err)
-		// Jangan return error fatal, karena di DB sudah aktif. Cuma warning log.
 	} else {
 		log.Println("SUCCESS: Lisensi tersimpan permanen di file .env")
 	}
 	os.Setenv(EnvLicenseKey, inputKey)
-	// ---------------------------------------------------
 
 	if actorID != 0 {
 		s.auditService.LogActivity(actorID, "AKTIVASI LISENSI", "Lisensi PRO berhasil diaktifkan.")
@@ -195,6 +192,7 @@ func (s *licenseService) ActivateLicense(inputKey string, actorID uint) (*models
 }
 
 func generateSignatureRaw(data string) string {
+	// Gunakan variabel global dari vars.go
 	h := hmac.New(sha256.New, []byte(AppSecretKeyString))
 	h.Write([]byte(data))
 	hash := h.Sum(nil)

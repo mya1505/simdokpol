@@ -2,7 +2,6 @@ package services
 
 import (
 	"errors"
-	"os"
 	"simdokpol/internal/repositories"
 	"time"
 
@@ -11,7 +10,7 @@ import (
 	"gorm.io/gorm"
 )
 
-var JWTSecretKey = []byte(os.Getenv("JWT_SECRET_KEY"))
+// VAR JWTSecretKey SUDAH DIHAPUS DARI SINI (Pindah ke vars.go)
 
 type AuthService interface {
 	Login(nrp string, password string) (string, error)
@@ -19,7 +18,7 @@ type AuthService interface {
 
 type authService struct {
 	userRepo      repositories.UserRepository
-	configService ConfigService // Injected
+	configService ConfigService 
 }
 
 func NewAuthService(userRepo repositories.UserRepository, configService ConfigService) AuthService {
@@ -47,7 +46,6 @@ func (s *authService) Login(nrp string, password string) (string, error) {
 		return "", errors.New("NRP atau kata sandi salah")
 	}
 
-	// --- LOGIC TIMEOUT DINAMIS ---
 	config, _ := s.configService.GetConfig()
 	timeoutMinutes := 480 // Default 8 Jam
 	if config != nil && config.SessionTimeout > 0 {
@@ -55,7 +53,6 @@ func (s *authService) Login(nrp string, password string) (string, error) {
 	}
 	
 	expirationTime := time.Now().Add(time.Duration(timeoutMinutes) * time.Minute)
-	// -----------------------------
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"userID": user.ID,
@@ -63,6 +60,7 @@ func (s *authService) Login(nrp string, password string) (string, error) {
 		"exp":    expirationTime.Unix(),
 	})
 	
+	// Gunakan variabel global dari vars.go
 	tokenString, err := token.SignedString(JWTSecretKey)
 	if err != nil {
 		return "", err

@@ -47,6 +47,25 @@ var (
 )
 
 func main() {
+  // --- 1. INISIALISASI SECRETS (PENTING!) ---
+  // Jika dijalankan via 'go run', variabel ini kosong. Kita isi default DEV.
+  // Jika build production, variabel ini akan diisi via -ldflags, jadi logic ini di-skip.
+  if services.AppSecretKeyString == "" {
+      // Cek ENV dulu
+      if envKey := os.Getenv("APP_SECRET_KEY"); envKey != "" {
+          services.AppSecretKeyString = envKey
+      } else {
+          services.AppSecretKeyString = "DEV_SECRET_KEY_JANGAN_DIPAKAI_PROD"
+      }
+  }
+
+  if len(services.JWTSecretKey) == 0 {
+      if envJwt := os.Getenv("JWT_SECRET_KEY"); envJwt != "" {
+          services.JWTSecretKey = []byte(envJwt)
+      } else {
+          services.JWTSecretKey = []byte("DEV_JWT_SECRET_KEY")
+      }
+  }
 	// Initialize environment and logging
 	setupEnvironment()
 	setupLogging()
