@@ -6,11 +6,17 @@
         {{template "_topbar.html" .}}
         <div class="container-fluid">
 
-            <h1 class="h3 mb-4 text-gray-800" id="page-title">Buat Template Baru</h1>
+            <h1 class="h3 mb-4 text-gray-800" id="page-title">
+                <i class="fas fa-plus-circle mr-2 text-gray-400"></i>Buat Template Baru
+            </h1>
 
             <form id="template-form">
                 <div class="card shadow mb-4">
-                    <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary">Informasi Dasar Template</h6></div>
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-info-circle mr-2"></i>Informasi Dasar Template
+                        </h6>
+                    </div>
                     <div class="card-body">
                         <div class="row">
                             <div class="col-md-6">
@@ -23,7 +29,7 @@
                                 <div class="form-group">
                                     <label>Nomor Urut</label>
                                     <input type="number" class="form-control" id="urutan" value="10" required>
-                                    <small class="text-muted">Urutan tampilan di dropdown (angka kecil di atas).</small>
+                                    <small class="text-muted">Urutan tampilan di dropdown.</small>
                                 </div>
                             </div>
                             <div class="col-md-2 d-flex align-items-center">
@@ -38,8 +44,10 @@
 
                 <div class="card shadow mb-4">
                     <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                        <h6 class="m-0 font-weight-bold text-primary">Konfigurasi Fields (Formulir Dinamis)</h6>
-                        <button type="button" class="btn btn-info btn-sm" id="add-field-btn">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-layer-group mr-2"></i>Konfigurasi Fields (Formulir Dinamis)
+                        </h6>
+                        <button type="button" class="btn btn-info btn-sm shadow-sm" id="add-field-btn">
                             <i class="fas fa-plus mr-1"></i> Tambah Field Baru
                         </button>
                     </div>
@@ -56,8 +64,8 @@
                 </div>
 
                 <div class="d-flex justify-content-end mb-4">
-                    <a href="/templates" class="btn btn-secondary mr-2"><i class="fas fa-times mr-2"></i> Batal</a>
-                    <button type="submit" class="btn btn-primary" id="submit-btn"><i class="fas fa-save mr-2"></i> Simpan Template</button>
+                    <a href="/templates" class="btn btn-secondary mr-2 shadow-sm"><i class="fas fa-times mr-2"></i> Batal</a>
+                    <button type="submit" class="btn btn-primary shadow-sm" id="submit-btn"><i class="fas fa-save mr-2"></i> Simpan Template</button>
                 </div>
             </form>
 
@@ -116,5 +124,4 @@
 
 {{template "_scripts.html" .}}
 <script src="/static/vendor/sortable/Sortable.min.js"></script> 
-
 {{template "_itemTemplateFormScript.html" .}}

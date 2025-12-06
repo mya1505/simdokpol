@@ -11,7 +11,6 @@ $(document).ready(function() {
     const fieldsContainer = document.getElementById('fields-container');
     
     // --- INISIALISASI SORTABLE JS ---
-    // Cek apakah Sortable sudah terload
     if (typeof Sortable !== 'undefined') {
         new Sortable(fieldsContainer, {
             animation: 150,
@@ -57,7 +56,11 @@ $(document).ready(function() {
             $clone.find('[data-key="type"]').val(data.type);
             $clone.find('[data-key="data_label"]').val(data.data_label);
             $clone.find('[data-key="placeholder"]').val(data.placeholder);
-            // ... (tambahkan mapping field lain jika ada di template HTML)
+            
+            // Set checkbox required
+            if (data.required_length > 0 || data.min_length > 0) { // Asumsi logic backend untuk required
+                 $clone.find('[data-key="required_length"]').prop('checked', true);
+            }
         }
         
         $('#fields-container').append($clone);
@@ -75,7 +78,8 @@ $(document).ready(function() {
 
     // --- POPULATE DATA (EDIT MODE) ---
     if (isEdit) {
-        $('#page-title').text('Edit Template Barang');
+        // Menggunakan .html() agar ICON terbaca
+        $('#page-title').html('<i class="fas fa-edit mr-2 text-gray-400"></i>Edit Template Barang');
         $('#submit-btn').html('<i class="fas fa-save mr-2"></i> Simpan Perubahan');
         
         $.ajax({
@@ -84,7 +88,7 @@ $(document).ready(function() {
             success: function(data) {
                 $('#nama_barang').val(data.nama_barang);
                 $('#urutan').val(data.urutan);
-                $('#is_active').prop('checked', data.status === 'Aktif'); // Sesuaikan dengan response JSON
+                $('#is_active').prop('checked', data.is_active); 
                 
                 if (data.fields_config && data.fields_config.length > 0) {
                     data.fields_config.forEach(field => addField(field));
@@ -113,6 +117,7 @@ $(document).ready(function() {
             const $card = $(this);
             const label = $card.find('[data-key="label"]').val();
             const dataLabel = $card.find('[data-key="data_label"]').val();
+            const isRequired = $card.find('[data-key="required_length"]').is(':checked');
             
             if (!label || !dataLabel) {
                 Swal.fire('Input Tidak Lengkap', 'Setiap field harus memiliki "Label Form" dan "Data Label".', 'warning');
@@ -120,12 +125,20 @@ $(document).ready(function() {
                 return false; 
             }
 
+            // Logic sederhana mapping checkbox 'Wajib' ke required_length (bisa disesuaikan kebutuhan)
+            // Di sini kita set min_length 1 sebagai tanda required jika checkbox dicentang
+            let reqLen = 0;
+            let minLen = 0;
+            if(isRequired) {
+                minLen = 1; 
+            }
+
             fieldsConfig.push({
                 label: label,
                 type: $card.find('[data-key="type"]').val(),
                 data_label: dataLabel,
                 placeholder: $card.find('[data-key="placeholder"]').val(),
-                // ... (tambahkan field lain jika diperlukan)
+                min_length: minLen
             });
         });
 
@@ -137,7 +150,7 @@ $(document).ready(function() {
         const formData = {
             nama_barang: $('#nama_barang').val(),
             urutan: parseInt($('#urutan').val()),
-            status: $('#is_active').is(':checked') ? 'Aktif' : 'Non-Aktif',
+            is_active: $('#is_active').is(':checked'),
             fields_config: fieldsConfig
         };
 
@@ -147,8 +160,13 @@ $(document).ready(function() {
             contentType: 'application/json',
             data: JSON.stringify(formData),
             success: function() {
-                Swal.fire('Berhasil!', 'Template berhasil disimpan.', 'success')
-                    .then(() => window.location.href = '/templates');
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Berhasil!',
+                    text: 'Template berhasil disimpan.',
+                    timer: 1500,
+                    showConfirmButton: false
+                }).then(() => window.location.href = '/templates');
             },
             error: function(jqXHR) {
                 const msg = jqXHR.responseJSON ? jqXHR.responseJSON.error : 'Terjadi kesalahan.';

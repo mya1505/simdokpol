@@ -1,25 +1,18 @@
 <script>
 $(document).ready(function() {
-    // --- FUNGSI HELPERS (TIDAK BERUBAH) ---
+    // --- FUNGSI HELPERS ---
     function toTitleCase(str) { return str.replace(/\w\S*/g, function(txt) { return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase(); }); }
     $('body').on('input', '.auto-uppercase', function() { $(this).val($(this).val().toUpperCase()); });
     $('body').on('input', '.auto-titlecase', function() { $(this).val(toTitleCase($(this).val())); });
     
-    // --- FUNGSI INTIP PASSWORD (DIPERBARUI) ---
-    $('#togglePassword').on('click', function() {
-        const password = $('#kata_sandi');
-        const type = password.attr('type') === 'password' ? 'text' : 'password';
-        password.attr('type', type);
-        $(this).toggleClass('fa-eye fa-eye-slash');
-    });
-
-    // --- PENAMBAHAN EVENT LISTENER UNTUK KONFIRMASI PASSWORD ---
-    $('#togglePasswordConfirm').on('click', function() {
-        const password = $('#kata_sandi_konfirmasi');
-        const type = password.attr('type') === 'password' ? 'text' : 'password';
-        password.attr('type', type);
-        $(this).toggleClass('fa-eye fa-eye-slash');
-    });
+    // --- FUNGSI INTIP PASSWORD ---
+    function togglePass(inId, tgId) {
+        const p = $(inId); const t = $(tgId);
+        const type = p.attr('type') === 'password' ? 'text' : 'password';
+        p.attr('type', type); t.toggleClass('fa-eye fa-eye-slash');
+    }
+    $('#togglePassword').on('click', function() { togglePass('#kata_sandi', '#togglePassword'); });
+    $('#togglePasswordConfirm').on('click', function() { togglePass('#kata_sandi_konfirmasi', '#togglePasswordConfirm'); });
 
     const isEdit = {{.IsEdit}};
     const userID = {{.UserID}};
@@ -34,8 +27,9 @@ $(document).ready(function() {
     }
 
     if (isEdit) {
-        $('#form-title').text('Edit Data Pengguna');
-        $('#submit-btn').text('Simpan Perubahan');
+        // PERUBAHAN: Gunakan .html() dan tambahkan icon
+        $('#form-title').html('<i class="fas fa-user-edit mr-2 text-gray-400"></i>Edit Data Pengguna');
+        $('#submit-btn').html('<i class="fas fa-save mr-2"></i>Simpan Perubahan');
         $('#passwordHelp').show();
 
         $.ajax({
@@ -56,24 +50,18 @@ $(document).ready(function() {
     $('#user-form').on('submit', function(e) {
         e.preventDefault();
         
-        // --- LOGIKA VALIDASI PASSWORD DIPERBARUI DI SINI ---
         let password = $('#kata_sandi').val();
         let confirmPassword = $('#kata_sandi_konfirmasi').val();
 
         if (password !== confirmPassword) {
-            Swal.fire('Error', 'Konfirmasi kata sandi tidak cocok!', 'error');
-            return;
+            Swal.fire('Error', 'Konfirmasi kata sandi tidak cocok!', 'error'); return;
         }
-
         if (!isEdit && (!password || password.length < 8)) {
-            Swal.fire('Perhatian', 'Kata sandi wajib diisi minimal 8 karakter untuk pengguna baru.', 'warning');
-            return;
+            Swal.fire('Perhatian', 'Kata sandi wajib diisi minimal 8 karakter.', 'warning'); return;
         }
         if (isEdit && password && password.length < 8) {
-            Swal.fire('Perhatian', 'Kata sandi baru minimal 8 karakter.', 'warning');
-            return;
+            Swal.fire('Perhatian', 'Kata sandi baru minimal 8 karakter.', 'warning'); return;
         }
-        // --- AKHIR DARI LOGIKA VALIDASI ---
 
         const formData = {
             nama_lengkap: $('#nama_lengkap').val(),
@@ -109,13 +97,8 @@ $(document).ready(function() {
             ajaxSettings.url = `/api/users/${userID}`;
             ajaxSettings.method = 'PUT';
             ajaxSettings.success = function() {
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Berhasil!',
-                    text: 'Data pengguna berhasil diperbarui.',
-                    timer: 1500,
-                    showConfirmButton: false
-                }).then(() => { window.location.href = '/users'; });
+                Swal.fire({ icon: 'success', title: 'Berhasil!', text: 'Data diperbarui.', timer: 1500, showConfirmButton: false })
+                .then(() => { window.location.href = '/users'; });
             };
         }
 

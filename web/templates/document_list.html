@@ -9,15 +9,19 @@
             <div class="d-sm-flex align-items-center justify-content-between mb-2">
                 <div>
                     {{if eq .PageType "archived"}}
-                        <h1 class="h3 mb-0 text-gray-800" id="page-title">Arsip Dokumen</h1>
+                        <h1 class="h3 mb-0 text-gray-800" id="page-title">
+                            <i class="fas fa-archive mr-2 text-gray-400"></i>Arsip Dokumen
+                        </h1>
                     {{else}}
-                        <h1 class="h3 mb-0 text-gray-800" id="page-title">Daftar Dokumen Aktif</h1>
+                        <h1 class="h3 mb-0 text-gray-800" id="page-title">
+                            <i class="fas fa-file-alt mr-2 text-gray-400"></i>Daftar Dokumen Aktif
+                        </h1>
                     {{end}}
                 </div>
                 {{if eq .CurrentUser.Peran "SUPER_ADMIN"}}
                 <div>
                     <button class="btn btn-success btn-sm shadow-sm" id="export-excel-btn">
-                        <i class="fas fa-file-excel fa-sm text-white-50"></i> Ekspor ke Excel
+                        <i class="fas fa-file-excel fa-sm text-white-50 mr-2"></i>Ekspor ke Excel
                     </button>
                 </div>
                 {{end}}
@@ -32,7 +36,9 @@
 
             <div class="card shadow mb-4">
                 <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Data Surat Keterangan</h6>
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-table mr-2"></i>Data Surat Keterangan
+                    </h6>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">

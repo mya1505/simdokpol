@@ -6,12 +6,16 @@
         {{template "_topbar.html" .}}
         <div class="container-fluid">
 
-            <h1 class="h3 mb-2 text-gray-800">Laporan Agregat Dokumen</h1>
-            <p class="mb-4">Buat laporan PDF yang berisi ringkasan data, statistik operator, dan komposisi barang hilang berdasarkan rentang tanggal yang dipilih. (Fitur Super Admin)</p>
+            <h1 class="h3 mb-2 text-gray-800">
+                <i class="fas fa-chart-line mr-2 text-gray-400"></i>Laporan Agregat Dokumen
+            </h1>
+            <p class="mb-4">Buat laporan PDF yang berisi ringkasan data, statistik operator, dan komposisi barang hilang berdasarkan rentang tanggal yang dipilih.</p>
 
             <div class="card shadow mb-4">
                 <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Pilih Rentang Tanggal Laporan</h6>
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-calendar-alt mr-2"></i>Pilih Rentang Tanggal Laporan
+                    </h6>
                 </div>
                 <div class="card-body">
                     <form id="report-form">
@@ -25,8 +29,8 @@
                                 <input type="text" class="form-control" id="end_date" name="end_date" placeholder="DD-MM-YYYY" autocomplete="off" required>
                             </div>
                             <div class="form-group col-md-2">
-                                <button type="submit" id="generate-report-btn" class="btn btn-danger btn-block">
-                                    <i class="fas fa-file-pdf fa-sm"></i> Generate PDF
+                                <button type="submit" id="generate-report-btn" class="btn btn-danger btn-block shadow-sm">
+                                    <i class="fas fa-file-pdf mr-2"></i> Generate PDF
                                 </button>
                             </div>
                         </div>
