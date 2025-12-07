@@ -7,7 +7,10 @@ import (
 	"fmt"
 	"image/color"
 	"os"
+	"path/filepath"
 	"strings"
+
+	"simdokpol/internal/utils" // Import Utils
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -17,23 +20,24 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/joho/godotenv" // Import Dotenv
 )
 
-// Variabel ini KOSONG. Harus diisi via LDFLAGS saat build.
-// go build -ldflags "-X main.appSecretKey=RAHASIA_ASLI"
+// Variabel ini KOSONG. Harus diisi via LDFLAGS atau .env
 var appSecretKey = ""
 
 func main() {
-	// --- 1. VALIDASI SECRET KEY ---
-	isKeyValid := true
+	// --- 1. LOAD .ENV OTOMATIS ---
+	envPath := filepath.Join(utils.GetAppDataDir(), ".env")
+	_ = godotenv.Overload(envPath)
+
+	// --- 2. VALIDASI SECRET KEY ---
+	// Prioritas: LDFLAGS -> ENV (.env)
 	if appSecretKey == "" {
-		// Fallback: Cek Environment Variable (Mode Dev)
-		if envKey := os.Getenv("APP_SECRET_KEY"); envKey != "" {
-			appSecretKey = envKey
-		} else {
-			isKeyValid = false
-		}
+		appSecretKey = os.Getenv("APP_SECRET_KEY")
 	}
+
+	isKeyValid := appSecretKey != ""
 
 	a := app.New()
 	w := a.NewWindow("SIMDOKPOL License Manager")
@@ -55,12 +59,17 @@ func main() {
 	// --- Status Warning jika Key Kosong ---
 	var statusContainer *fyne.Container
 	if !isKeyValid {
-		warnText := canvas.NewText("ERROR: Secret Key belum dikonfigurasi saat Build!", color.RGBA{R: 255, G: 0, B: 0, A: 255})
+		warnText := canvas.NewText(fmt.Sprintf("ERROR: Secret Key tidak ditemukan di %s", envPath), color.RGBA{R: 255, G: 0, B: 0, A: 255})
 		warnText.TextStyle = fyne.TextStyle{Bold: true}
 		warnText.Alignment = fyne.TextAlignCenter
+		warnText.TextSize = 10
 		statusContainer = container.New(layout.NewCenterLayout(), warnText)
 	} else {
-		statusContainer = container.New(layout.NewCenterLayout(), widget.NewLabel("")) // Kosong
+		// Info Key Loaded
+		keyInfo := canvas.NewText(fmt.Sprintf("Key Loaded: %s... (Valid)", sha256Sum(appSecretKey)), color.RGBA{R: 0, G: 128, B: 0, A: 255})
+		keyInfo.TextSize = 10
+		keyInfo.Alignment = fyne.TextAlignCenter
+		statusContainer = container.New(layout.NewCenterLayout(), keyInfo)
 	}
 
 	// --- Tombol Generate ---
@@ -71,7 +80,7 @@ func main() {
 			return
 		}
 
-		// Logic Generate (Sama persis dengan Backend)
+		// Logic Generate
 		h := hmac.New(sha256.New, []byte(appSecretKey))
 		h.Write([]byte(hwid))
 		hash := h.Sum(nil)
@@ -91,7 +100,6 @@ func main() {
 	})
 	btnGenerate.Importance = widget.HighImportance
 
-	// Disable tombol jika key tidak valid
 	if !isKeyValid {
 		btnGenerate.Disable()
 		entryHwid.Disable()
@@ -108,7 +116,7 @@ func main() {
 	// --- Layout ---
 	formContent := container.NewVBox(
 		lblInfo,
-		statusContainer, // Tampilkan warning di sini
+		statusContainer,
 		widget.NewSeparator(),
 		widget.NewLabel("Hardware ID User:"),
 		entryHwid,
@@ -122,4 +130,9 @@ func main() {
 
 	w.SetContent(container.NewPadded(formContent))
 	w.ShowAndRun()
+}
+
+func sha256Sum(s string) string {
+	h := sha256.Sum256([]byte(s))
+	return fmt.Sprintf("%x", h[:8])
 }

@@ -498,7 +498,15 @@ func setupDatabase(cfg *config.Config) (*gorm.DB, error) {
 		db, err = gorm.Open(postgres.Open(dsn), gormConfig)
 	default:
 		db, err = gorm.Open(sqlite.Open(cfg.DBDSN), gormConfig)
-		if err == nil { db.Exec("PRAGMA foreign_keys = ON") }
+		if err == nil { 
+			// --- OPTIMASI SQLITE (WAL MODE) ---
+			// Mengaktifkan Write-Ahead Logging untuk concurrency yang lebih baik
+			db.Exec("PRAGMA journal_mode = WAL;") 
+			// Mode sinkronisasi normal (aman & cepat)
+			db.Exec("PRAGMA synchronous = NORMAL;") 
+			// Aktifkan Foreign Keys
+			db.Exec("PRAGMA foreign_keys = ON;")
+		}
 	}
 	if err != nil { return nil, err }
 	sqlDB, _ := db.DB()
