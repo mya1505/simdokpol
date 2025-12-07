@@ -8,44 +8,53 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
+
+	"simdokpol/internal/utils" // Import Utils untuk dapat path folder
+
+	"github.com/joho/godotenv" // Import Dotenv
 )
 
-// Variable ini KOSONG secara default.
-// Harus diisi saat build menggunakan: -ldflags "-X main.appSecretKey=RAHASIA_ASLI"
+// Variabel ini KOSONG defaultnya.
 var appSecretKey = ""
 
 func main() {
-	// Fitur tambahan: Bisa input secret key via flag saat runtime (untuk admin)
+	// 1. SETUP ENV (Baca file .env dari folder config)
+	envPath := filepath.Join(utils.GetAppDataDir(), ".env")
+	_ = godotenv.Overload(envPath)
+
+	// 2. PARSE FLAGS
 	secretFlag := flag.String("secret", "", "App Secret Key manual (opsional)")
 	flag.Parse()
 
-	// Prioritas 1: Flag CLI
+	// 3. RESOLUSI SECRET KEY (Prioritas: Flag -> Env -> LDFLAGS)
 	if *secretFlag != "" {
 		appSecretKey = *secretFlag
 	}
 
-	// Prioritas 2: Environment Variable
 	if appSecretKey == "" {
+		// Coba ambil dari Environment (yang sudah di-load dari file .env)
 		appSecretKey = os.Getenv("APP_SECRET_KEY")
 	}
 
-	// Validasi Safety
+	// 4. VALIDASI AKHIR
 	if appSecretKey == "" {
-		fmt.Println("❌ CRITICAL ERROR: Secret Key belum dikonfigurasi!")
-		fmt.Println("Gunakan salah satu cara:")
-		fmt.Println("1. Build dengan LDFLAGS: go build -ldflags \"-X main.appSecretKey=KUNCI_RAHASIA\"")
-		fmt.Println("2. Jalankan dengan flag: ./keygen -secret=\"KUNCI_RAHASIA\"")
+		fmt.Println("❌ CRITICAL ERROR: Secret Key tidak ditemukan!")
+		fmt.Printf("   File .env di '%s' tidak memiliki APP_SECRET_KEY.\n", envPath)
+		fmt.Println("   Solusi: Jalankan aplikasi utama (simdokpol) dulu minimal sekali untuk generate key.")
 		os.Exit(1)
 	}
 
 	reader := bufio.NewReader(os.Stdin)
 
-	fmt.Println(strings.Repeat("=", 50))
-	fmt.Println("   SIMDOKPOL KEY GENERATOR (ADMIN TOOL)")
-	fmt.Println(strings.Repeat("=", 50))
-	fmt.Println("🔑 Secret Key Hash:", sha256Sum(appSecretKey)) // Print hashnya aja buat verifikasi (jangan key aslinya)
-	fmt.Println(strings.Repeat("-", 50))
+	fmt.Println(strings.Repeat("=", 60))
+	fmt.Println("   SIMDOKPOL KEY GENERATOR (SMART MODE)")
+	fmt.Println(strings.Repeat("=", 60))
+	// Tampilkan fingerprint key biar Admin yakin ini key yang benar
+	fmt.Printf("📁 Config Source : %s\n", envPath)
+	fmt.Printf("🔑 Key Checksum  : %s...\n", sha256Sum(appSecretKey)) 
+	fmt.Println(strings.Repeat("-", 60))
 
 	fmt.Print("👉 Masukkan Hardware ID User: ")
 	hwid, _ := reader.ReadString('\n')
@@ -56,7 +65,7 @@ func main() {
 		return
 	}
 
-	// Generate Logic (SAMA PERSIS DENGAN LICENSE SERVICE)
+	// Generate Logic (HMAC-SHA256)
 	h := hmac.New(sha256.New, []byte(appSecretKey))
 	h.Write([]byte(hwid))
 	hash := h.Sum(nil)
@@ -64,7 +73,6 @@ func main() {
 	truncatedHash := hash[:15]
 	rawKey := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(truncatedHash)
 
-	// Format Output (XXXXX-XXXXX-XXXXX)
 	var formattedKey strings.Builder
 	for i, r := range rawKey {
 		if i > 0 && i%5 == 0 {
@@ -77,11 +85,9 @@ func main() {
 	fmt.Println("--------------------------------------------------")
 	fmt.Println(formattedKey.String())
 	fmt.Println("--------------------------------------------------")
-	fmt.Println("💡 Copy key di atas dan berikan ke user.")
 }
 
-// Helper untuk print fingerprint secret key (biar admin tau dia pake key yg bener)
 func sha256Sum(s string) string {
 	h := sha256.Sum256([]byte(s))
-	return fmt.Sprintf("%x", h[:4]) + "..." // Cuma ambil 8 karakter awal
+	return fmt.Sprintf("%x", h[:8])
 }
