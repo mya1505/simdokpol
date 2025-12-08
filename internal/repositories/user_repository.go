@@ -35,7 +35,6 @@ func (r *userRepository) FindAllPaged(req dto.DataTableRequest, statusFilter str
 	var users []models.User
 	var total, filtered int64
 
-	// Fix Logic Limit
 	limit := req.Length
 	if limit <= 0 { limit = 10 }
 	if limit > 100 { limit = 100 }
@@ -75,12 +74,14 @@ func (r *userRepository) FindByNRP(nrp string) (*models.User, error) {
 	return &user, nil
 }
 
+// --- PERBAIKAN: KEMBALIKAN FILTER USER AKTIF ---
 func (r *userRepository) FindOperators() ([]models.User, error) {
-    var users []models.User
-    // Hapus filter "peran = OPERATOR", kita ambil semua user aktif
-    // Nanti frontend yang filter berdasarkan Jabatan (Kanit/Anggota Jaga)
-    err := r.db.Where("deleted_at IS NULL").Order("nama_lengkap asc").Find(&users).Error
-    return users, err
+	var users []models.User
+	// 1. Hapus Unscoped() agar user yang sudah dihapus tidak muncul.
+	// 2. Tetap ambil SEMUA role (Operator & Super Admin) karena Kanit butuh tanda tangan.
+	// 3. Filter deleted_at secara eksplisit (optional di GORM, tapi bagus untuk kepastian).
+	err := r.db.Where("deleted_at IS NULL").Order("nama_lengkap asc").Find(&users).Error
+	return users, err
 }
 
 func (r *userRepository) Update(user *models.User) error {

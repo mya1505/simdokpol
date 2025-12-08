@@ -1,37 +1,24 @@
-</div>
-</div>
-</div>
 <a class="scroll-to-top rounded" href="#page-top"><i class="fas fa-angle-up"></i></a>
-
-<style>
-    .modal-changelog-header { background: #4e73df; color: white; border-bottom: none; }
-    .modal-changelog-header .close { color: white; text-shadow: none; opacity: 0.8; }
-    .modal-changelog-header .close:hover { opacity: 1; }
-    .changelog-paper {
-        font-family: 'Nunito', sans-serif; font-size: 0.95rem; line-height: 1.7;
-        color: #2d3748; background-color: #ffffff; border: 1px solid #e3e6f0;
-        border-radius: 0.5rem; padding: 1.5rem; box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
-        white-space: pre-wrap; word-wrap: break-word; max-height: 60vh; overflow-y: auto;
-    }
-    .version-badge { background-color: rgba(255, 255, 255, 0.2); padding: 0.2rem 0.6rem; border-radius: 0.25rem; font-size: 0.85rem; margin-left: 10px; }
-</style>
 
 <div class="modal fade" id="changelogModal" tabindex="-1" role="dialog" aria-labelledby="changelogModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
         <div class="modal-content border-0 shadow-lg">
-            <div class="modal-header modal-changelog-header">
+            <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title font-weight-bold" id="changelogModalLabel">
-                    <i class="fas fa-rocket mr-2"></i> Catatan Rilis <span class="version-badge">v{{.AppVersion}}</span>
+                    <i class="fas fa-rocket mr-2"></i> Catatan Rilis <span class="badge badge-light text-primary ml-2">v{{.AppVersion}}</span>
                 </h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
             </div>
             <div class="modal-body bg-light">
-                <p class="text-muted small mb-3 ml-1">Berikut daftar perubahan pada versi ini:</p>
-                <div class="changelog-paper">{{ .AppChangelog }}</div>
+                <div style="font-family: 'Courier New', monospace; font-size: 0.9rem; line-height: 1.6; color: #2d3748; background-color: #ffffff; border: 1px solid #e3e6f0; border-radius: 0.5rem; padding: 1.5rem; max-height: 60vh; overflow-y: auto;">
+                    {{ .AppChangelog }}
+                </div>
             </div>
-            <div class="modal-footer bg-light border-top-0">
-                <button type="button" id="btn-check-update-modal" class="btn btn-outline-primary btn-sm"><i class="fas fa-sync-alt mr-1"></i> Cek Update</button>
-                <button type="button" class="btn btn-primary btn-sm shadow-sm" data-dismiss="modal"><i class="fas fa-check mr-1"></i> Tutup</button>
+            <div class="modal-footer bg-light">
+                <button type="button" id="btn-check-update-modal" class="btn btn-info btn-sm shadow-sm">
+                    <i class="fas fa-sync-alt mr-1"></i> Cek Update
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm shadow-sm" data-dismiss="modal">Tutup</button>
             </div>
         </div>
     </div>
@@ -47,22 +34,17 @@
 <script src="/static/vendor/sweetalert2/sweetalert2.all.min.js"></script>
 <script src="/static/vendor/datepicker/js/bootstrap-datepicker.min.js"></script>
 <script src="/static/vendor/datepicker/locales/bootstrap-datepicker.id.min.js"></script>
+<script src="/static/vendor/select2/js/select2.min.js"></script>
 
 <script>
 $(document).ready(function() {
-    // 1. Global Logout Handler
+    // Logout
     $('#logout-btn').on('click', function(e) {
         e.preventDefault();
-        $.ajax({
-            url: '/api/logout',
-            type: 'POST',
-            success: function() { window.location.href = '/login'; },
-            error: function() { Swal.fire('Error', 'Gagal logout.', 'error'); }
-        });
+        $.ajax({ url: '/api/logout', type: 'POST', success: function() { window.location.href = '/login'; } });
     });
 
-    // 2. Global Password Peek (Intip Password)
-    // Berfungsi otomatis untuk semua input yang punya sibling .password-peek
+    // Password Peek
     $('body').on('click', '.password-peek', function() {
         let $input = $(this).siblings('input');
         if ($input.length > 0) {
@@ -71,74 +53,11 @@ $(document).ready(function() {
             $(this).toggleClass('fa-eye fa-eye-slash');
         }
     });
-
-    // 3. SMART AUTO LOGOUT SYSTEM (Idle Detection)
-    let idleTime = 0;
-    let idleLimit = 15; // Default 15 menit (akan ditimpa config server)
-    
-    // Ambil config limit dari server saat halaman dimuat
-    // Endpoint ini public (authorized)
-    $.ajax({
-        url: '/api/config/limits',
-        method: 'GET',
-        success: function(resp) {
-            if(resp.idle_timeout) {
-                idleLimit = parseInt(resp.idle_timeout);
-                console.log(`Auto Logout Active: Idle Limit = ${idleLimit} menit`);
-                
-                // Mulai Timer: Cek setiap 1 menit (60000 ms)
-                setInterval(timerIncrement, 60000);
-            }
-        }
-    });
-
-    // Reset timer kalau ada aktivitas user
-    $(this).mousemove(function (e) { idleTime = 0; });
-    $(this).keypress(function (e) { idleTime = 0; });
-    $(this).click(function (e) { idleTime = 0; });
-    $(this).scroll(function (e) { idleTime = 0; });
-
-    function timerIncrement() {
-        idleTime = idleTime + 1;
-        
-        // Jika waktu diam melebihi batas
-        if (idleTime >= idleLimit) {
-            // Tampilkan peringatan dan logout
-            doAutoLogout();
-        }
-    }
-
-    function doAutoLogout() {
-        // Mencegah loop alert
-        idleTime = 0; 
-        
-        Swal.fire({
-            title: 'Sesi Berakhir',
-            text: "Anda telah logout otomatis karena tidak ada aktivitas untuk menjaga keamanan.",
-            icon: 'warning',
-            timer: 5000,
-            timerProgressBar: true,
-            showConfirmButton: false,
-            allowOutsideClick: false,
-            allowEscapeKey: false
-        }).then(() => {
-            // Call Logout API
-            $.ajax({
-                url: '/api/logout', 
-                type: 'POST', 
-                complete: function() { 
-                    window.location.href = '/login'; 
-                } 
-            });
-        });
-    }
 });
 </script>
 
+{{template "_updateScript.html" .}}
 {{template "_notificationScript.html" .}}
-
-{{template "_updateScript.html" .}} 
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
 </body>
 </html>

@@ -48,17 +48,24 @@
 
                 <div class="card shadow mb-4">
                     <div class="card-header py-3">
-                        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-user-shield mr-2"></i>Petugas Terlibat</h6>
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-user-shield mr-2"></i>Petugas Terlibat
+                        </h6>
                     </div>
                     <div class="card-body">
                         <div class="form-row">
                             <div class="form-group col-md-6">
                                 <label for="penerima_laporan">Penerima Laporan</label>
-                                <select id="penerima_laporan" class="form-control" required><option value="">Memuat...</option></select>
+                                <select id="penerima_laporan" class="form-control" required>
+                                    <option value="">(Sedang mengambil data...)</option>
+                                </select>
+                                <small class="text-muted" id="debug-penerima">Status: Menunggu...</small>
                             </div>
                             <div class="form-group col-md-6">
-                                <label for="penanggung_jawab">Penanggung Jawab (Pejabat Persetuju)</label>
-                                <select id="penanggung_jawab" class="form-control" required><option value="">Memuat...</option></select>
+                                <label for="penanggung_jawab">Penanggung Jawab</label>
+                                <select id="penanggung_jawab" class="form-control" required>
+                                    <option value="">(Sedang mengambil data...)</option>
+                                </select>
                             </div>
                         </div>
                     </div>

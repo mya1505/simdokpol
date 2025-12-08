@@ -47,18 +47,12 @@ var (
 )
 
 func main() {
-	// 1. SETUP ENVIRONMENT (Load .env dari ~/.config/SIMDOKPOL/)
 	setupEnvironment()
-
-	// 2. SECRET KEY INITIALIZATION (LOGIC BARU)
-	// Prioritas: LDFLAGS (Injection) -> ENV (.env) -> Auto-Generate
 	initializeSecrets()
-
 	setupLogging()
 
 	appData := utils.GetAppDataDir()
 	
-	// DEBUG: Print Hash Key untuk memastikan key konsisten
 	h := sha256.Sum256([]byte(services.AppSecretKeyString))
 	keyHash := fmt.Sprintf("%x", h[:4]) 
 
@@ -66,7 +60,7 @@ func main() {
 	log.Printf("🚀 SIMDOKPOL MOBILE - v%s", version)
 	log.Printf("📱 Mode: TERMUX (HEADLESS)")
 	log.Printf("📂 Data Dir: %s", appData)
-	log.Printf("🔑 Secret Hash: %s... (Stabil)", keyHash)
+	log.Printf("🔑 Secret Hash: %s...", keyHash)
 	log.Println("==========================================")
 
 	cfg := config.LoadConfig()
@@ -78,7 +72,6 @@ func main() {
 		seedDefaultTemplates(db)
 	}
 
-	// --- INIT LAYERS ---
 	var userRepo repositories.UserRepository
 	var docRepo repositories.LostDocumentRepository
 	var residentRepo repositories.ResidentRepository
@@ -115,7 +108,6 @@ func main() {
 	dbTestService := services.NewDBTestService()
 	updateService := services.NewUpdateService()
 
-	// Init Controllers
 	authController := controllers.NewAuthController(authService, configService, version)
 	userController := controllers.NewUserController(userService)
 	docController := controllers.NewLostDocumentController(docService)
@@ -150,7 +142,6 @@ func main() {
 		c.Next()
 	})
 
-	// --- ROUTES ---
 	r.GET("/login", authController.ShowLoginPage)
 	r.POST("/api/login", middleware.LoginRateLimiter.GetLimiterMiddleware(), authController.Login)
 	r.POST("/api/logout", authController.Logout)
@@ -240,8 +231,10 @@ func main() {
 		c.HTML(200, "tentang.html", gin.H{"Title": "Tentang", "CurrentUser": c.MustGet("currentUser"), "AppVersion": version, "Config": conf})
 	})
 
-	// Route Operator untuk list user
+	// --- FIX: ROUTE INI ADA DI LUAR GROUP ADMIN ---
+	// Operator bisa akses ini untuk dropdown form dokumen
 	authorized.GET("/api/users/operators", userController.FindOperators)
+	// ----------------------------------------------
 
 	admin := authorized.Group("/")
 	admin.Use(middleware.AdminAuthMiddleware())
@@ -335,7 +328,6 @@ func main() {
 		time.Sleep(2 * time.Second)
 		url := fmt.Sprintf("http://localhost:%s", port)
 		if isHTTPS { url = fmt.Sprintf("https://localhost:%s", port) }
-		
 		log.Println("✨ Buka browser di:", url)
 		openBrowserTermux(url)
 	}()
@@ -350,95 +342,58 @@ func main() {
 	log.Println("✅ Server stopped.")
 }
 
-// --- HELPER UNTUK ENVIRONMENT & SECRETS ---
+// --- HELPER FUNCTIONS ---
 
 func setupEnvironment() {
 	envPath := filepath.Join(utils.GetAppDataDir(), ".env")
-	// Load .env (jika ada) ke environment variable
 	_ = godotenv.Overload(envPath)
 }
 
 func initializeSecrets() {
-    envPath := filepath.Join(utils.GetAppDataDir(), ".env")
+	// A. Cek Injection LDFLAGS
+	if services.JWTSecretKeyString != "" {
+		services.JWTSecretKey = []byte(services.JWTSecretKeyString)
+	}
 
-    // --- 1. COBA BACA LANGSUNG DARI FILE .ENV (PRIORITAS UTAMA UTK DEV) ---
-    // Kita baca manual file-nya untuk memastikan kita dapat data persisten terakhir
-    var fileEnv map[string]string
-    fileEnv, _ = godotenv.Read(envPath)
-    if fileEnv == nil {
-        fileEnv = make(map[string]string)
-    }
+	// B. Cek Environment Variable
+	if services.AppSecretKeyString == "" {
+		services.AppSecretKeyString = os.Getenv("APP_SECRET_KEY")
+	}
+	if len(services.JWTSecretKey) == 0 {
+		if jwtStr := os.Getenv("JWT_SECRET_KEY"); jwtStr != "" {
+			services.JWTSecretKey = []byte(jwtStr)
+		}
+	}
 
-    // --- 2. SETUP APP SECRET KEY ---
-    // Urutan Prioritas: LDFLAGS -> File .env -> os.Getenv -> Auto Generate
+	// C. Auto-Generate & Persist
+	updates := make(map[string]string)
+	
+	if services.AppSecretKeyString == "" {
+		log.Println("🔑 Generating new APP_SECRET_KEY...")
+		b := make([]byte, 32)
+		rand.Read(b)
+		services.AppSecretKeyString = hex.EncodeToString(b)
+		updates["APP_SECRET_KEY"] = services.AppSecretKeyString
+		os.Setenv("APP_SECRET_KEY", services.AppSecretKeyString)
+	}
 
-    // Cek LDFLAGS (Injection saat Build)
-    if services.AppSecretKeyString == "" {
-        // Cek File .env (Persisten)
-        if val, exists := fileEnv["APP_SECRET_KEY"]; exists && val != "" {
-            services.AppSecretKeyString = val
-            log.Println("🔑 Loaded APP_SECRET_KEY from .env file")
-        } else {
-            // Cek OS Environment (Session Export)
-            if envVal := os.Getenv("APP_SECRET_KEY"); envVal != "" {
-                services.AppSecretKeyString = envVal
-                log.Println("🔑 Loaded APP_SECRET_KEY from Environment Variable")
-            }
-        }
-    } else {
-        log.Println("🔑 Loaded APP_SECRET_KEY from Build Injection")
-    }
+	if len(services.JWTSecretKey) == 0 {
+		log.Println("🔑 Generating new JWT_SECRET_KEY...")
+		b := make([]byte, 32)
+		rand.Read(b)
+		jwtStr := hex.EncodeToString(b)
+		services.JWTSecretKey = []byte(jwtStr)
+		updates["JWT_SECRET_KEY"] = jwtStr
+		os.Setenv("JWT_SECRET_KEY", jwtStr)
+	}
 
-    // --- 3. SETUP JWT SECRET KEY ---
-    if len(services.JWTSecretKey) == 0 {
-        // Cek Injection String LDFLAGS
-        if services.JWTSecretKeyString != "" {
-            services.JWTSecretKey = []byte(services.JWTSecretKeyString)
-            log.Println("🔑 Loaded JWT_SECRET_KEY from Build Injection")
-        } else {
-            // Cek File .env
-            if val, exists := fileEnv["JWT_SECRET_KEY"]; exists && val != "" {
-                services.JWTSecretKey = []byte(val)
-                log.Println("🔑 Loaded JWT_SECRET_KEY from .env file")
-            } else {
-                // Cek OS Environment
-                if envVal := os.Getenv("JWT_SECRET_KEY"); envVal != "" {
-                    services.JWTSecretKey = []byte(envVal)
-                    log.Println("🔑 Loaded JWT_SECRET_KEY from Environment Variable")
-                }
-            }
-        }
-    }
-
-    // --- 4. LOGIC AUTO-GENERATE (HANYA JIKA BENAR-BENAR KOSONG) ---
-    updates := make(map[string]string)
-    
-    if services.AppSecretKeyString == "" {
-        log.Println("⚠️ APP_SECRET_KEY kosong. Generating NEW persistent key...")
-        b := make([]byte, 32)
-        rand.Read(b)
-        services.AppSecretKeyString = hex.EncodeToString(b)
-        updates["APP_SECRET_KEY"] = services.AppSecretKeyString
-    }
-
-    if len(services.JWTSecretKey) == 0 {
-        log.Println("⚠️ JWT_SECRET_KEY kosong. Generating NEW persistent key...")
-        b := make([]byte, 32)
-        rand.Read(b)
-        jwtStr := hex.EncodeToString(b)
-        services.JWTSecretKey = []byte(jwtStr)
-        updates["JWT_SECRET_KEY"] = jwtStr
-    }
-
-    // --- 5. SIMPAN PERUBAHAN KE .ENV ---
-    if len(updates) > 0 {
-        // Gabungkan dengan data lama agar tidak menimpa config DB
-        if err := utils.UpdateEnvFile(updates); err != nil {
-            log.Printf("❌ Gagal menyimpan secrets ke %s: %v", envPath, err)
-        } else {
-            log.Printf("✅ Secrets baru disimpan ke: %s", envPath)
-        }
-    }
+	if len(updates) > 0 {
+		if err := utils.UpdateEnvFile(updates); err != nil {
+			log.Printf("⚠️ Gagal menyimpan secrets ke .env: %v", err)
+		} else {
+			log.Println("✅ Secrets berhasil disimpan permanen ke .env")
+		}
+	}
 }
 
 func setupDatabase(cfg *config.Config) (*gorm.DB, error) {
@@ -462,15 +417,7 @@ func setupDatabase(cfg *config.Config) (*gorm.DB, error) {
 		db, err = gorm.Open(postgres.Open(dsn), gormConfig)
 	default:
 		db, err = gorm.Open(sqlite.Open(cfg.DBDSN), gormConfig)
-		if err == nil { 
-			// --- OPTIMASI SQLITE (WAL MODE) ---
-			// Mengaktifkan Write-Ahead Logging untuk concurrency yang lebih baik
-			db.Exec("PRAGMA journal_mode = WAL;") 
-			// Mode sinkronisasi normal (aman & cepat)
-			db.Exec("PRAGMA synchronous = NORMAL;") 
-			// Aktifkan Foreign Keys
-			db.Exec("PRAGMA foreign_keys = ON;")
-		}
+		if err == nil { db.Exec("PRAGMA foreign_keys = ON") }
 	}
 	if err != nil { return nil, err }
 	sqlDB, _ := db.DB()

@@ -129,18 +129,30 @@ func (c *LostDocumentController) SearchGlobal(ctx *gin.Context) {
 // @Router /documents [get]
 func (c *LostDocumentController) FindAll(ctx *gin.Context) {
 	var req dto.DataTableRequest
-	// Bind query params (draw, start, length, search[value])
 	if err := ctx.ShouldBindQuery(&req); err != nil {
-		// Default values jika tidak dikirim DataTables (fallback)
 		req.Draw = 1
 		req.Start = 0
 		req.Length = 10
 	}
+	
+	if filter := ctx.Query("filter"); filter != "" {
+		req.FilterType = filter
+	}
 
 	status := ctx.DefaultQuery("status", "active")
 
-	// Panggil service paging
-	response, err := c.docService.GetDocumentsPaged(req, status)
+	// --- PERBAIKAN LOGIC: Ambil Context User ---
+	userID := ctx.GetUint("userID")
+	var userRole string
+	if u, exists := ctx.Get("currentUser"); exists {
+		if user, ok := u.(*models.User); ok {
+			userRole = user.Peran
+		}
+	}
+	// -------------------------------------------
+
+	// Kirim userID dan userRole ke Service
+	response, err := c.docService.GetDocumentsPaged(req, status, userID, userRole)
 	if err != nil {
 		log.Printf("ERROR: Gagal mengambil data dokumen: %v", err)
 		ctx.JSON(http.StatusInternalServerError, dto.DataTableResponse{

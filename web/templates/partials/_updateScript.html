@@ -1,74 +1,70 @@
 <script>
 $(document).ready(function() {
-    // Handler untuk tombol di dalam Modal "Lihat Versi"
-    $('#btn-check-update-modal').on('click', function(e) {
+    // Handler Ganda: Tombol Bulat di Tentang & Tombol di Modal
+    $(document).on('click', '#btn-check-update-modal, #btn-check-update-inline', function(e) {
         e.preventDefault();
         
-        // Opsional: Tutup modal changelog agar SweetAlert terlihat jelas
-        $('#changelogModal').modal('hide');
+        const $btn = $(this);
+        const $icon = $btn.find('i');
+        const isInlineBtn = $btn.attr('id') === 'btn-check-update-inline';
         
-        // Tampilkan loading
-        Swal.fire({
-            title: 'Memeriksa Pembaruan...',
-            text: 'Sedang menghubungi server GitHub.',
-            allowOutsideClick: false,
-            didOpen: () => {
-                Swal.showLoading();
-            }
-        });
+        // Animasi putar
+        if (isInlineBtn) {
+            $icon.addClass('fa-spin');
+        } else {
+            $('#changelogModal').modal('hide');
+        }
 
+        // Feedback Loading
+        if (isInlineBtn) {
+            const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 10000 });
+            Toast.fire({ icon: 'info', title: 'Memeriksa pembaruan...' });
+        } else {
+            Swal.fire({ title: 'Memeriksa...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        }
+
+        // Call API
         $.ajax({
             url: '/api/updates/check',
             method: 'GET',
             success: function(resp) {
+                if(isInlineBtn) $icon.removeClass('fa-spin');
+                
                 if (resp.error) {
-                    Swal.fire({
-                        icon: 'info',
-                        title: 'Gagal Memeriksa',
-                        text: resp.error,
-                        confirmButtonText: 'Oke'
-                    });
+                    Swal.fire('Info', resp.error, 'info');
                     return;
                 }
 
                 if (resp.has_update) {
                     Swal.fire({
                         icon: 'info',
-                        title: 'Update Tersedia!',
+                        title: 'Update Tersedia! 🎉',
                         html: `
                             <div class="text-left">
-                                <p>Versi Baru: <strong>${resp.latest_version}</strong></p>
-                                <p>Versi Anda: ${resp.current_version}</p>
-                                <hr>
-                                <small class="text-muted">Catatan Rilis:</small><br>
-                                <div style="max-height: 150px; overflow-y: auto; background: #f8f9fc; padding: 10px; border-radius: 5px; font-size: 0.85rem;">
-                                    <pre style="white-space: pre-wrap; margin: 0; font-family: inherit;">${resp.release_notes}</pre>
+                                <p>Versi Baru: <strong class="text-success">${resp.latest_version}</strong></p>
+                                <div class="bg-light p-2 rounded border small text-muted mb-3" style="max-height:150px;overflow:auto;">
+                                    ${resp.release_notes}
                                 </div>
                             </div>
                         `,
                         showCancelButton: true,
-                        confirmButtonText: '<i class="fas fa-download"></i> Unduh Sekarang',
-                        cancelButtonText: 'Nanti Saja'
-                    }).then((result) => {
-                        if (result.isConfirmed) {
-                            window.open(resp.download_url, '_blank');
-                        }
+                        confirmButtonText: 'Unduh',
+                        cancelButtonText: 'Nanti'
+                    }).then((r) => {
+                        if (r.isConfirmed) window.open(resp.download_url, '_blank');
                     });
                 } else {
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Aplikasi Terbaru',
-                        text: `Anda sudah menggunakan versi terbaru (${resp.current_version}).`,
-                        confirmButtonText: 'Mantap!'
-                    });
+                    if(isInlineBtn) {
+                        const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
+                        Toast.fire({ icon: 'success', title: 'Aplikasi sudah terbaru' });
+                    } else {
+                        Swal.fire('Mantap!', `Versi ${resp.current_version} adalah yang terbaru.`, 'success');
+                    }
                 }
             },
             error: function() {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Kesalahan Jaringan',
-                    text: 'Gagal menghubungi server. Periksa koneksi internet Anda.',
-                });
+                if(isInlineBtn) $icon.removeClass('fa-spin');
+                Swal.fire('Error', 'Gagal terhubung ke server update.', 'error');
             }
         });
     });

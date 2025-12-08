@@ -5,15 +5,13 @@ $(document).ready(function() {
     const docID = {{.DocID}};
     const $form = $('#create-doc-form');
     
-    // Konversi Data Attribute ke Tipe yang Tepat
+    // Konversi Data Attribute
     const currentUserID = parseInt($form.data('current-user-id')) || 0;
-    const currentUserRegu = ($form.data('current-user-regu') || "").toString().trim();
-    const currentUserJabatan = ($form.data('current-user-jabatan') || "").toString().toUpperCase();
+    const currentUserRegu = ($form.data('current-user-regu') || "").toString().trim().toUpperCase();
+    const currentUserJabatan = ($form.data('current-user-jabatan') || "").toString().trim().toUpperCase();
     const currentUserPeran = $form.data('current-user-peran');
 
     let itemTemplates = {}; 
-    let anggotaJagaList = [];
-    let kanitList = [];
     const $penerimaSelect = $('#penerima_laporan');
     const $penanggungJawabSelect = $('#penanggung_jawab');
 
@@ -22,58 +20,42 @@ $(document).ready(function() {
         format: 'dd-mm-yyyy', language: 'id', autoclose: true, todayHighlight: true, endDate: '0d'
     });
 
-    // Inisialisasi Select2 dengan Placeholder yang Jelas
-    $('#penerima_laporan').select2({
+    $('.select2-user').select2({
         theme: 'bootstrap4',
-        placeholder: "Klik untuk cari Penerima Laporan...",
+        placeholder: "Cari petugas...",
         allowClear: true,
-        width: '100%'
+        width: '100%',
+        language: { noResults: () => "Tidak ditemukan (Cek Regu/Nama)" }
     });
 
-    $('#penanggung_jawab').select2({
-        theme: 'bootstrap4',
-        placeholder: "Klik untuk cari Pejabat Penyetuju...",
-        allowClear: true,
-        width: '100%'
-    });
-
-    // --- 2. HELPERS (Validasi & Format) ---
+    // --- 2. HELPERS (Validasi) ---
     function showInputError($input, message) { $input.addClass('is-invalid'); $input.siblings('.invalid-feedback').text(message); $input.focus(); }
     function clearInputErrors() { $('.conditional-fields input').removeClass('is-invalid'); }
-    
     function validateItemFields() {
         clearInputErrors();
         let isValid = true;
         $('.conditional-fields:visible input[data-label]').each(function() {
-            const $input = $(this);
-            const val = $input.val().trim();
-            const reqLen = $input.data('required-length');
-            const minLen = $input.data('min-length');
-            const regexPat = $input.data('regex'); 
-            const label = $input.data('label');
-
+            const $input = $(this); const val = $input.val().trim();
+            const reqLen = $input.data('required-length'); const minLen = $input.data('min-length'); const regexPat = $input.data('regex'); const label = $input.data('label');
             if (reqLen && val.length > 0 && val.length !== parseInt(reqLen)) { showInputError($input, `${label} harus ${reqLen} digit.`); isValid = false; return false; }
             if (minLen && val.length > 0 && val.length < parseInt(minLen)) { showInputError($input, `${label} minimal ${minLen} digit.`); isValid = false; return false; }
             if (regexPat && val.length > 0 && !new RegExp(regexPat).test(val)) { showInputError($input, `Format ${label} tidak valid.`); isValid = false; return false; }
         });
         return isValid;
     }
-    
     $('body').on('input', '.numeric-only', function() { this.value = this.value.replace(/[^0-9]/g,''); });
     $('body').on('input', '.auto-uppercase', function() { if (!$(this).hasClass('alphanumeric-only')) $(this).val($(this).val().toUpperCase()); });
-    $('body').on('input', '.auto-titlecase', function() { 
-        this.value = this.value.replace(/\w\S*/g, function(txt) { return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase(); }); 
-    });
+    $('body').on('input', '.auto-titlecase', function() { this.value = this.value.replace(/\w\S*/g, function(txt) { return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase(); }); });
 
-    // --- 3. FORM DINAMIS (TEMPLATE) ---
+    // --- 3. TEMPLATE BARANG ---
     $.ajax({
         url: '/api/item-templates/active', method: 'GET',
         success: function(templates) {
-            const $itemTypeSelect = $('#modal_item_type');
-            $itemTypeSelect.empty().append(new Option('Pilih Jenis Barang...', ''));
-            templates.forEach(t => { if(t.nama_barang !== 'LAINNYA') { itemTemplates[t.nama_barang] = t; $itemTypeSelect.append(new Option(t.nama_barang, t.nama_barang)); } });
+            const $sel = $('#modal_item_type');
+            $sel.empty().append(new Option('Pilih Jenis Barang...', ''));
+            if(templates) templates.forEach(t => { if(t.nama_barang !== 'LAINNYA') { itemTemplates[t.nama_barang] = t; $sel.append(new Option(t.nama_barang, t.nama_barang)); } });
             itemTemplates['LAINNYA'] = { fields_config: [] }; 
-            $itemTypeSelect.append(new Option('Lainnya...', 'LAINNYA'));
+            $sel.append(new Option('Lainnya...', 'LAINNYA'));
         }
     });
 
@@ -81,7 +63,6 @@ $(document).ready(function() {
         let inputClass = "form-control";
         if(field.is_numeric) inputClass += " numeric-only";
         if(field.is_uppercase) inputClass += " auto-uppercase";
-        
         let html = `<div class="form-group"><label>${field.label}</label>`;
         if(field.type === 'select') {
             html += `<select class="${inputClass}" data-label="${field.data_label}">`;
@@ -95,8 +76,7 @@ $(document).ready(function() {
     }
 
     $('#modal_item_type').on('change', function() {
-        const sel = $(this).val();
-        $('.conditional-fields').hide(); $('#dynamic-fields-container').empty();
+        const sel = $(this).val(); $('.conditional-fields').hide(); $('#dynamic-fields-container').empty();
         if(sel === 'LAINNYA') $('#fields-lainnya').show();
         else if(itemTemplates[sel]) {
             itemTemplates[sel].fields_config.forEach(f => $('#dynamic-fields-container').append(buildFormField(f)));
@@ -107,145 +87,114 @@ $(document).ready(function() {
     $('#save-item-btn').on('click', function() {
         const type = $('#modal_item_type').val();
         if(!type) { Swal.fire('Perhatian', 'Pilih jenis barang.', 'warning'); return; }
-        
-        let name = type;
-        if(type === 'LAINNYA') {
-            name = $('#lainnya_nama_barang').val();
-            if(!name) { $('#lainnya_nama_barang').focus(); return; }
-        }
-        
+        let name = type; if(type === 'LAINNYA') { name = $('#lainnya_nama_barang').val(); if(!name) { $('#lainnya_nama_barang').focus(); return; } }
         if(!validateItemFields()) return;
-
         let descParts = [];
-        if(type === 'LAINNYA') {
-            if($('#lainnya_deskripsi').val()) descParts.push($('#lainnya_deskripsi').val());
-        } else {
-            $('#dynamic-fields-container').find('input, select').each(function() {
-                if($(this).val()) descParts.push($(this).data('label') + ': ' + $(this).val());
-            });
-        }
-        
+        if(type === 'LAINNYA') { if($('#lainnya_deskripsi').val()) descParts.push($('#lainnya_deskripsi').val()); } 
+        else { $('#dynamic-fields-container').find('input, select').each(function() { if($(this).val()) descParts.push($(this).data('label') + ': ' + $(this).val()); }); }
         const rowCnt = $('#lost-items-table tbody tr').length + 1;
         $('#lost-items-table tbody').append(`<tr class="lost-item-row"><td>${rowCnt}</td><td data-name="nama_barang">${name}</td><td data-name="deskripsi">${descParts.join(', ')}</td><td><button type="button" class="btn btn-danger btn-sm remove-item-btn"><i class="fas fa-trash"></i></button></td></tr>`);
-        $('#addItemModal').modal('hide');
-        $('#modal-item-form')[0].reset();
+        $('#addItemModal').modal('hide'); $('#modal-item-form')[0].reset();
     });
+    $('#lost-items-table').on('click', '.remove-item-btn', function() { $(this).closest('tr').remove(); });
 
-    $('#lost-items-table').on('click', '.remove-item-btn', function() {
-        $(this).closest('tr').remove();
-    });
 
-    // --- 4. LOGIKA LOAD DATA PETUGAS (DIPERBAIKI) ---
-
+    // --- 4. LOGIKA LOAD DATA PETUGAS (SMART FILTER IS BACK!) ---
     $.ajax({
         url: '/api/users/operators',
         method: 'GET',
-        success: function(operators) {
-            // A. FILTERING LOGIC
+        success: function(allUsers) {
+            if (!allUsers || allUsers.length === 0) {
+                $penerimaSelect.empty().append(new Option('Data Kosong', ''));
+                return;
+            }
+
             let filteredAnggota = [];
             let filteredKanit = [];
 
+            // === FILTER LOGIC ===
             if (currentUserPeran === 'SUPER_ADMIN') {
-                // Super Admin: LOAD SEMUA DATA (Clean)
-                // Filter kasar berdasarkan nama jabatan string
-                filteredAnggota = operators.filter(op => op.jabatan && op.jabatan.toUpperCase().includes('ANGGOTA JAGA'));
-                filteredKanit = operators.filter(op => op.jabatan && (op.jabatan.toUpperCase().includes('KANIT') || op.jabatan.toUpperCase().includes('KAPOLSEK')));
+                // Admin: Lihat SEMUA (Filter kasar berdasarkan text jabatan)
+                filteredAnggota = allUsers.filter(u => u.jabatan && u.jabatan.toUpperCase().includes('ANGGOTA'));
+                filteredKanit = allUsers.filter(u => u.jabatan && (u.jabatan.toUpperCase().includes('KANIT') || u.jabatan.toUpperCase().includes('KAPOLSEK')));
+                
+                // Fallback: Jika filter jabatan gagal (karena typo), masukkan semua user ke list biar Admin bisa cari manual
+                if (filteredAnggota.length === 0) filteredAnggota = allUsers;
+                if (filteredKanit.length === 0) filteredKanit = allUsers;
+
             } else {
-                // Operator: HANYA LOAD REGU SENDIRI
-                // Pastikan filter regu konsisten (trim spasi)
-                filteredAnggota = operators.filter(op => 
-                    op.jabatan && op.jabatan.toUpperCase().includes('ANGGOTA JAGA') && 
-                    op.regu === currentUserRegu
-                );
-                filteredKanit = operators.filter(op => 
-                    op.jabatan && (op.jabatan.toUpperCase().includes('KANIT') || op.jabatan.toUpperCase().includes('KAPOLSEK')) &&
-                    op.regu === currentUserRegu
-                );
+                // Operator: Filter REGU
+                // Pastikan Regu cocok (String comparison)
+                filteredAnggota = allUsers.filter(u => {
+                    const uRegu = (u.regu || "").toString().trim().toUpperCase();
+                    const uJab = (u.jabatan || "").toUpperCase();
+                    return uRegu === currentUserRegu && uJab.includes('ANGGOTA');
+                });
+                
+                filteredKanit = allUsers.filter(u => {
+                    const uRegu = (u.regu || "").toString().trim().toUpperCase();
+                    const uJab = (u.jabatan || "").toUpperCase();
+                    return uRegu === currentUserRegu && (uJab.includes('KANIT') || uJab.includes('KAPOLSEK'));
+                });
             }
 
-            anggotaJagaList = filteredAnggota;
-            kanitList = filteredKanit;
-
-            // B. POPULATE SELECT2
-            // Tambahkan Option Kosong (Placeholder)
+            // === POPULATE DROPDOWN ===
             $penerimaSelect.empty().append(new Option('', '', true, true));
-            anggotaJagaList.forEach(op => {
-                const text = `${op.pangkat} ${op.nama_lengkap} (${op.nrp})`;
-                $penerimaSelect.append(new Option(text, op.id));
+            filteredAnggota.forEach(u => {
+                $penerimaSelect.append(new Option(`${u.pangkat} ${u.nama_lengkap} (${u.nrp})`, u.id));
             });
 
             $penanggungJawabSelect.empty().append(new Option('', '', true, true));
-            kanitList.forEach(op => {
-                const text = `${op.pangkat} ${op.nama_lengkap} (${op.jabatan})`;
-                $penanggungJawabSelect.append(new Option(text, op.id));
+            filteredKanit.forEach(u => {
+                $penanggungJawabSelect.append(new Option(`${u.pangkat} ${u.nama_lengkap} (${u.jabatan})`, u.id));
             });
 
-            // C. SET DEFAULT & LOCK (Hanya untuk Form Baru)
+            $penerimaSelect.trigger('change');
+            $penanggungJawabSelect.trigger('change');
+
+            // === AUTO SELECT & LOCK ===
             if (!isEdit) {
                 const params = new URLSearchParams(window.location.search);
-                // Jika bukan duplikat, jalankan auto-set
                 if (!params.has('duplicate_from')) {
-                    setDefaultOfficers();
+                    setDefaultOfficers(filteredAnggota, filteredKanit);
                 }
             }
             
-            // Terapkan ReadOnly logic
+            // Re-apply Lock
             applyDropdownLogic();
             
-            // Load data edit/duplicate
-            loadInitialData(); 
+            loadInitialData(allUsers); // Pass allUsers untuk data edit
         },
-        error: function() { console.error("Gagal load petugas."); }
+        error: function(xhr) {
+             console.error("API Error:", xhr);
+             Swal.fire({icon: 'error', title: 'Gagal Memuat Petugas', toast: true, position: 'top-end', timer: 4000});
+        }
     });
 
-    function setDefaultOfficers() {
-        // Logika Super Admin: Biarkan kosong (Placeholder Select2 akan muncul)
-        if (currentUserPeran === 'SUPER_ADMIN') {
-            $penerimaSelect.val(null).trigger('change');
-            $penanggungJawabSelect.val(null).trigger('change');
-            return;
-        }
+    function setDefaultOfficers(anggotaList, kanitList) {
+        if (currentUserPeran === 'SUPER_ADMIN') return;
 
-        // Logika Operator
-        if (currentUserJabatan.includes('ANGGOTA JAGA')) {
-            // 1. Set Penerima = Diri Sendiri
+        // Jika saya Anggota -> Pilih diri sendiri
+        if (currentUserJabatan.includes('ANGGOTA')) {
             $penerimaSelect.val(currentUserID).trigger('change');
-            
-            // 2. Set Penanggung Jawab = Kanit Regu (Otomatis)
-            if (kanitList.length > 0) {
-                // Ambil Kanit pertama di list (karena sudah difilter per regu)
-                $penanggungJawabSelect.val(kanitList[0].id).trigger('change');
-            }
+            // Auto pilih Kanit pertama di list (karena sudah difilter regu)
+            if (kanitList.length > 0) $penanggungJawabSelect.val(kanitList[0].id).trigger('change');
         } 
+        // Jika saya Kanit -> Pilih diri sendiri sbg PJ
         else if (currentUserJabatan.includes('KANIT') || currentUserJabatan.includes('KAPOLSEK')) {
-            // 1. Set Penanggung Jawab = Diri Sendiri
             $penanggungJawabSelect.val(currentUserID).trigger('change');
-            
-            // 2. Penerima = Kosong (Biar Kanit pilih)
-            $penerimaSelect.val(null).trigger('change');
         }
     }
     
     function applyDropdownLogic() {
-        if (currentUserPeran === 'SUPER_ADMIN') {
-            $penerimaSelect.prop('disabled', false);
-            $penanggungJawabSelect.prop('disabled', false);
-        } else {
-            // Operator Logic: Lock field yang sudah auto-set
-            if (currentUserJabatan.includes('ANGGOTA JAGA')) {
-                // Anggota Jaga GAK BOLEH ganti penerima (harus dirinya)
+        if (currentUserPeran !== 'SUPER_ADMIN') {
+            if (currentUserJabatan.includes('ANGGOTA')) {
+                // Lock Diri Sendiri & Kanit (Biar gak salah pilih)
                 $penerimaSelect.prop('disabled', true);
-                
-                // Anggota Jaga GAK BOLEH ganti Kanit (harus Kanit regunya)
-                // Kecuali di regu itu ada 2 kanit (jarang), kita lock saja untuk keamanan
                 $penanggungJawabSelect.prop('disabled', true);
-            } 
-            else if (currentUserJabatan.includes('KANIT') || currentUserJabatan.includes('KAPOLSEK')) {
-                // Kanit GAK BOLEH ganti penanggung jawab (harus dirinya)
+            } else if (currentUserJabatan.includes('KANIT')) {
+                // Kanit Lock dirinya sendiri, tapi bebas pilih anggota
                 $penanggungJawabSelect.prop('disabled', true);
-                
-                // Kanit BOLEH pilih penerima (tapi listnya cuma anggota regunya)
-                $penerimaSelect.prop('disabled', false);
             }
         }
     }
@@ -255,70 +204,52 @@ $(document).ready(function() {
         e.preventDefault();
         
         var items = [];
-        $('#lost-items-table tbody tr').each(function() {
-            items.push({
-                nama_barang: $(this).find('td[data-name="nama_barang"]').text(),
-                deskripsi: $(this).find('td[data-name="deskripsi"]').text()
-            });
-        });
+        $('#lost-items-table tbody tr').each(function() { items.push({ nama_barang: $(this).find('td[data-name="nama_barang"]').text(), deskripsi: $(this).find('td[data-name="deskripsi"]').text() }); });
         if (items.length === 0) { Swal.fire('Perhatian', 'Tambahkan minimal satu barang.', 'warning'); return; }
 
         const tgl = $('#tanggal_lahir').val();
-        let tglISO = '';
-        if (tgl) { const parts = tgl.split('-'); tglISO = `${parts[2]}-${parts[1]}-${parts[0]}`; }
+        let tglISO = ''; if (tgl) { const p = tgl.split('-'); tglISO = `${p[2]}-${p[1]}-${p[0]}`; }
 
-        // UNLOCK SEBELUM SUBMIT AGAR VALUE TERKIRIM
+        // UNLOCK SEBELUM SUBMIT (PENTING)
         $penerimaSelect.prop('disabled', false);
         $penanggungJawabSelect.prop('disabled', false);
         
         const pelaporID = parseInt($penerimaSelect.val()) || 0;
         const pejabatID = parseInt($penanggungJawabSelect.val()) || 0;
 
-        // Re-Apply Logic (biar user gak bingung kalau ajax gagal)
-        setTimeout(applyDropdownLogic, 100); 
-
         if (pelaporID === 0 || pejabatID === 0) {
-            Swal.fire('Data Tidak Lengkap', 'Petugas Penerima dan Penanggung Jawab wajib diisi.', 'warning');
+            applyDropdownLogic(); // Lock lagi biar tampilan balik
+            Swal.fire('Data Kurang', 'Petugas Penerima dan Penanggung Jawab wajib dipilih.', 'warning');
             return;
         }
 
         var formData = {
-            nama_lengkap: $('#nama_lengkap').val(),
-            tempat_lahir: $('#tempat_lahir').val(),
-            tanggal_lahir: tglISO,
-            jenis_kelamin: $('#jenis_kelamin').val(),
-            agama: $('#agama').val(),
-            pekerjaan: $('#pekerjaan').val(),
-            alamat: $('#alamat').val(),
-            lokasi_hilang: $('#lokasi_hilang').val(),
-            petugas_pelapor_id: pelaporID,
-            pejabat_persetuju_id: pejabatID,
-            items: items
+            nama_lengkap: $('#nama_lengkap').val(), tempat_lahir: $('#tempat_lahir').val(), tanggal_lahir: tglISO,
+            jenis_kelamin: $('#jenis_kelamin').val(), agama: $('#agama').val(), pekerjaan: $('#pekerjaan').val(),
+            alamat: $('#alamat').val(), lokasi_hilang: $('#lokasi_hilang').val(),
+            petugas_pelapor_id: pelaporID, pejabat_persetuju_id: pejabatID, items: items
         };
 
-        let url = '/api/documents';
-        let method = 'POST';
-        if (isEdit) { url += '/' + docID; method = 'PUT'; }
+        let url = '/api/documents'; let m = 'POST';
+        if (isEdit) { url += '/' + docID; m = 'PUT'; }
 
         $.ajax({
-            url: url, method: method, contentType: 'application/json',
-            data: JSON.stringify(formData),
+            url: url, method: m, contentType: 'application/json', data: JSON.stringify(formData),
             success: function(res) {
-                Swal.fire({ icon: 'success', title: 'Berhasil!', text: isEdit ? 'Data diperbarui' : 'Surat no: ' + res.nomor_surat, timer: 2000, showConfirmButton: false })
-                .then(() => { window.location.href = '/documents'; });
+                Swal.fire({ icon: 'success', title: 'Berhasil!', text: isEdit ? 'Data diperbarui' : 'Surat no: ' + res.nomor_surat, timer: 2000, showConfirmButton: false }).then(() => { window.location.href = '/documents'; });
             },
-            error: function(xhr) { Swal.fire('Gagal', xhr.responseJSON?.error || 'Error', 'error'); }
+            error: function(xhr) { 
+                applyDropdownLogic(); // Lock lagi jika error
+                Swal.fire('Gagal', xhr.responseJSON?.error || 'Error', 'error'); 
+            }
         });
     });
 
-    // Helper Load Data (Edit/Duplicate)
-    function loadInitialData() {
+    function loadInitialData(allUsers) {
         const params = new URLSearchParams(window.location.search);
         const dupId = params.get('duplicate_from');
         let url = '';
-        if (isEdit) url = '/api/documents/' + docID;
-        else if (dupId) url = '/api/documents/' + dupId;
-        else return;
+        if (isEdit) url = '/api/documents/' + docID; else if (dupId) url = '/api/documents/' + dupId; else return;
 
         if(isEdit) { $('#form-title').html('<i class="fas fa-edit mr-2"></i>Edit Surat'); $('#submit-btn').html('<i class="fas fa-save mr-2"></i>Simpan'); }
         else { $('#form-title').html('<i class="fas fa-copy mr-2"></i>Duplikat Surat'); }
@@ -326,38 +257,24 @@ $(document).ready(function() {
         $.ajax({
             url: url, method: 'GET',
             success: function(data) {
-                $('#nama_lengkap').val(data.resident.nama_lengkap);
-                $('#tempat_lahir').val(data.resident.tempat_lahir);
-                if(data.resident.tanggal_lahir) {
-                    const d = data.resident.tanggal_lahir.split('T')[0].split('-');
-                    $('#tanggal_lahir').val(`${d[2]}-${d[1]}-${d[0]}`);
-                }
-                $('#jenis_kelamin').val(data.resident.jenis_kelamin);
-                $('#agama').val(data.resident.agama);
-                $('#pekerjaan').val(data.resident.pekerjaan);
-                $('#alamat').val(data.resident.alamat);
-                $('#lokasi_hilang').val(data.lokasi_hilang);
+                $('#nama_lengkap').val(data.resident.nama_lengkap); $('#tempat_lahir').val(data.resident.tempat_lahir);
+                if(data.resident.tanggal_lahir) { const d = data.resident.tanggal_lahir.split('T')[0].split('-'); $('#tanggal_lahir').val(`${d[2]}-${d[1]}-${d[0]}`); }
+                $('#jenis_kelamin').val(data.resident.jenis_kelamin); $('#agama').val(data.resident.agama); $('#pekerjaan').val(data.resident.pekerjaan); $('#alamat').val(data.resident.alamat); $('#lokasi_hilang').val(data.lokasi_hilang);
+                $('#lost-items-table tbody').empty(); if(data.lost_items) data.lost_items.forEach(i => addItemToTable(i.nama_barang, i.deskripsi));
                 
-                $('#lost-items-table tbody').empty();
-                if(data.lost_items) data.lost_items.forEach(i => addItemToTable(i.nama_barang, i.deskripsi));
-                
-                // Populate Select2 (Hati-hati, option mungkin tidak ada di list filter)
-                // Kita tambahkan option manual jika tidak ketemu (kasus admin/beda regu)
+                // Handling Select2 Value (Edit Mode)
+                // Jika data lama tidak ada di dropdown (karena terfilter regu), kita inject manual biar tampil
                 if(data.petugas_pelapor) {
-                    if ($penerimaSelect.find("option[value='" + data.petugas_pelapor.id + "']").length) {
-                        $penerimaSelect.val(data.petugas_pelapor.id).trigger('change');
-                    } else {
-                        var newOption = new Option(data.petugas_pelapor.nama_lengkap, data.petugas_pelapor.id, true, true);
-                        $penerimaSelect.append(newOption).trigger('change');
+                    if ($penerimaSelect.find("option[value='" + data.petugas_pelapor.id + "']").length === 0) {
+                        $penerimaSelect.append(new Option(data.petugas_pelapor.nama_lengkap + " (Lain)", data.petugas_pelapor.id, true, true));
                     }
+                    $penerimaSelect.val(data.petugas_pelapor.id).trigger('change');
                 }
                 if(data.pejabat_persetuju) {
-                    if ($penanggungJawabSelect.find("option[value='" + data.pejabat_persetuju.id + "']").length) {
-                        $penanggungJawabSelect.val(data.pejabat_persetuju.id).trigger('change');
-                    } else {
-                        var newOption = new Option(data.pejabat_persetuju.nama_lengkap, data.pejabat_persetuju.id, true, true);
-                        $penanggungJawabSelect.append(newOption).trigger('change');
+                    if ($penanggungJawabSelect.find("option[value='" + data.pejabat_persetuju.id + "']").length === 0) {
+                        $penanggungJawabSelect.append(new Option(data.pejabat_persetuju.nama_lengkap + " (Lain)", data.pejabat_persetuju.id, true, true));
                     }
+                    $penanggungJawabSelect.val(data.pejabat_persetuju.id).trigger('change');
                 }
             }
         });

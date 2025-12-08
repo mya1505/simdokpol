@@ -27,7 +27,9 @@ type LostDocumentService interface {
 	DeleteLostDocument(id uint, loggedInUserID uint) error
 	ExportDocuments(query string, statusFilter string) (*bytes.Buffer, string, error)
 	GenerateDocumentPDF(docID uint, actorID uint) (*bytes.Buffer, string, error)
-	GetDocumentsPaged(req dto.DataTableRequest, statusFilter string) (*dto.DataTableResponse, error)
+	
+	// FIX: Update Signature Interface (4 Parameter)
+	GetDocumentsPaged(req dto.DataTableRequest, statusFilter string, userID uint, userRole string) (*dto.DataTableResponse, error)
 }
 
 type lostDocumentService struct {
@@ -55,7 +57,8 @@ func NewLostDocumentService(db *gorm.DB, docRepo repositories.LostDocumentReposi
 	}
 }
 
-func (s *lostDocumentService) GetDocumentsPaged(req dto.DataTableRequest, statusFilter string) (*dto.DataTableResponse, error) {
+// FIX: Implementasi dengan 4 Parameter
+func (s *lostDocumentService) GetDocumentsPaged(req dto.DataTableRequest, statusFilter string, userID uint, userRole string) (*dto.DataTableResponse, error) {
 	appConfig, err := s.configService.GetConfig()
 	if err != nil {
 		return nil, err
@@ -65,7 +68,8 @@ func (s *lostDocumentService) GetDocumentsPaged(req dto.DataTableRequest, status
 		archiveDays = appConfig.ArchiveDurationDays
 	}
 
-	docs, total, filtered, err := s.docRepo.FindAllPaged(req, statusFilter, archiveDays)
+	// Passing userID dan userRole ke Repository
+	docs, total, filtered, err := s.docRepo.FindAllPaged(req, statusFilter, archiveDays, userID, userRole)
 	if err != nil {
 		return nil, err
 	}
@@ -182,14 +186,12 @@ func (s *lostDocumentService) FindByID(id uint, actorID uint) (*models.LostDocum
 
 	appConfig, _ := s.configService.GetConfig()
 	
-	// --- FIX BUG (SA5011): Cek Nil sebelum akses ---
 	if appConfig != nil && appConfig.ArchiveDurationDays > 0 {
 		archiveDuration := time.Duration(appConfig.ArchiveDurationDays) * 24 * time.Hour
 		if doc.Status == "DITERBITKAN" && time.Now().After(doc.TanggalLaporan.Add(archiveDuration)) {
 			doc.Status = "DIARSIPKAN"
 		}
 	}
-	// --- END FIX ---
 
 	return doc, nil
 }
@@ -208,7 +210,6 @@ func (s *lostDocumentService) generateDocumentNumber(tx *gorm.DB) (string, strin
 	if err != nil {
 		return "", "", fmt.Errorf("gagal memuat konfigurasi: %w", err)
 	}
-	// Safety check jika config nil (fallback default format)
 	format := "SKH/%03d/%s/TUK.7.2.1/%d"
 	if appConfig != nil && appConfig.FormatNomorSurat != "" {
 		format = appConfig.FormatNomorSurat

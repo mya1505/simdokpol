@@ -6,6 +6,7 @@ type DataTableRequest struct {
 	Start  int    `form:"start"`
 	Length int    `form:"length"`
 	Search string `form:"search[value]"` // Search global
+	FilterType string `form:"filter_type"` // <-- TAMBAHAN BARU
 }
 
 // DataTableResponse adalah format JSON yang diharapkan DataTables

@@ -3,26 +3,23 @@ $(document).ready(function() {
     function loadNotifications() {
         const $counter = $('#notification-counter');
         const $list = $('#notification-list');
+        const MAX_DISPLAY = 5; 
 
-        // 1. Ambil Konfigurasi Durasi Arsip dulu dari API
+        // 1. Ambil Config Durasi Arsip
         $.ajax({
             url: '/api/config/limits',
             method: 'GET',
             success: function(config) {
                 const archiveDurationDays = config.archive_duration_days || 15;
-                
-                // 2. Setelah tahu durasinya, baru ambil data dokumen
-                fetchExpiringDocs(archiveDurationDays, $counter, $list);
+                fetchExpiringDocs(archiveDurationDays, $counter, $list, MAX_DISPLAY);
             },
             error: function() {
-                console.warn("Gagal memuat konfigurasi notifikasi.");
-                // Fallback ke default 15 hari jika gagal
-                fetchExpiringDocs(15, $counter, $list);
+                fetchExpiringDocs(15, $counter, $list, MAX_DISPLAY);
             }
         });
     }
 
-    function fetchExpiringDocs(archiveDurationDays, $counter, $list) {
+    function fetchExpiringDocs(archiveDurationDays, $counter, $list, maxDisplay) {
         $.ajax({
             url: '/api/notifications/expiring-documents',
             method: 'GET',
@@ -44,19 +41,16 @@ $(document).ready(function() {
                     return;
                 }
 
-                // Tampilkan counter
                 $counter.text(docs.length).show();
-                
-                // Kosongkan list dan isi dengan data baru
-                $list.empty();
+                $list.empty(); // BERSIHKAN ISI LAMA
 
                 const now = new Date();
+                const displayDocs = docs.slice(0, maxDisplay);
 
-                docs.forEach(doc => {
+                displayDocs.forEach(doc => {
                     const reportDate = new Date(doc.tanggal_laporan);
                     const expiryDate = new Date(reportDate.getTime());
                     expiryDate.setDate(reportDate.getDate() + archiveDurationDays);
-
                     const diffTime = expiryDate - now;
                     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
@@ -89,23 +83,27 @@ $(document).ready(function() {
                     `;
                     $list.append(notificationItem);
                 });
-            },
-            error: function(xhr) {
-                console.error("Gagal memuat notifikasi:", xhr.responseText);
-                $list.html(`
-                    <a class="dropdown-item d-flex align-items-center" href="#">
-                        <div class="mr-3"><div class="icon-circle bg-secondary"><i class="fas fa-exclamation text-white"></i></div></div>
-                        <div><span class="font-weight-bold">Gagal memuat notifikasi.</span></div>
+
+                // Footer Link: Dinamis + Filter
+                const remaining = docs.length - displayDocs.length;
+                let footerText = "Lihat Semua Notifikasi";
+                if (remaining > 0) {
+                    footerText = `Lihat ${remaining} Lainnya & Semua Notifikasi`;
+                }
+
+                $list.append(`
+                    <a class="dropdown-item text-center small text-gray-500 bg-light border-top font-weight-bold py-3" href="/documents?filter=expiring">
+                        ${footerText} <i class="fas fa-arrow-right ml-1"></i>
                     </a>
                 `);
+            },
+            error: function(xhr) {
+                $list.html(`<div class="p-3 text-center small text-danger">Gagal memuat notifikasi.</div>`);
             }
         });
     }
 
-    // Panggil fungsi saat halaman siap
     loadNotifications();
-    
-    // Opsional: Refresh notifikasi setiap 5 menit
-    setInterval(loadNotifications, 300000);
+    setInterval(loadNotifications, 300000); 
 });
 </script>
