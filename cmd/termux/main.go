@@ -157,7 +157,7 @@ func main() {
 	}
 
 	authorized.GET("/", func(c *gin.Context) {
-		c.HTML(200, "dashboard.html", gin.H{"Title": "Beranda", "CurrentUser": c.MustGet("currentUser"), "Config": mustGetConfig(configService)})
+		controllers.RenderHTML(c, "dashboard.html", gin.H{"Title": "Beranda", "Config": mustGetConfig(configService)})
 	})
 	authorized.GET("/api/config/limits", configController.GetLimits)
 	authorized.GET("/api/stats", dashboardController.GetStats)
@@ -167,16 +167,16 @@ func main() {
 	authorized.GET("/api/updates/check", updateController.CheckUpdate)
 
 	authorized.GET("/documents", func(c *gin.Context) {
-		c.HTML(200, "document_list.html", gin.H{"Title": "Daftar Dokumen", "CurrentUser": c.MustGet("currentUser"), "PageType": "active"})
+		controllers.RenderHTML(c, "document_list.html", gin.H{"Title": "Daftar Dokumen", "PageType": "active"})
 	})
 	authorized.GET("/documents/archived", func(c *gin.Context) {
-		c.HTML(200, "document_list.html", gin.H{"Title": "Arsip Dokumen", "CurrentUser": c.MustGet("currentUser"), "PageType": "archived"})
+		controllers.RenderHTML(c, "document_list.html", gin.H{"Title": "Arsip Dokumen", "PageType": "archived"})
 	})
 	authorized.GET("/documents/new", func(c *gin.Context) {
-		c.HTML(200, "document_form.html", gin.H{"Title": "Buat Surat Baru", "CurrentUser": c.MustGet("currentUser"), "IsEdit": false, "DocID": 0})
+		controllers.RenderHTML(c, "document_form.html", gin.H{"Title": "Buat Surat Baru", "IsEdit": false, "DocID": 0})
 	})
 	authorized.GET("/documents/:id/edit", func(c *gin.Context) {
-		c.HTML(200, "document_form.html", gin.H{"Title": "Edit Surat", "CurrentUser": c.MustGet("currentUser"), "IsEdit": true, "DocID": c.Param("id")})
+		controllers.RenderHTML(c, "document_form.html", gin.H{"Title": "Edit Surat", "IsEdit": true, "DocID": c.Param("id")})
 	})
 
 	authorized.GET("/documents/:id/print", func(c *gin.Context) {
@@ -194,7 +194,7 @@ func main() {
 		if conf.ArchiveDurationDays > 0 {
 			archiveDays = conf.ArchiveDurationDays
 		}
-		c.HTML(200, "print_preview.html", gin.H{"Document": doc, "Config": conf, "ArchiveDaysWords": utils.IntToIndonesianWords(archiveDays)})
+		controllers.RenderHTML(c, "print_preview.html", gin.H{"Document": doc, "Config": conf, "ArchiveDaysWords": utils.IntToIndonesianWords(archiveDays)})
 	})
 
 	authorized.POST("/api/documents", docController.Create)
@@ -205,47 +205,39 @@ func main() {
 	authorized.DELETE("/api/documents/:id", docController.Delete)
 	authorized.GET("/api/search", docController.SearchGlobal)
 	authorized.GET("/search", func(c *gin.Context) {
-		c.HTML(200, "search_results.html", gin.H{"Title": "Hasil Pencarian", "CurrentUser": c.MustGet("currentUser")})
+		controllers.RenderHTML(c, "search_results.html", gin.H{"Title": "Hasil Pencarian"})
 	})
 
 	authorized.GET("/api/item-templates/active", itemTemplateController.FindAllActive)
 	authorized.GET("/profile", func(c *gin.Context) {
-		c.HTML(200, "profile.html", gin.H{"Title": "Profil Saya", "CurrentUser": c.MustGet("currentUser")})
+		controllers.RenderHTML(c, "profile.html", gin.H{"Title": "Profil Saya"})
 	})
 	authorized.PUT("/api/profile", userController.UpdateProfile)
 	authorized.PUT("/api/profile/password", userController.ChangePassword)
 	authorized.GET("/panduan", func(c *gin.Context) {
-		c.HTML(200, "panduan.html", gin.H{"Title": "Panduan", "CurrentUser": c.MustGet("currentUser")})
+		controllers.RenderHTML(c, "panduan.html", gin.H{"Title": "Panduan"})
 	})
 	authorized.GET("/upgrade", func(c *gin.Context) {
 		conf, _ := configService.GetConfig()
-		c.HTML(200, "upgrade.html", gin.H{
-			"Title":       "Upgrade ke Pro",
-			"CurrentUser": c.MustGet("currentUser"),
-			"Config":      conf,
-			"AppVersion":  version,
-		})
+		controllers.RenderHTML(c, "upgrade.html", gin.H{"Title": "Upgrade ke Pro", "Config": conf})
 	})
 	authorized.GET("/tentang", func(c *gin.Context) {
 		conf, _ := configService.GetConfig()
-		c.HTML(200, "tentang.html", gin.H{"Title": "Tentang", "CurrentUser": c.MustGet("currentUser"), "AppVersion": version, "Config": conf})
+		controllers.RenderHTML(c, "tentang.html", gin.H{"Title": "Tentang", "Config": conf})
 	})
 
-	// --- FIX: ROUTE INI ADA DI LUAR GROUP ADMIN ---
-	// Operator bisa akses ini untuk dropdown form dokumen
 	authorized.GET("/api/users/operators", userController.FindOperators)
-	// ----------------------------------------------
 
 	admin := authorized.Group("/")
 	admin.Use(middleware.AdminAuthMiddleware())
 	admin.GET("/users", func(c *gin.Context) {
-		c.HTML(200, "user_list.html", gin.H{"Title": "Manajemen Pengguna", "CurrentUser": c.MustGet("currentUser")})
+		controllers.RenderHTML(c, "user_list.html", gin.H{"Title": "Manajemen Pengguna"})
 	})
 	admin.GET("/users/new", func(c *gin.Context) {
-		c.HTML(200, "user_form.html", gin.H{"Title": "Tambah Pengguna", "CurrentUser": c.MustGet("currentUser"), "IsEdit": false, "UserID": 0})
+		controllers.RenderHTML(c, "user_form.html", gin.H{"Title": "Tambah Pengguna", "IsEdit": false, "UserID": 0})
 	})
 	admin.GET("/users/:id/edit", func(c *gin.Context) {
-		c.HTML(200, "user_form.html", gin.H{"Title": "Edit Pengguna", "CurrentUser": c.MustGet("currentUser"), "IsEdit": true, "UserID": c.Param("id")})
+		controllers.RenderHTML(c, "user_form.html", gin.H{"Title": "Edit Pengguna", "IsEdit": true, "UserID": c.Param("id")})
 	})
 	admin.POST("/api/users", userController.Create)
 	admin.GET("/api/users", userController.FindAll)
@@ -255,7 +247,7 @@ func main() {
 	admin.DELETE("/api/users/:id", userController.Delete)
 	admin.POST("/api/users/:id/activate", userController.Activate)
 	admin.GET("/settings", func(c *gin.Context) {
-		c.HTML(200, "settings.html", gin.H{"Title": "Pengaturan Sistem", "CurrentUser": c.MustGet("currentUser")})
+		controllers.RenderHTML(c, "settings.html", gin.H{"Title": "Pengaturan Sistem"})
 	})
 	admin.GET("/api/settings", settingsController.GetSettings)
 	admin.PUT("/api/settings", settingsController.UpdateSettings)
@@ -266,7 +258,7 @@ func main() {
 	admin.GET("/api/audit-logs", auditController.FindAll)
 	admin.GET("/api/audit-logs/export", auditController.Export)
 	admin.GET("/audit-logs", func(c *gin.Context) {
-		c.HTML(200, "audit_log_list.html", gin.H{"Title": "Log Audit", "CurrentUser": c.MustGet("currentUser")})
+		controllers.RenderHTML(c, "audit_log_list.html", gin.H{"Title": "Log Audit"})
 	})
 	admin.GET("/api/documents/export", docController.Export)
 	admin.POST("/api/license/activate", licenseController.ActivateLicense)
@@ -277,13 +269,13 @@ func main() {
 	pro.GET("/reports/aggregate", reportController.ShowReportPage)
 	pro.GET("/api/reports/aggregate/pdf", reportController.GenerateReportPDF)
 	pro.GET("/templates", func(c *gin.Context) {
-		c.HTML(200, "item_template_list.html", gin.H{"Title": "Template Barang", "CurrentUser": c.MustGet("currentUser")})
+		controllers.RenderHTML(c, "item_template_list.html", gin.H{"Title": "Template Barang"})
 	})
 	pro.GET("/templates/new", func(c *gin.Context) {
-		c.HTML(200, "item_template_form.html", gin.H{"Title": "Tambah Template", "CurrentUser": c.MustGet("currentUser"), "IsEdit": false, "TemplateID": 0})
+		controllers.RenderHTML(c, "item_template_form.html", gin.H{"Title": "Tambah Template", "IsEdit": false, "TemplateID": 0})
 	})
 	pro.GET("/templates/:id/edit", func(c *gin.Context) {
-		c.HTML(200, "item_template_form.html", gin.H{"Title": "Edit Template", "CurrentUser": c.MustGet("currentUser"), "IsEdit": true, "TemplateID": c.Param("id")})
+		controllers.RenderHTML(c, "item_template_form.html", gin.H{"Title": "Edit Template", "IsEdit": true, "TemplateID": c.Param("id")})
 	})
 	pro.GET("/api/item-templates", itemTemplateController.FindAll)
 	pro.GET("/api/item-templates/:id", itemTemplateController.FindByID)
@@ -342,20 +334,16 @@ func main() {
 	log.Println("✅ Server stopped.")
 }
 
-// --- HELPER FUNCTIONS ---
-
 func setupEnvironment() {
 	envPath := filepath.Join(utils.GetAppDataDir(), ".env")
 	_ = godotenv.Overload(envPath)
 }
 
 func initializeSecrets() {
-	// A. Cek Injection LDFLAGS
 	if services.JWTSecretKeyString != "" {
 		services.JWTSecretKey = []byte(services.JWTSecretKeyString)
 	}
 
-	// B. Cek Environment Variable
 	if services.AppSecretKeyString == "" {
 		services.AppSecretKeyString = os.Getenv("APP_SECRET_KEY")
 	}
@@ -365,7 +353,6 @@ func initializeSecrets() {
 		}
 	}
 
-	// C. Auto-Generate & Persist
 	updates := make(map[string]string)
 	
 	if services.AppSecretKeyString == "" {
@@ -417,7 +404,11 @@ func setupDatabase(cfg *config.Config) (*gorm.DB, error) {
 		db, err = gorm.Open(postgres.Open(dsn), gormConfig)
 	default:
 		db, err = gorm.Open(sqlite.Open(cfg.DBDSN), gormConfig)
-		if err == nil { db.Exec("PRAGMA foreign_keys = ON") }
+		if err == nil { 
+			db.Exec("PRAGMA journal_mode = WAL;") 
+			db.Exec("PRAGMA synchronous = NORMAL;") 
+			db.Exec("PRAGMA foreign_keys = ON;")
+		}
 	}
 	if err != nil { return nil, err }
 	sqlDB, _ := db.DB()

@@ -43,27 +43,24 @@ func NewConfigController(
 	}
 }
 
-// @Summary Ambil Batasan Konfigurasi (Publik & License Check)
+// @Summary Ambil Batasan Konfigurasi (Publik)
 // @Router /api/config/limits [get]
 func (c *ConfigController) GetLimits(ctx *gin.Context) {
 	cfg, err := c.configService.GetConfig()
 	if err != nil {
-		// Fallback default
 		ctx.JSON(http.StatusOK, gin.H{
 			"session_timeout":       480,
 			"idle_timeout":          15,
 			"license_status":        "UNLICENSED",
-			"archive_duration_days": 15, // Default aman
+			"archive_duration_days": 15,
 		})
 		return
 	}
-	
 	ctx.JSON(http.StatusOK, gin.H{
 		"session_timeout":       cfg.SessionTimeout,
 		"idle_timeout":          cfg.IdleTimeout,
 		"license_status":        cfg.LicenseStatus,
-		// TAMBAHAN BARU: Kirim durasi arsip ke frontend
-		"archive_duration_days": cfg.ArchiveDurationDays, 
+		"archive_duration_days": cfg.ArchiveDurationDays,
 	})
 }
 
@@ -309,5 +306,6 @@ func (c *ConfigController) ShowSetupPage(ctx *gin.Context) {
 		return
 	}
 	cfg, _ := c.configService.GetConfig()
-	ctx.HTML(http.StatusOK, "setup.html", gin.H{"Title": "Konfigurasi Awal", "CurrentConfig": cfg})
+    // Menggunakan RenderHTML agar konsisten dengan halaman lain
+	RenderHTML(ctx, "setup.html", gin.H{"Title": "Konfigurasi Awal", "CurrentConfig": cfg})
 }

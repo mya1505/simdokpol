@@ -11,10 +11,9 @@ import (
 type AuthController struct {
 	service       services.AuthService
 	configService services.ConfigService
-	currentVersion string // <-- TAMBAH FIELD INI
+	currentVersion string
 }
 
-// Update Constructor untuk terima version
 func NewAuthController(service services.AuthService, configService services.ConfigService, version string) *AuthController {
 	return &AuthController{
 		service:       service,
@@ -28,19 +27,15 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required" example:"password123"`
 }
 
-// ShowLoginPage me-render halaman login dengan data versi
 func (c *AuthController) ShowLoginPage(ctx *gin.Context) {
-	// Cek apakah setup sudah selesai
 	isSetup, _ := c.configService.IsSetupComplete()
 	if !isSetup {
 		ctx.Redirect(http.StatusFound, "/setup")
 		return
 	}
-
-	// Render Login dengan Versi
-	ctx.HTML(http.StatusOK, "login.html", gin.H{
+    // Menggunakan RenderHTML agar version dan changelog masuk
+	RenderHTML(ctx, "login.html", gin.H{
 		"Title":      "Login Masuk",
-		"AppVersion": c.currentVersion, // <-- INJECT VERSI DI SINI
 	})
 }
 

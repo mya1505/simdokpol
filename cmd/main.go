@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -11,9 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -43,19 +40,13 @@ import (
 )
 
 var (
-	// Versi default (akan ditimpa oleh ldflags saat build)
 	version         = "dev"
 	changelogBase64 = ""
 )
 
 func main() {
-	// 1. SETUP ENVIRONMENT
 	setupEnvironment()
-
-	// 2. SECRET KEY INITIALIZATION (SAMA DENGAN TERMUX)
 	initializeSecrets()
-
-	// 3. JALANKAN SYSTRAY
 	systray.Run(onReady, onExit)
 }
 
@@ -74,7 +65,6 @@ func onReady() {
 	log.Printf("🔑 Secret Hash: %s...", keyHash)
 	log.Println("==========================================")
 
-	// Setup Systray
 	systray.SetIcon(web.GetIconBytes())
 	systray.SetTitle("SIMDOKPOL")
 	systray.SetTooltip("Sistem Informasi Manajemen Dokumen Kepolisian")
@@ -82,7 +72,6 @@ func onReady() {
 	mOpen := systray.AddMenuItem("Buka Aplikasi", "Buka di Browser")
 	mQuit := systray.AddMenuItem("Keluar", "Hentikan Server")
 
-	// Setup Virtual Host
 	vhost := utils.NewVHostSetup()
 	isVhostSetup, _ := vhost.IsSetup()
 	var appURL string
@@ -106,7 +95,6 @@ func onReady() {
 		seedDefaultTemplates(db)
 	}
 
-	// --- INIT LAYERS ---
 	var userRepo repositories.UserRepository
 	var docRepo repositories.LostDocumentRepository
 	var residentRepo repositories.ResidentRepository
@@ -178,6 +166,7 @@ func onReady() {
 		c.Next()
 	})
 
+	// --- ROUTES ---
 	r.GET("/login", authController.ShowLoginPage)
 	r.POST("/api/login", middleware.LoginRateLimiter.GetLimiterMiddleware(), authController.Login)
 	r.POST("/api/logout", authController.Logout)
@@ -193,7 +182,7 @@ func onReady() {
 	}
 
 	authorized.GET("/", func(c *gin.Context) {
-		c.HTML(200, "dashboard.html", gin.H{"Title": "Beranda", "CurrentUser": c.MustGet("currentUser"), "Config": mustGetConfig(configService)})
+		controllers.RenderHTML(c, "dashboard.html", gin.H{"Title": "Beranda", "Config": mustGetConfig(configService)})
 	})
 	authorized.GET("/api/config/limits", configController.GetLimits)
 	authorized.GET("/api/stats", dashboardController.GetStats)
@@ -203,16 +192,16 @@ func onReady() {
 	authorized.GET("/api/updates/check", updateController.CheckUpdate)
 
 	authorized.GET("/documents", func(c *gin.Context) {
-		c.HTML(200, "document_list.html", gin.H{"Title": "Daftar Dokumen", "CurrentUser": c.MustGet("currentUser"), "PageType": "active"})
+		controllers.RenderHTML(c, "document_list.html", gin.H{"Title": "Daftar Dokumen", "PageType": "active"})
 	})
 	authorized.GET("/documents/archived", func(c *gin.Context) {
-		c.HTML(200, "document_list.html", gin.H{"Title": "Arsip Dokumen", "CurrentUser": c.MustGet("currentUser"), "PageType": "archived"})
+		controllers.RenderHTML(c, "document_list.html", gin.H{"Title": "Arsip Dokumen", "PageType": "archived"})
 	})
 	authorized.GET("/documents/new", func(c *gin.Context) {
-		c.HTML(200, "document_form.html", gin.H{"Title": "Buat Surat Baru", "CurrentUser": c.MustGet("currentUser"), "IsEdit": false, "DocID": 0})
+		controllers.RenderHTML(c, "document_form.html", gin.H{"Title": "Buat Surat Baru", "IsEdit": false, "DocID": 0})
 	})
 	authorized.GET("/documents/:id/edit", func(c *gin.Context) {
-		c.HTML(200, "document_form.html", gin.H{"Title": "Edit Surat", "CurrentUser": c.MustGet("currentUser"), "IsEdit": true, "DocID": c.Param("id")})
+		controllers.RenderHTML(c, "document_form.html", gin.H{"Title": "Edit Surat", "IsEdit": true, "DocID": c.Param("id")})
 	})
 
 	authorized.GET("/documents/:id/print", func(c *gin.Context) {
@@ -230,7 +219,7 @@ func onReady() {
 		if conf.ArchiveDurationDays > 0 {
 			archiveDays = conf.ArchiveDurationDays
 		}
-		c.HTML(200, "print_preview.html", gin.H{"Document": doc, "Config": conf, "ArchiveDaysWords": utils.IntToIndonesianWords(archiveDays)})
+		controllers.RenderHTML(c, "print_preview.html", gin.H{"Document": doc, "Config": conf, "ArchiveDaysWords": utils.IntToIndonesianWords(archiveDays)})
 	})
 
 	authorized.POST("/api/documents", docController.Create)
@@ -241,30 +230,25 @@ func onReady() {
 	authorized.DELETE("/api/documents/:id", docController.Delete)
 	authorized.GET("/api/search", docController.SearchGlobal)
 	authorized.GET("/search", func(c *gin.Context) {
-		c.HTML(200, "search_results.html", gin.H{"Title": "Hasil Pencarian", "CurrentUser": c.MustGet("currentUser")})
+		controllers.RenderHTML(c, "search_results.html", gin.H{"Title": "Hasil Pencarian"})
 	})
 
 	authorized.GET("/api/item-templates/active", itemTemplateController.FindAllActive)
 	authorized.GET("/profile", func(c *gin.Context) {
-		c.HTML(200, "profile.html", gin.H{"Title": "Profil Saya", "CurrentUser": c.MustGet("currentUser")})
+		controllers.RenderHTML(c, "profile.html", gin.H{"Title": "Profil Saya"})
 	})
 	authorized.PUT("/api/profile", userController.UpdateProfile)
 	authorized.PUT("/api/profile/password", userController.ChangePassword)
 	authorized.GET("/panduan", func(c *gin.Context) {
-		c.HTML(200, "panduan.html", gin.H{"Title": "Panduan", "CurrentUser": c.MustGet("currentUser")})
+		controllers.RenderHTML(c, "panduan.html", gin.H{"Title": "Panduan"})
 	})
 	authorized.GET("/upgrade", func(c *gin.Context) {
 		conf, _ := configService.GetConfig()
-		c.HTML(200, "upgrade.html", gin.H{
-			"Title":       "Upgrade ke Pro",
-			"CurrentUser": c.MustGet("currentUser"),
-			"Config":      conf,
-			"AppVersion":  version,
-		})
+		controllers.RenderHTML(c, "upgrade.html", gin.H{"Title": "Upgrade ke Pro", "Config": conf})
 	})
 	authorized.GET("/tentang", func(c *gin.Context) {
 		conf, _ := configService.GetConfig()
-		c.HTML(200, "tentang.html", gin.H{"Title": "Tentang", "CurrentUser": c.MustGet("currentUser"), "AppVersion": version, "Config": conf})
+		controllers.RenderHTML(c, "tentang.html", gin.H{"Title": "Tentang", "Config": conf})
 	})
 
 	authorized.GET("/api/users/operators", userController.FindOperators)
@@ -272,13 +256,13 @@ func onReady() {
 	admin := authorized.Group("/")
 	admin.Use(middleware.AdminAuthMiddleware())
 	admin.GET("/users", func(c *gin.Context) {
-		c.HTML(200, "user_list.html", gin.H{"Title": "Manajemen Pengguna", "CurrentUser": c.MustGet("currentUser")})
+		controllers.RenderHTML(c, "user_list.html", gin.H{"Title": "Manajemen Pengguna"})
 	})
 	admin.GET("/users/new", func(c *gin.Context) {
-		c.HTML(200, "user_form.html", gin.H{"Title": "Tambah Pengguna", "CurrentUser": c.MustGet("currentUser"), "IsEdit": false, "UserID": 0})
+		controllers.RenderHTML(c, "user_form.html", gin.H{"Title": "Tambah Pengguna", "IsEdit": false, "UserID": 0})
 	})
 	admin.GET("/users/:id/edit", func(c *gin.Context) {
-		c.HTML(200, "user_form.html", gin.H{"Title": "Edit Pengguna", "CurrentUser": c.MustGet("currentUser"), "IsEdit": true, "UserID": c.Param("id")})
+		controllers.RenderHTML(c, "user_form.html", gin.H{"Title": "Edit Pengguna", "IsEdit": true, "UserID": c.Param("id")})
 	})
 	admin.POST("/api/users", userController.Create)
 	admin.GET("/api/users", userController.FindAll)
@@ -288,7 +272,7 @@ func onReady() {
 	admin.DELETE("/api/users/:id", userController.Delete)
 	admin.POST("/api/users/:id/activate", userController.Activate)
 	admin.GET("/settings", func(c *gin.Context) {
-		c.HTML(200, "settings.html", gin.H{"Title": "Pengaturan Sistem", "CurrentUser": c.MustGet("currentUser")})
+		controllers.RenderHTML(c, "settings.html", gin.H{"Title": "Pengaturan Sistem"})
 	})
 	admin.GET("/api/settings", settingsController.GetSettings)
 	admin.PUT("/api/settings", settingsController.UpdateSettings)
@@ -299,7 +283,7 @@ func onReady() {
 	admin.GET("/api/audit-logs", auditController.FindAll)
 	admin.GET("/api/audit-logs/export", auditController.Export)
 	admin.GET("/audit-logs", func(c *gin.Context) {
-		c.HTML(200, "audit_log_list.html", gin.H{"Title": "Log Audit", "CurrentUser": c.MustGet("currentUser")})
+		controllers.RenderHTML(c, "audit_log_list.html", gin.H{"Title": "Log Audit"})
 	})
 	admin.GET("/api/documents/export", docController.Export)
 	admin.POST("/api/license/activate", licenseController.ActivateLicense)
@@ -310,13 +294,13 @@ func onReady() {
 	pro.GET("/reports/aggregate", reportController.ShowReportPage)
 	pro.GET("/api/reports/aggregate/pdf", reportController.GenerateReportPDF)
 	pro.GET("/templates", func(c *gin.Context) {
-		c.HTML(200, "item_template_list.html", gin.H{"Title": "Template Barang", "CurrentUser": c.MustGet("currentUser")})
+		controllers.RenderHTML(c, "item_template_list.html", gin.H{"Title": "Template Barang"})
 	})
 	pro.GET("/templates/new", func(c *gin.Context) {
-		c.HTML(200, "item_template_form.html", gin.H{"Title": "Tambah Template", "CurrentUser": c.MustGet("currentUser"), "IsEdit": false, "TemplateID": 0})
+		controllers.RenderHTML(c, "item_template_form.html", gin.H{"Title": "Tambah Template", "IsEdit": false, "TemplateID": 0})
 	})
 	pro.GET("/templates/:id/edit", func(c *gin.Context) {
-		c.HTML(200, "item_template_form.html", gin.H{"Title": "Edit Template", "CurrentUser": c.MustGet("currentUser"), "IsEdit": true, "TemplateID": c.Param("id")})
+		controllers.RenderHTML(c, "item_template_form.html", gin.H{"Title": "Edit Template", "IsEdit": true, "TemplateID": c.Param("id")})
 	})
 	pro.GET("/api/item-templates", itemTemplateController.FindAll)
 	pro.GET("/api/item-templates/:id", itemTemplateController.FindByID)
@@ -363,13 +347,10 @@ func onReady() {
 	go func() {
 		time.Sleep(2 * time.Second)
 		log.Println("✨ Membuka browser...")
-		utils.OpenBrowser(appURL)
-		
-		// Notifikasi Desktop (Native)
+		utils.OpenBrowser(appURL) // SEKARANG SUDAH ADA DI UTILS
 		beeep.Notify("SIMDOKPOL Berjalan", fmt.Sprintf("Akses di %s", appURL), "web/static/img/icon.png")
 	}()
 
-	// Handle Systray (Blocking)
 	go func() {
 		for {
 			select {
@@ -384,10 +365,7 @@ func onReady() {
 
 func onExit() {
 	log.Println("🛑 Shutting down server...")
-	// Cleanup if needed
 }
-
-// --- HELPER FUNCTIONS ---
 
 func setupEnvironment() {
 	envPath := filepath.Join(utils.GetAppDataDir(), ".env")
@@ -395,86 +373,47 @@ func setupEnvironment() {
 }
 
 func initializeSecrets() {
-    envPath := filepath.Join(utils.GetAppDataDir(), ".env")
+	if services.JWTSecretKeyString != "" {
+		services.JWTSecretKey = []byte(services.JWTSecretKeyString)
+	}
 
-    // --- 1. COBA BACA LANGSUNG DARI FILE .ENV (PRIORITAS UTAMA UTK DEV) ---
-    // Kita baca manual file-nya untuk memastikan kita dapat data persisten terakhir
-    var fileEnv map[string]string
-    fileEnv, _ = godotenv.Read(envPath)
-    if fileEnv == nil {
-        fileEnv = make(map[string]string)
-    }
+	if services.AppSecretKeyString == "" {
+		services.AppSecretKeyString = os.Getenv("APP_SECRET_KEY")
+	}
+	if len(services.JWTSecretKey) == 0 {
+		if jwtStr := os.Getenv("JWT_SECRET_KEY"); jwtStr != "" {
+			services.JWTSecretKey = []byte(jwtStr)
+		}
+	}
 
-    // --- 2. SETUP APP SECRET KEY ---
-    // Urutan Prioritas: LDFLAGS -> File .env -> os.Getenv -> Auto Generate
+	updates := make(map[string]string)
+	
+	if services.AppSecretKeyString == "" {
+		log.Println("🔑 Generating new APP_SECRET_KEY...")
+		b := make([]byte, 32)
+		rand.Read(b)
+		services.AppSecretKeyString = hex.EncodeToString(b)
+		updates["APP_SECRET_KEY"] = services.AppSecretKeyString
+		os.Setenv("APP_SECRET_KEY", services.AppSecretKeyString)
+	}
 
-    // Cek LDFLAGS (Injection saat Build)
-    if services.AppSecretKeyString == "" {
-        // Cek File .env (Persisten)
-        if val, exists := fileEnv["APP_SECRET_KEY"]; exists && val != "" {
-            services.AppSecretKeyString = val
-            log.Println("🔑 Loaded APP_SECRET_KEY from .env file")
-        } else {
-            // Cek OS Environment (Session Export)
-            if envVal := os.Getenv("APP_SECRET_KEY"); envVal != "" {
-                services.AppSecretKeyString = envVal
-                log.Println("🔑 Loaded APP_SECRET_KEY from Environment Variable")
-            }
-        }
-    } else {
-        log.Println("🔑 Loaded APP_SECRET_KEY from Build Injection")
-    }
+	if len(services.JWTSecretKey) == 0 {
+		log.Println("🔑 Generating new JWT_SECRET_KEY...")
+		b := make([]byte, 32)
+		rand.Read(b)
+		jwtStr := hex.EncodeToString(b)
+		services.JWTSecretKey = []byte(jwtStr)
+		updates["JWT_SECRET_KEY"] = jwtStr
+		os.Setenv("JWT_SECRET_KEY", jwtStr)
+	}
 
-    // --- 3. SETUP JWT SECRET KEY ---
-    if len(services.JWTSecretKey) == 0 {
-        // Cek Injection String LDFLAGS
-        if services.JWTSecretKeyString != "" {
-            services.JWTSecretKey = []byte(services.JWTSecretKeyString)
-            log.Println("🔑 Loaded JWT_SECRET_KEY from Build Injection")
-        } else {
-            // Cek File .env
-            if val, exists := fileEnv["JWT_SECRET_KEY"]; exists && val != "" {
-                services.JWTSecretKey = []byte(val)
-                log.Println("🔑 Loaded JWT_SECRET_KEY from .env file")
-            } else {
-                // Cek OS Environment
-                if envVal := os.Getenv("JWT_SECRET_KEY"); envVal != "" {
-                    services.JWTSecretKey = []byte(envVal)
-                    log.Println("🔑 Loaded JWT_SECRET_KEY from Environment Variable")
-                }
-            }
-        }
-    }
-
-    // --- 4. LOGIC AUTO-GENERATE (HANYA JIKA BENAR-BENAR KOSONG) ---
-    updates := make(map[string]string)
-    
-    if services.AppSecretKeyString == "" {
-        log.Println("⚠️ APP_SECRET_KEY kosong. Generating NEW persistent key...")
-        b := make([]byte, 32)
-        rand.Read(b)
-        services.AppSecretKeyString = hex.EncodeToString(b)
-        updates["APP_SECRET_KEY"] = services.AppSecretKeyString
-    }
-
-    if len(services.JWTSecretKey) == 0 {
-        log.Println("⚠️ JWT_SECRET_KEY kosong. Generating NEW persistent key...")
-        b := make([]byte, 32)
-        rand.Read(b)
-        jwtStr := hex.EncodeToString(b)
-        services.JWTSecretKey = []byte(jwtStr)
-        updates["JWT_SECRET_KEY"] = jwtStr
-    }
-
-    // --- 5. SIMPAN PERUBAHAN KE .ENV ---
-    if len(updates) > 0 {
-        // Gabungkan dengan data lama agar tidak menimpa config DB
-        if err := utils.UpdateEnvFile(updates); err != nil {
-            log.Printf("❌ Gagal menyimpan secrets ke %s: %v", envPath, err)
-        } else {
-            log.Printf("✅ Secrets baru disimpan ke: %s", envPath)
-        }
-    }
+	if len(updates) > 0 {
+		if err := utils.UpdateEnvFile(updates); err != nil {
+			log.Printf("⚠️ Gagal menyimpan secrets ke .env: %v", err)
+		} else {
+			log.Println("✅ Secrets berhasil disimpan permanen ke .env")
+		}
+	}
 }
 
 func setupDatabase(cfg *config.Config) (*gorm.DB, error) {
@@ -499,12 +438,8 @@ func setupDatabase(cfg *config.Config) (*gorm.DB, error) {
 	default:
 		db, err = gorm.Open(sqlite.Open(cfg.DBDSN), gormConfig)
 		if err == nil { 
-			// --- OPTIMASI SQLITE (WAL MODE) ---
-			// Mengaktifkan Write-Ahead Logging untuk concurrency yang lebih baik
 			db.Exec("PRAGMA journal_mode = WAL;") 
-			// Mode sinkronisasi normal (aman & cepat)
 			db.Exec("PRAGMA synchronous = NORMAL;") 
-			// Aktifkan Foreign Keys
 			db.Exec("PRAGMA foreign_keys = ON;")
 		}
 	}
