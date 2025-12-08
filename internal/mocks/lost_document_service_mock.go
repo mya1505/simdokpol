@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// LostDocumentService adalah mock untuk services.LostDocumentService
 type LostDocumentService struct {
 	mock.Mock
 }
@@ -31,27 +30,11 @@ func (m *LostDocumentService) UpdateLostDocument(docID uint, residentData models
 
 func (m *LostDocumentService) FindAll(query string, statusFilter string) ([]models.LostDocument, error) {
 	args := m.Called(query, statusFilter)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
 	return args.Get(0).([]models.LostDocument), args.Error(1)
 }
 
-// --- METODE BARU (FIX ERROR) ---
-func (m *LostDocumentService) GetDocumentsPaged(req dto.DataTableRequest, statusFilter string) (*dto.DataTableResponse, error) {
-	args := m.Called(req, statusFilter)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*dto.DataTableResponse), args.Error(1)
-}
-// ------------------------------
-
 func (m *LostDocumentService) SearchGlobal(query string) ([]models.LostDocument, error) {
 	args := m.Called(query)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
 	return args.Get(0).([]models.LostDocument), args.Error(1)
 }
 
@@ -71,7 +54,7 @@ func (m *LostDocumentService) DeleteLostDocument(id uint, loggedInUserID uint) e
 func (m *LostDocumentService) ExportDocuments(query string, statusFilter string) (*bytes.Buffer, string, error) {
 	args := m.Called(query, statusFilter)
 	if args.Get(0) == nil {
-		return nil, args.String(1), args.Error(2)
+		return nil, "", args.Error(2)
 	}
 	return args.Get(0).(*bytes.Buffer), args.String(1), args.Error(2)
 }
@@ -79,7 +62,16 @@ func (m *LostDocumentService) ExportDocuments(query string, statusFilter string)
 func (m *LostDocumentService) GenerateDocumentPDF(docID uint, actorID uint) (*bytes.Buffer, string, error) {
 	args := m.Called(docID, actorID)
 	if args.Get(0) == nil {
-		return nil, args.String(1), args.Error(2)
+		return nil, "", args.Error(2)
 	}
 	return args.Get(0).(*bytes.Buffer), args.String(1), args.Error(2)
+}
+
+// --- FIX DISINI: Update Signature menjadi 4 Parameter ---
+func (m *LostDocumentService) GetDocumentsPaged(req dto.DataTableRequest, statusFilter string, userID uint, userRole string) (*dto.DataTableResponse, error) {
+	args := m.Called(req, statusFilter, userID, userRole)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*dto.DataTableResponse), args.Error(1)
 }
