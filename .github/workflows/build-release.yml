@@ -16,7 +16,7 @@ permissions:
 
 env:
   APP_NAME: simdokpol
-  GO_VERSION: '1.23' # Gunakan versi stabil
+  GO_VERSION: '1.23'
 
 jobs:
   prepare:
@@ -49,14 +49,10 @@ jobs:
           fi
           
           PREVIOUS_TAG=$(git tag --sort=-v:refname | grep -v "^${CURRENT_TAG}$" | head -n 1)
-          
           if [ -z "$PREVIOUS_TAG" ]; then
             PREVIOUS_TAG=$(git rev-list --max-parents=0 HEAD)
           fi
-          
           echo "PREVIOUS_TAG=$PREVIOUS_TAG" >> $GITHUB_OUTPUT
-          echo "Current tag: $CURRENT_TAG"
-          echo "Previous tag: $PREVIOUS_TAG"
 
   generate-changelog:
     name: Generate Changelog
@@ -64,7 +60,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       changelog: ${{ steps.create_changelog.outputs.CHANGELOG }}
-      changelog_file: ${{ steps.create_changelog.outputs.CHANGELOG_FILE }}
       changelog_b64: ${{ steps.encode_changelog.outputs.CHANGELOG_B64 }}
     steps:
       - name: Checkout code
@@ -72,493 +67,163 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Generate changelog from commits
+      - name: Generate changelog
         id: create_changelog
         run: |
           VERSION="${{ needs.prepare.outputs.version }}"
           PREVIOUS_TAG="${{ needs.prepare.outputs.previous_tag }}"
-          CURRENT_TAG="v${VERSION}"
-          
-          echo "Generating changelog from $PREVIOUS_TAG to $CURRENT_TAG"
-          
           CHANGELOG_FILE="CHANGELOG_${VERSION}.md"
           
-          {
-            echo "## 🚀 SIMDOKPOL v${VERSION}"
-            echo ""
-            echo "Rilis stabil baru untuk **SIMDOKPOL** - Sistem Informasi Manajemen Dokumen Kepolisian."
-            echo ""
-            echo "---"
-            
-            FEATURES=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"%s" --grep="^feat" --grep="^feature" -i)
-            if [ ! -z "$FEATURES" ]; then
-              echo "### ✨ Fitur Baru"
-              echo ""
-              echo "$FEATURES" | while read -r line; do
-                CLEAN_LINE=$(echo "$line" | sed 's/^feat://i' | sed 's/^feature://i' | sed 's/^ *//')
-                echo "- $CLEAN_LINE"
-              done
-              echo ""
-            fi
-            
-            IMPROVEMENTS=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"%s" --grep="^improve" --grep="^enhancement" --grep="^perf" -i)
-            if [ ! -z "$IMPROVEMENTS" ]; then
-              echo "### 🚀 Peningkatan"
-              echo ""
-              echo "$IMPROVEMENTS" | while read -r line; do
-                CLEAN_LINE=$(echo "$line" | sed 's/^improve://i' | sed 's/^enhancement://i' | sed 's/^perf://i' | sed 's/^ *//')
-                echo "- $CLEAN_LINE"
-              done
-              echo ""
-            fi
-            
-            FIXES=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"%s" --grep="^fix" --grep="^bugfix" -i)
-            if [ ! -z "$FIXES" ]; then
-              echo "### 🐛 Bug Fixes"
-              echo ""
-              echo "$FIXES" | while read -r line; do
-                CLEAN_LINE=$(echo "$line" | sed 's/^fix://i' | sed 's/^bugfix://i' | sed 's/^ *//')
-                echo "- $CLEAN_LINE"
-              done
-              echo ""
-            fi
-            
-            SECURITY=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"%s" --grep="^security" --grep="^sec:" -i)
-            if [ ! -z "$SECURITY" ]; then
-              echo "### 🔒 Keamanan"
-              echo ""
-              echo "$SECURITY" | while read -r line; do
-                CLEAN_LINE=$(echo "$line" | sed 's/^security://i' | sed 's/^sec://i' | sed 's/^ *//')
-                echo "- $CLEAN_LINE"
-              done
-              echo ""
-            fi
-            
-            DOCS=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"%s" --grep="^docs" -i)
-            if [ ! -z "$DOCS" ]; then
-              echo "### 📚 Dokumentasi"
-              echo ""
-              echo "$DOCS" | while read -r line; do
-                CLEAN_LINE=$(echo "$line" | sed 's/^docs://i' | sed 's/^ *//')
-                echo "- $CLEAN_LINE"
-              done
-              echo ""
-            fi
-            
-            echo "---"
-          } > "$CHANGELOG_FILE"
+          # Simple Logic for Changelog Generation
+          echo "## 🚀 SIMDOKPOL v${VERSION}" > "$CHANGELOG_FILE"
+          echo "" >> "$CHANGELOG_FILE"
+          echo "Rilis stabil baru untuk **SIMDOKPOL**." >> "$CHANGELOG_FILE"
+          echo "" >> "$CHANGELOG_FILE"
           
-          echo "CHANGELOG_FILE=$CHANGELOG_FILE" >> $GITHUB_OUTPUT
+          git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s" >> "$CHANGELOG_FILE"
           
-          CHANGELOG_CONTENT=$(cat "$CHANGELOG_FILE")
-          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          # Read into Output Variable (Multi-line Safe)
+          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          echo "CHANGELOG<<$EOF" >> "$GITHUB_OUTPUT"
+          cat "$CHANGELOG_FILE" >> "$GITHUB_OUTPUT"
+          echo "$EOF" >> "$GITHUB_OUTPUT"
 
-      - name: Encode Changelog to Base64
+      - name: Encode Changelog
         id: encode_changelog
         run: |
           CHANGELOG_B64=$(echo "${{ steps.create_changelog.outputs.CHANGELOG }}" | base64 -w 0)
           echo "CHANGELOG_B64=$CHANGELOG_B64" >> $GITHUB_OUTPUT
 
-      - name: Upload changelog artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: changelog
-          path: CHANGELOG_*.md
-          retention-days: 5
-
   build-windows:
-    name: Build untuk Windows (x64)
+    name: Build Windows (x64)
     needs: [prepare, generate-changelog]
     runs-on: windows-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache: true
 
-      - name: Install dependencies
+      # Install Tools Windows
+      - name: Install Tools
         shell: bash
         run: |
           choco install -y mingw nsis 7zip imagemagick.app --no-progress --force
-          NSIS_PATH="C:\Program Files (x86)\NSIS"
-          echo "$NSIS_PATH" >> $GITHUB_PATH
-
-      - name: Setup environment
-        shell: bash
-        run: |
-          echo "CGO_ENABLED=1" >> $GITHUB_ENV
-          echo "GOOS=windows" >> $GITHUB_ENV
-          echo "GOARCH=amd64" >> $GITHUB_ENV
-
-      - name: Install Go tools
-        run: |
-          go mod download
           go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
           go install github.com/akavel/rsrc@latest
 
-      - name: Generate Windows icon resource
+      # Generate Icon & Version Info
+      - name: Generate Resources
         shell: bash
         run: |
-          set -e
-          ICON_PATH="web/static/img/icon.png"
-          if [ -f "$ICON_PATH" ]; then
-            magick convert "$ICON_PATH" -background transparent \
-              \( -clone 0 -resize 256x256 \) \
-              \( -clone 0 -resize 64x64 \) \
-              \( -clone 0 -resize 48x48 \) \
-              \( -clone 0 -resize 32x32 \) \
-              \( -clone 0 -resize 16x16 \) \
-              -delete 0 app-icon.ico
+          if [ -f "web/static/img/icon.png" ]; then
+            magick convert "web/static/img/icon.png" -define icon:auto-resize="256,64,48,32,16" app-icon.ico
             rsrc -ico app-icon.ico -o rsrc.syso
           fi
-
-      - name: Create version info
-        shell: bash
-        run: |
-          VERSION="${{ needs.prepare.outputs.version }}"
-          MAJOR=$(echo $VERSION | cut -d. -f1)
-          MINOR=$(echo $VERSION | cut -d. -f2)
-          PATCH=$(echo $VERSION | cut -d. -f3 | cut -d- -f1)
           
-          cat > versioninfo.json << EOF
-          {
-            "FixedFileInfo": {
-              "FileVersion": { "Major": ${MAJOR}, "Minor": ${MINOR}, "Patch": ${PATCH}, "Build": 0 },
-              "ProductVersion": { "Major": ${MAJOR}, "Minor": ${MINOR}, "Patch": ${PATCH}, "Build": 0 },
-              "FileFlagsMask": "3f", "FileFlags": "00", "FileOS": "040004", "FileType": "01", "FileSubType": "00"
-            },
-            "StringFileInfo": {
-              "Comments": "Sistem Informasi Manajemen Dokumen Kepolisian",
-              "CompanyName": "SIMDOKPOL Team",
-              "FileDescription": "SIMDOKPOL Application",
-              "FileVersion": "${VERSION}",
-              "InternalName": "${{ env.APP_NAME }}",
-              "LegalCopyright": "Copyright © 2025 SIMDOKPOL Team",
-              "OriginalFilename": "${{ env.APP_NAME }}.exe",
-              "ProductName": "SIMDOKPOL",
-              "ProductVersion": "${VERSION}"
-            },
-            "VarFileInfo": { "Translation": { "LangID": "0409", "CharsetID": "04B0" } }
-          }
-          EOF
+          VERSION="${{ needs.prepare.outputs.version }}"
+          # Simple goversioninfo (json) generation
+          echo "{ \"FixedFileInfo\": { \"FileVersion\": { \"Major\": 1, \"Minor\": 0, \"Patch\": 0, \"Build\": 0 } } }" > versioninfo.json
           goversioninfo -64
 
-      - name: Build Windows executables
+      # Build Binary
+      - name: Build Executable
         shell: bash
         env:
+          CGO_ENABLED: 1
           CHANGELOG_B64: ${{ needs.generate-changelog.outputs.changelog_b64 }}
         run: |
-          set -e
-          VERSION="${{ needs.prepare.outputs.version }}"
-          
-          # === KEY INJECTION ===
-          LDFLAGS="-s -w -X main.version=$VERSION \
-          -X 'main.changelogBase64=$CHANGELOG_B64' \
-          -X 'simdokpol/internal/services.AppSecretKeyString=${{ secrets.APP_SECRET_KEY }}' \
-          -X 'simdokpol/internal/services.JWTSecretKeyString=${{ secrets.JWT_SECRET_KEY }}' \
-          -extldflags '-static'"
-          
-          mkdir -p build
-          
-          echo "Building GUI..."
-          go build -trimpath -ldflags="-H windowsgui $LDFLAGS" -tags sqlite_omit_load_extension -o "build/${{ env.APP_NAME }}.exe" ./cmd/main.go
-          
-          echo "Building Console..."
-          go build -trimpath -ldflags="$LDFLAGS" -tags sqlite_omit_load_extension -o "build/${{ env.APP_NAME }}-console.exe" ./cmd/main.go
-          
-          rm -f rsrc.syso resource.syso versioninfo.json
+          LDFLAGS="-s -w -X main.version=${{ needs.prepare.outputs.version }} -X main.changelogBase64=$CHANGELOG_B64 -extldflags '-static'"
+          go build -ldflags="$LDFLAGS" -o "${{ env.APP_NAME }}.exe" ./cmd/main.go
 
-      - name: Prepare release package
+      # Package (Zip & Installer)
+      - name: Create Package
         shell: bash
         run: |
-          set -e
           mkdir -p release/backups
-          cp -r build/* release/
+          cp "${{ env.APP_NAME }}.exe" release/
           cp -r web migrations release/
-          cp app-icon.ico release/icon.ico
-          [ -f README.md ] && cp README.md release/ || true
-          [ -f LICENSE ] && cp LICENSE release/ || true
+          cp app-icon.ico release/icon.ico || true
           
-          # Buat file start.bat (sama seperti sebelumnya)
-          echo 'start simdokpol.exe' > release/start.bat
-          echo 'simdokpol-console.exe' > release/start-console.bat
-
-      - name: Create NSIS installer
-        shell: bash
-        run: |
-          set -e
-          # (Logic create banner BMP - dipersingkat di sini tapi logic sama)
-          if [ -f "web/static/img/icon.png" ]; then
-             magick convert web/static/img/icon.png -resize 100x100 -gravity center -background "#0078D7" -extent 164x314 BMP3:web/static/img/installer-banner.bmp
-             magick convert web/static/img/icon.png -resize 40x40 -gravity west -background "#FFFFFF" -extent 150x57 BMP3:web/static/img/installer-header.bmp
-          fi
-
-          # Generate Installer NSI Script
-          cat > installer.nsi << 'NSIEOF'
-          !define APP_NAME "SIMDOKPOL"
-          !define VERSION "${{ needs.prepare.outputs.version }}"
-          !define PUBLISHER "SIMDOKPOL Team"
-          !define INSTALLER_NAME "${{ env.APP_NAME }}-windows-x64-v${{ needs.prepare.outputs.version }}-installer.exe"
-          Name "${APP_NAME} ${VERSION}"
-          OutFile "${INSTALLER_NAME}"
-          InstallDir "$PROGRAMFILES64\${APP_NAME}"
-          RequestExecutionLevel admin
-          !include "MUI2.nsh"
-          !define MUI_ICON "app-icon.ico"
-          !define MUI_UNICON "app-icon.ico"
-          !define MUI_WELCOMEFINISHPAGE_BITMAP "web\static\img\installer-banner.bmp"
-          !define MUI_HEADERIMAGE
-          !define MUI_HEADERIMAGE_BITMAP "web\static\img\installer-header.bmp"
-          !insertmacro MUI_PAGE_WELCOME
-          !insertmacro MUI_PAGE_LICENSE "LICENSE"
-          !insertmacro MUI_PAGE_DIRECTORY
-          !insertmacro MUI_PAGE_INSTFILES
-          !define MUI_FINISHPAGE_RUN "$INSTDIR\${{ env.APP_NAME }}.exe"
-          !insertmacro MUI_PAGE_FINISH
-          !insertmacro MUI_UNPAGE_CONFIRM
-          !insertmacro MUI_UNPAGE_INSTFILES
-          !insertmacro MUI_LANGUAGE "English"
-          Section "Install"
-            SetOutPath "$INSTDIR"
+          # Portable Zip
+          7z a "${{ env.APP_NAME }}-windows-x64.zip" ./release/*
+          
+          # Installer NSIS (Simplified)
+          cat > installer.nsi <<EOF
+          Name "SIMDOKPOL"
+          OutFile "${{ env.APP_NAME }}-installer.exe"
+          InstallDir "\$PROGRAMFILES64\SIMDOKPOL"
+          Section
+            SetOutPath "\$INSTDIR"
             File /r "release\*.*"
-            CreateDirectory "$INSTDIR\backups"
-            WriteUninstaller "$INSTDIR\Uninstall.exe"
-            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "DisplayName" "${APP_NAME}"
-            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "UninstallString" "$INSTDIR\Uninstall.exe"
-            CreateShortcut "$DESKTOP\${APP_NAME}.lnk" "$INSTDIR\${{ env.APP_NAME }}.exe" "" "$INSTDIR\icon.ico" 0
-            CreateDirectory "$SMPROGRAMS\${APP_NAME}"
-            CreateShortcut "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk" "$INSTDIR\${{ env.APP_NAME }}.exe" "" "$INSTDIR\icon.ico" 0
-            CreateShortcut "$SMPROGRAMS\${APP_NAME}\Uninstall.lnk" "$INSTDIR\Uninstall.exe" "" "$INSTDIR\icon.ico" 0
+            CreateShortcut "\$DESKTOP\SIMDOKPOL.lnk" "\$INSTDIR\${{ env.APP_NAME }}.exe"
           SectionEnd
-          Section "Uninstall"
-            Delete "$DESKTOP\${APP_NAME}.lnk"
-            RMDir /r "$SMPROGRAMS\${APP_NAME}"
-            DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
-            RMDir /r "$INSTDIR"
-          SectionEnd
-          NSIEOF
-          
+          EOF
           makensis installer.nsi
 
-      - name: Create portable package
-        shell: bash
-        run: |
-          PORTABLE_NAME="${{ env.APP_NAME }}-windows-x64-v${{ needs.prepare.outputs.version }}-portable.zip"
-          cd release
-          7z a -tzip "../$PORTABLE_NAME" . -xr!.env
-          
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: windows-x64
+          name: windows-artifacts
           path: |
             *.zip
             *-installer.exe
-          retention-days: 5
-  
+
   build-linux:
-    name: Build untuk Linux (amd64)
+    name: Build Linux (amd64)
     needs: [prepare, generate-changelog]
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache: true
+      
+      - name: Install Dependencies
+        run: sudo apt-get update && sudo apt-get install -y gcc libgtk-3-dev libayatana-appindicator3-dev
 
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y gcc libgtk-3-dev libayatana-appindicator3-dev dpkg-dev rpm
-
-      - name: Build executable
+      - name: Build Binary
         env:
-          CGO_ENABLED: '1'
+          CGO_ENABLED: 1
           CHANGELOG_B64: ${{ needs.generate-changelog.outputs.changelog_b64 }}
         run: |
-          set -e
-          mkdir -p build
-          
-          # === KEY INJECTION ===
-          LDFLAGS="-s -w -X main.version=${{ needs.prepare.outputs.version }} \
-          -X 'main.changelogBase64=$CHANGELOG_B64' \
-          -X 'simdokpol/internal/services.AppSecretKeyString=${{ secrets.APP_SECRET_KEY }}' \
-          -X 'simdokpol/internal/services.JWTSecretKeyString=${{ secrets.JWT_SECRET_KEY }}'"
-          
-          go build -trimpath -ldflags="$LDFLAGS" -o "build/${{ env.APP_NAME }}" ./cmd/main.go
-          chmod +x "build/${{ env.APP_NAME }}"
+          LDFLAGS="-s -w -X main.version=${{ needs.prepare.outputs.version }} -X main.changelogBase64=$CHANGELOG_B64"
+          go build -ldflags="$LDFLAGS" -o "${{ env.APP_NAME }}" ./cmd/main.go
 
-      - name: Prepare release package
+      - name: Create Package
         run: |
-          set -e
           mkdir -p release/backups
-          cp "build/${{ env.APP_NAME }}" release/
+          cp "${{ env.APP_NAME }}" release/
           cp -r web migrations release/
-          [ -f README.md ] && cp README.md release/ || true
-          [ -f LICENSE ] && cp LICENSE release/ || true
-          echo "./simdokpol" > release/start.sh
-          chmod +x release/start.sh
+          chmod +x release/${{ env.APP_NAME }}
+          tar -czf "${{ env.APP_NAME }}-linux-amd64.tar.gz" -C release .
 
-      - name: Create DEB package
-        run: |
-          set -e
-          VERSION="${{ needs.prepare.outputs.version }}"
-          PKG_NAME="${{ env.APP_NAME }}_${VERSION}_amd64"
-          
-          mkdir -p "${PKG_NAME}/DEBIAN" "${PKG_NAME}/opt/${{ env.APP_NAME }}" "${PKG_NAME}/usr/share/applications" "${PKG_NAME}/usr/bin"
-          cp -r release/* "${PKG_NAME}/opt/${{ env.APP_NAME }}/"
-          ln -s "/opt/${{ env.APP_NAME }}/${{ env.APP_NAME }}" "${PKG_NAME}/usr/bin/${{ env.APP_NAME }}"
-          
-          cat > "${PKG_NAME}/usr/share/applications/${{ env.APP_NAME }}.desktop" << EOF
-          [Desktop Entry]
-          Version=1.0
-          Type=Application
-          Name=SIMDOKPOL
-          Exec=/opt/${{ env.APP_NAME }}/start.sh
-          Icon=${{ env.APP_NAME }}
-          Terminal=false
-          Categories=Office;Database;
-          EOF
-          
-          cat > "${PKG_NAME}/DEBIAN/control" << EOF
-          Package: ${{ env.APP_NAME }}
-          Version: ${VERSION}
-          Section: utils
-          Priority: optional
-          Architecture: amd64
-          Depends: libgtk-3-0, libayatana-appindicator3-1
-          Maintainer: SIMDOKPOL Team
-          Description: Sistem Informasi Manajemen Dokumen Kepolisian
-          EOF
-          
-          dpkg-deb --build "${PKG_NAME}"
-
-      - name: Create portable package
-        run: |
-          PORTABLE_NAME="${{ env.APP_NAME }}-linux-amd64-v${{ needs.prepare.outputs.version }}-portable.tar.gz"
-          cd release
-          tar -czf "../$PORTABLE_NAME" *
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: linux-amd64
-          path: |
-            *.tar.gz
-            *.deb
-          retention-days: 5
-
-  build-macos:
-    name: Build untuk macOS (amd64)
-    needs: [prepare, generate-changelog]
-    runs-on: macos-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-
-      - name: Build executable
-        env:
-          CGO_ENABLED: '1'
-          CHANGELOG_B64: ${{ needs.generate-changelog.outputs.changelog_b64 }}
-        run: |
-          set -e
-          mkdir -p build
-          
-          # === KEY INJECTION ===
-          LDFLAGS="-s -w -X main.version=${{ needs.prepare.outputs.version }} \
-          -X 'main.changelogBase64=$CHANGELOG_B64' \
-          -X 'simdokpol/internal/services.AppSecretKeyString=${{ secrets.APP_SECRET_KEY }}' \
-          -X 'simdokpol/internal/services.JWTSecretKeyString=${{ secrets.JWT_SECRET_KEY }}'"
-          
-          go build -trimpath -ldflags="$LDFLAGS" -o "build/${{ env.APP_NAME }}" ./cmd/main.go
-          chmod +x "build/${{ env.APP_NAME }}"
-
-      - name: Create macOS App Bundle
-        run: |
-          set -e
-          APP_NAME="SIMDOKPOL"
-          BUNDLE_NAME="${APP_NAME}.app"
-          mkdir -p "${BUNDLE_NAME}/Contents/MacOS" "${BUNDLE_NAME}/Contents/Resources"
-          cp "build/${{ env.APP_NAME }}" "${BUNDLE_NAME}/Contents/MacOS/${{ env.APP_NAME }}"
-          cp -r web migrations "${BUNDLE_NAME}/Contents/Resources/"
-          
-          # Generate Info.plist (Simpel)
-          cat > "${BUNDLE_NAME}/Contents/Info.plist" << 'PLISTEOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>CFBundleExecutable</key><string>simdokpol</string>
-              <key>CFBundleIdentifier</key><string>com.simdokpol.app</string>
-              <key>CFBundleName</key><string>SIMDOKPOL</string>
-              <key>CFBundlePackageType</key><string>APPL</string>
-              <key>CFBundleShortVersionString</key><string>${{ needs.prepare.outputs.version }}</string>
-          </dict>
-          </plist>
-          PLISTEOF
-
-      - name: Create portable package
-        run: |
-          PORTABLE_NAME="${{ env.APP_NAME }}-macos-amd64-v${{ needs.prepare.outputs.version }}-portable.zip"
-          zip -r "$PORTABLE_NAME" SIMDOKPOL.app
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-amd64
-          path: *.zip
-          retention-days: 5
+          name: linux-artifacts
+          path: *.tar.gz
 
   create-release:
-    name: Create GitHub Release
-    needs: [prepare, generate-changelog, build-windows, build-linux, build-macos]
+    name: Publish Release
+    needs: [prepare, generate-changelog, build-windows, build-linux]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      - name: Prepare release assets
-        id: prep_assets
+      - name: Consolidate Artifacts
         run: |
-          set -e
-          mkdir -p release-assets
-          find artifacts -type f -name "*.zip" -o -name "*.exe" -o -name "*.deb" -o -name "*.tar.gz" | while read file; do
-            mv "$file" release-assets/
-          done
-          cd release-assets
-          sha256sum * > checksums.txt
-          ls -lh
-          echo "ASSETS_PATH=release-assets/*" >> $GITHUB_OUTPUT
+          mkdir dist
+          find artifacts -type f \( -name "*.zip" -o -name "*.exe" -o -name "*.tar.gz" \) -exec cp {} dist/ \;
+          ls -l dist/
 
-      - name: Create GitHub Release to Public Repo
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          token: ${{ secrets.RELEASE_TOKEN }}
-          repository: muhammad1505/simdokpol-release
           tag_name: v${{ needs.prepare.outputs.version }}
           name: Release v${{ needs.prepare.outputs.version }}
           body: ${{ needs.generate-changelog.outputs.changelog }}
-          files: release-assets/*
-          target_commitish: main
-          draft: false
-          prerelease: false
+          files: dist/*
+          token: ${{ secrets.RELEASE_TOKEN }}
+          repository: muhammad1505/simdokpol-release
