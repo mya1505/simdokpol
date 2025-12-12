@@ -53,21 +53,20 @@
                         </h6>
                     </div>
                     <div class="card-body">
-                        <div class="form-row">
-                            <div class="form-group col-md-6">
-                                <label for="penerima_laporan">Penerima Laporan</label>
-                                <select id="penerima_laporan" class="form-control" required>
-                                    <option value="">(Sedang mengambil data...)</option>
-                                </select>
-                                <small class="text-muted" id="debug-penerima">Status: Menunggu...</small>
-                            </div>
-                            <div class="form-group col-md-6">
-                                <label for="penanggung_jawab">Penanggung Jawab</label>
-                                <select id="penanggung_jawab" class="form-control" required>
-                                    <option value="">(Sedang mengambil data...)</option>
-                                </select>
-                            </div>
+                      <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="penerima_laporan" class="font-weight-bold">Penerima Laporan</label>
+                            <select id="penerima_laporan" class="form-control select2-user" style="width: 100%;" required>
+                                <option value="">Memuat data...</option>
+                            </select>
                         </div>
+                        <div class="form-group col-md-6">
+                            <label for="penanggung_jawab" class="font-weight-bold">Penanggung Jawab (Pejabat)</label>
+                            <select id="penanggung_jawab" class="form-control select2-user" style="width: 100%;" required>
+                                <option value="">Memuat data...</option>
+                            </select>
+                        </div>
+                    </div>
                     </div>
                 </div>
 

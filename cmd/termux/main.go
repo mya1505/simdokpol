@@ -434,15 +434,23 @@ func mustGetConfig(s services.ConfigService) *dto.AppConfig {
 func seedDefaultTemplates(db *gorm.DB) {
 	var count int64
 	db.Model(&models.ItemTemplate{}).Unscoped().Count(&count)
-	if count > 0 { return }
+	if count > 0 { return } // Kalau sudah ada data, skip (makanya kita butuh seeder di atas buat update)
+	
 	log.Println("🔹 Seeding templates...")
+	
+	// Daftar Bank Lengkap
+	bankOptions := []string{"BRI", "BCA", "Mandiri", "BNI", "BSI", "BTN", "CIMB Niaga", "Danamon", "Permata", "Panin", "Maybank", "Mega", "BTPN / Jenius", "Bank Daerah (BPD)", "Lainnya"}
+
 	templates := []models.ItemTemplate{
 		{NamaBarang: "KTP", Urutan: 1, IsActive: true, FieldsConfig: models.JSONFieldArray{{Label: "NIK", Type: "text", DataLabel: "NIK", Regex: "^[0-9]{16}$", RequiredLength: 16, IsNumeric: true, Placeholder: "16 Digit NIK"}}},
 		{NamaBarang: "SIM", Urutan: 2, IsActive: true, FieldsConfig: models.JSONFieldArray{{Label: "Golongan SIM", Type: "select", DataLabel: "Gol", Options: []string{"A", "B I", "B II", "C", "D"}}, {Label: "Nomor SIM", Type: "text", DataLabel: "No. SIM", Regex: "^[0-9]{12,14}$", MinLength: 12, MaxLength: 14, IsNumeric: true}}},
 		{NamaBarang: "STNK", Urutan: 3, IsActive: true, FieldsConfig: models.JSONFieldArray{{Label: "Nomor Polisi", Type: "text", DataLabel: "No. Pol"}, {Label: "Nomor Rangka", Type: "text", DataLabel: "No. Rangka"}, {Label: "Nomor Mesin", Type: "text", DataLabel: "No. Mesin"}}},
 		{NamaBarang: "BPKB", Urutan: 4, IsActive: true, FieldsConfig: models.JSONFieldArray{{Label: "Nomor BPKB", Type: "text", DataLabel: "No. BPKB"}, {Label: "Atas Nama", Type: "text", DataLabel: "a.n."}}},
 		{NamaBarang: "IJAZAH", Urutan: 5, IsActive: true, FieldsConfig: models.JSONFieldArray{{Label: "Tingkat", Type: "select", DataLabel: "Tingkat", Options: []string{"SD", "SMP", "SMA", "D3", "S1", "S2"}}, {Label: "Nomor Ijazah", Type: "text", DataLabel: "No. Ijazah"}}},
-		{NamaBarang: "ATM", Urutan: 6, IsActive: true, FieldsConfig: models.JSONFieldArray{{Label: "Nama Bank", Type: "select", DataLabel: "Bank", Options: []string{"BRI", "BCA", "Mandiri"}}, {Label: "Nomor Rekening", Type: "text", DataLabel: "No. Rek"}}},
+		
+		// UPDATE INI
+		{NamaBarang: "ATM", Urutan: 6, IsActive: true, FieldsConfig: models.JSONFieldArray{{Label: "Nama Bank", Type: "select", DataLabel: "Bank", Options: bankOptions}, {Label: "Nomor Rekening", Type: "text", DataLabel: "No. Rek"}}},
+		
 		{NamaBarang: "LAINNYA", Urutan: 99, IsActive: true, FieldsConfig: models.JSONFieldArray{}},
 	}
 	db.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "nama_barang"}}, DoNothing: true}).Create(&templates)

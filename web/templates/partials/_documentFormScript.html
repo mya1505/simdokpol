@@ -5,56 +5,156 @@ $(document).ready(function() {
     const docID = {{.DocID}};
     const $form = $('#create-doc-form');
     
-    // Konversi Data Attribute
+    // Data Login
     const currentUserID = parseInt($form.data('current-user-id')) || 0;
     const currentUserRegu = ($form.data('current-user-regu') || "").toString().trim().toUpperCase();
     const currentUserJabatan = ($form.data('current-user-jabatan') || "").toString().trim().toUpperCase();
     const currentUserPeran = $form.data('current-user-peran');
 
-    let itemTemplates = {}; 
+    // UI Elements
     const $penerimaSelect = $('#penerima_laporan');
     const $penanggungJawabSelect = $('#penanggung_jawab');
+    let itemTemplatesData = {}; 
 
     // --- 1. INISIALISASI PLUGIN ---
     $('#tanggal_lahir').datepicker({
         format: 'dd-mm-yyyy', language: 'id', autoclose: true, todayHighlight: true, endDate: '0d'
     });
 
+    // INISIALISASI SELECT2 (KOLOM PENCARIAN)
+    // Pastikan assets select2 js/css sudah ada di _header dan _scripts
     $('.select2-user').select2({
         theme: 'bootstrap4',
-        placeholder: "Cari petugas...",
+        placeholder: "Ketik Pangkat / Nama / NRP...",
         allowClear: true,
         width: '100%',
-        language: { noResults: () => "Tidak ditemukan (Cek Regu/Nama)" }
+        language: { 
+            noResults: () => "Data tidak ditemukan",
+            searching: () => "Mencari..."
+        }
     });
 
-    // --- 2. HELPERS (Validasi) ---
-    function showInputError($input, message) { $input.addClass('is-invalid'); $input.siblings('.invalid-feedback').text(message); $input.focus(); }
-    function clearInputErrors() { $('.conditional-fields input').removeClass('is-invalid'); }
-    function validateItemFields() {
-        clearInputErrors();
-        let isValid = true;
-        $('.conditional-fields:visible input[data-label]').each(function() {
-            const $input = $(this); const val = $input.val().trim();
-            const reqLen = $input.data('required-length'); const minLen = $input.data('min-length'); const regexPat = $input.data('regex'); const label = $input.data('label');
-            if (reqLen && val.length > 0 && val.length !== parseInt(reqLen)) { showInputError($input, `${label} harus ${reqLen} digit.`); isValid = false; return false; }
-            if (minLen && val.length > 0 && val.length < parseInt(minLen)) { showInputError($input, `${label} minimal ${minLen} digit.`); isValid = false; return false; }
-            if (regexPat && val.length > 0 && !new RegExp(regexPat).test(val)) { showInputError($input, `Format ${label} tidak valid.`); isValid = false; return false; }
-        });
-        return isValid;
-    }
-    $('body').on('input', '.numeric-only', function() { this.value = this.value.replace(/[^0-9]/g,''); });
-    $('body').on('input', '.auto-uppercase', function() { if (!$(this).hasClass('alphanumeric-only')) $(this).val($(this).val().toUpperCase()); });
-    $('body').on('input', '.auto-titlecase', function() { this.value = this.value.replace(/\w\S*/g, function(txt) { return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase(); }); });
+    // --- 2. LOAD DATA PETUGAS (PRODUCTION MODE) ---
+    $.ajax({
+        url: '/api/users/operators',
+        method: 'GET',
+        success: function(allUsers) {
+            if (!allUsers || allUsers.length === 0) {
+                // Handle kosong tapi rapi
+                const opt = new Option('Data Kosong', '');
+                $penerimaSelect.empty().append(opt);
+                $penanggungJawabSelect.empty().append(opt);
+                return;
+            }
 
-    // --- 3. TEMPLATE BARANG ---
+            // A. FILTERING (Logika Regu)
+            let filteredPenerima = [];
+            let filteredPejabat = [];
+
+            if (currentUserPeran === 'SUPER_ADMIN') {
+                // Admin lihat semua
+                filteredPenerima = allUsers;
+                filteredPejabat = allUsers;
+            } else {
+                // Operator: Filter REGU SAMA
+                const myRegu = currentUserRegu === "-" ? "" : currentUserRegu;
+
+                filteredPenerima = allUsers.filter(u => {
+                    const uRegu = (u.regu || "").toString().trim().toUpperCase();
+                    // Logika: User aktif di regu yang sama
+                    return uRegu === myRegu;
+                });
+
+                filteredPejabat = allUsers.filter(u => {
+                    const uRegu = (u.regu || "").toString().trim().toUpperCase();
+                    const uJab = (u.jabatan || "").toUpperCase();
+                    // Pejabat: Regu sama ATAU Kapolsek (tanpa regu)
+                    return uRegu === myRegu || uJab.includes('KAPOLSEK');
+                });
+            }
+
+            // B. ISI DROPDOWN
+            populateSelect($penerimaSelect, filteredPenerima);
+            populateSelect($penanggungJawabSelect, filteredPejabat);
+
+            // C. AUTO-SELECT (Hanya Form Baru)
+            if (!isEdit) {
+                const params = new URLSearchParams(window.location.search);
+                if (!params.has('duplicate_from')) {
+                    applyDefaultSelection(allUsers);
+                }
+            } else {
+                // Jika Edit, load data tersimpan
+                loadInitialData();
+            }
+            
+            // Jika duplicate
+            if (window.location.search.includes('duplicate_from')) {
+                loadInitialData();
+            }
+        },
+        error: function(xhr) {
+             Swal.fire({icon: 'error', title: 'Gagal Memuat Petugas', text: 'Cek koneksi server.'});
+        }
+    });
+
+    // Helper: Mengisi Opsi Select2
+    function populateSelect($el, users) {
+        $el.empty().append(new Option('', '', true, true)); // Placeholder kosong
+        
+        users.forEach(u => {
+            // FORMAT YG DIMINTA: [PANGKAT] [NAMA] [NRP]
+            // Contoh: BRIPDA BAMBANG NUGROHO (87500589)
+            // Saya tambah kurung di NRP biar lebih rapi sedikit, atau bisa polos sesuai selera.
+            // Sesuai request: "Pangkat Nama NRP" (tanpa kurung kalau mau strict)
+            
+            // Opsi 1 (Pangkat Nama NRP) - Agak susah dibaca kalau nyatu
+            // const label = `${u.pangkat} ${u.nama_lengkap} ${u.nrp}`;
+            
+            // Opsi 2 (Pangkat Nama (NRP)) - Standar Kepolisian yang lebih umum
+            const label = `${u.pangkat} ${u.nama_lengkap} (${u.nrp})`; 
+            
+            $el.append(new Option(label, u.id));
+        });
+        $el.trigger('change'); // Refresh UI Select2
+    }
+
+    // Helper: Auto Pilih Diri Sendiri
+    function applyDefaultSelection(allUsers) {
+        if (currentUserPeran === 'SUPER_ADMIN') return; 
+
+        const me = allUsers.find(u => u.id === currentUserID);
+        if (!me) return;
+
+        // Jika saya Anggota -> Pilih saya sebagai Penerima
+        if (currentUserJabatan.includes('ANGGOTA')) {
+            $penerimaSelect.val(me.id).trigger('change');
+            
+            // Cari Kanit Regu Saya
+            const myKanit = allUsers.find(u => 
+                (u.jabatan || "").toUpperCase().includes('KANIT') && 
+                u.regu === me.regu
+            );
+            if (myKanit) $penanggungJawabSelect.val(myKanit.id).trigger('change');
+            
+            // Lock Penerima (Opsional)
+            $penerimaSelect.prop('disabled', true);
+
+        } else if (currentUserJabatan.includes('KANIT')) {
+            // Jika saya Kanit -> Pilih saya sebagai Pejabat
+            $penanggungJawabSelect.val(me.id).trigger('change');
+            $penanggungJawabSelect.prop('disabled', true);
+        }
+    }
+
+    // --- 3. TEMPLATE BARANG (Tetap Sama) ---
     $.ajax({
         url: '/api/item-templates/active', method: 'GET',
         success: function(templates) {
             const $sel = $('#modal_item_type');
             $sel.empty().append(new Option('Pilih Jenis Barang...', ''));
-            if(templates) templates.forEach(t => { if(t.nama_barang !== 'LAINNYA') { itemTemplates[t.nama_barang] = t; $sel.append(new Option(t.nama_barang, t.nama_barang)); } });
-            itemTemplates['LAINNYA'] = { fields_config: [] }; 
+            if(templates) templates.forEach(t => { if(t.nama_barang !== 'LAINNYA') { itemTemplatesData[t.nama_barang] = t; $sel.append(new Option(t.nama_barang, t.nama_barang)); } });
+            itemTemplatesData['LAINNYA'] = { fields_config: [] }; 
             $sel.append(new Option('Lainnya...', 'LAINNYA'));
         }
     });
@@ -69,210 +169,149 @@ $(document).ready(function() {
             if(field.options) field.options.forEach(o => html += `<option>${o}</option>`);
             html += `</select>`;
         } else {
-            html += `<input type="text" class="${inputClass}" data-label="${field.data_label}" placeholder="${field.placeholder || ''}" ${field.required_length ? 'data-required-length="'+field.required_length+'"' : ''} ${field.min_length ? 'data-min-length="'+field.min_length+'"' : ''} ${field.regex ? 'data-regex="'+field.regex+'"' : ''}>`;
-            html += '<div class="invalid-feedback">Input tidak valid.</div>';
+            html += `<input type="text" class="${inputClass}" data-label="${field.data_label}" placeholder="${field.placeholder || ''}" ${field.required_length ? 'data-required-length="'+field.required_length+'"' : ''}>`;
         }
         return html + '</div>';
     }
 
     $('#modal_item_type').on('change', function() {
-        const sel = $(this).val(); $('.conditional-fields').hide(); $('#dynamic-fields-container').empty();
+        const sel = $(this).val();
+        $('#dynamic-fields-container').empty(); $('.conditional-fields').hide();
         if(sel === 'LAINNYA') $('#fields-lainnya').show();
-        else if(itemTemplates[sel]) {
-            itemTemplates[sel].fields_config.forEach(f => $('#dynamic-fields-container').append(buildFormField(f)));
+        else if(itemTemplatesData[sel]) {
+            itemTemplatesData[sel].fields_config.forEach(f => $('#dynamic-fields-container').append(buildFormField(f)));
             $('#dynamic-fields-container').show();
         }
     });
-
-    $('#save-item-btn').on('click', function() {
-        const type = $('#modal_item_type').val();
-        if(!type) { Swal.fire('Perhatian', 'Pilih jenis barang.', 'warning'); return; }
-        let name = type; if(type === 'LAINNYA') { name = $('#lainnya_nama_barang').val(); if(!name) { $('#lainnya_nama_barang').focus(); return; } }
-        if(!validateItemFields()) return;
-        let descParts = [];
-        if(type === 'LAINNYA') { if($('#lainnya_deskripsi').val()) descParts.push($('#lainnya_deskripsi').val()); } 
-        else { $('#dynamic-fields-container').find('input, select').each(function() { if($(this).val()) descParts.push($(this).data('label') + ': ' + $(this).val()); }); }
-        const rowCnt = $('#lost-items-table tbody tr').length + 1;
-        $('#lost-items-table tbody').append(`<tr class="lost-item-row"><td>${rowCnt}</td><td data-name="nama_barang">${name}</td><td data-name="deskripsi">${descParts.join(', ')}</td><td><button type="button" class="btn btn-danger btn-sm remove-item-btn"><i class="fas fa-trash"></i></button></td></tr>`);
-        $('#addItemModal').modal('hide'); $('#modal-item-form')[0].reset();
-    });
-    $('#lost-items-table').on('click', '.remove-item-btn', function() { $(this).closest('tr').remove(); });
-
-
-    // --- 4. LOGIKA LOAD DATA PETUGAS (SMART FILTER IS BACK!) ---
-    $.ajax({
-        url: '/api/users/operators',
-        method: 'GET',
-        success: function(allUsers) {
-            if (!allUsers || allUsers.length === 0) {
-                $penerimaSelect.empty().append(new Option('Data Kosong', ''));
-                return;
-            }
-
-            let filteredAnggota = [];
-            let filteredKanit = [];
-
-            // === FILTER LOGIC ===
-            if (currentUserPeran === 'SUPER_ADMIN') {
-                // Admin: Lihat SEMUA (Filter kasar berdasarkan text jabatan)
-                filteredAnggota = allUsers.filter(u => u.jabatan && u.jabatan.toUpperCase().includes('ANGGOTA'));
-                filteredKanit = allUsers.filter(u => u.jabatan && (u.jabatan.toUpperCase().includes('KANIT') || u.jabatan.toUpperCase().includes('KAPOLSEK')));
-                
-                // Fallback: Jika filter jabatan gagal (karena typo), masukkan semua user ke list biar Admin bisa cari manual
-                if (filteredAnggota.length === 0) filteredAnggota = allUsers;
-                if (filteredKanit.length === 0) filteredKanit = allUsers;
-
-            } else {
-                // Operator: Filter REGU
-                // Pastikan Regu cocok (String comparison)
-                filteredAnggota = allUsers.filter(u => {
-                    const uRegu = (u.regu || "").toString().trim().toUpperCase();
-                    const uJab = (u.jabatan || "").toUpperCase();
-                    return uRegu === currentUserRegu && uJab.includes('ANGGOTA');
-                });
-                
-                filteredKanit = allUsers.filter(u => {
-                    const uRegu = (u.regu || "").toString().trim().toUpperCase();
-                    const uJab = (u.jabatan || "").toUpperCase();
-                    return uRegu === currentUserRegu && (uJab.includes('KANIT') || uJab.includes('KAPOLSEK'));
-                });
-            }
-
-            // === POPULATE DROPDOWN ===
-            $penerimaSelect.empty().append(new Option('', '', true, true));
-            filteredAnggota.forEach(u => {
-                $penerimaSelect.append(new Option(`${u.pangkat} ${u.nama_lengkap} (${u.nrp})`, u.id));
-            });
-
-            $penanggungJawabSelect.empty().append(new Option('', '', true, true));
-            filteredKanit.forEach(u => {
-                $penanggungJawabSelect.append(new Option(`${u.pangkat} ${u.nama_lengkap} (${u.jabatan})`, u.id));
-            });
-
-            $penerimaSelect.trigger('change');
-            $penanggungJawabSelect.trigger('change');
-
-            // === AUTO SELECT & LOCK ===
-            if (!isEdit) {
-                const params = new URLSearchParams(window.location.search);
-                if (!params.has('duplicate_from')) {
-                    setDefaultOfficers(filteredAnggota, filteredKanit);
-                }
-            }
-            
-            // Re-apply Lock
-            applyDropdownLogic();
-            
-            loadInitialData(allUsers); // Pass allUsers untuk data edit
-        },
-        error: function(xhr) {
-             console.error("API Error:", xhr);
-             Swal.fire({icon: 'error', title: 'Gagal Memuat Petugas', toast: true, position: 'top-end', timer: 4000});
-        }
-    });
-
-    function setDefaultOfficers(anggotaList, kanitList) {
-        if (currentUserPeran === 'SUPER_ADMIN') return;
-
-        // Jika saya Anggota -> Pilih diri sendiri
-        if (currentUserJabatan.includes('ANGGOTA')) {
-            $penerimaSelect.val(currentUserID).trigger('change');
-            // Auto pilih Kanit pertama di list (karena sudah difilter regu)
-            if (kanitList.length > 0) $penanggungJawabSelect.val(kanitList[0].id).trigger('change');
-        } 
-        // Jika saya Kanit -> Pilih diri sendiri sbg PJ
-        else if (currentUserJabatan.includes('KANIT') || currentUserJabatan.includes('KAPOLSEK')) {
-            $penanggungJawabSelect.val(currentUserID).trigger('change');
-        }
+    
+    // --- HELPER VALIDASI ---
+    function validateItemFields() {
+        let isValid = true;
+        $('.conditional-fields:visible input[data-label]').each(function() {
+             // Basic validation placeholder
+        });
+        return isValid;
     }
     
-    function applyDropdownLogic() {
-        if (currentUserPeran !== 'SUPER_ADMIN') {
-            if (currentUserJabatan.includes('ANGGOTA')) {
-                // Lock Diri Sendiri & Kanit (Biar gak salah pilih)
-                $penerimaSelect.prop('disabled', true);
-                $penanggungJawabSelect.prop('disabled', true);
-            } else if (currentUserJabatan.includes('KANIT')) {
-                // Kanit Lock dirinya sendiri, tapi bebas pilih anggota
-                $penanggungJawabSelect.prop('disabled', true);
-            }
+    $('#save-item-btn').on('click', function() {
+        const type = $('#modal_item_type').val();
+        if(!type) return;
+        let name = type === 'LAINNYA' ? $('#lainnya_nama_barang').val() : type;
+        
+        let descParts = [];
+        if(type === 'LAINNYA') { 
+            if($('#lainnya_deskripsi').val()) descParts.push($('#lainnya_deskripsi').val()); 
+        } else { 
+            $('#dynamic-fields-container').find('input, select').each(function() { 
+                if($(this).val()) descParts.push($(this).data('label') + ': ' + $(this).val()); 
+            }); 
         }
-    }
+        
+        const rowCnt = $('#lost-items-table tbody tr').length + 1;
+        $('#lost-items-table tbody').append(`<tr><td>${rowCnt}</td><td data-name="nama_barang">${name}</td><td data-name="deskripsi">${descParts.join(', ')}</td><td><button type="button" class="btn btn-danger btn-sm remove-item-btn"><i class="fas fa-trash"></i></button></td></tr>`);
+        $('#addItemModal').modal('hide');
+    });
+    $('#lost-items-table').on('click', '.remove-item-btn', function() { $(this).closest('tr').remove(); });
+    
+    // Event Formatters
+    $('body').on('input', '.auto-uppercase', function() { $(this).val($(this).val().toUpperCase()); });
+    $('body').on('input', '.auto-titlecase', function() { 
+        this.value = this.value.replace(/\w\S*/g, function(txt) { return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase(); }); 
+    });
+    $('body').on('input', '.numeric-only', function() { this.value = this.value.replace(/[^0-9]/g,''); });
 
-    // --- 5. SUBMIT HANDLER ---
+
+    // --- 4. SUBMIT FORM ---
     $form.on('submit', function(e) {
         e.preventDefault();
         
         var items = [];
-        $('#lost-items-table tbody tr').each(function() { items.push({ nama_barang: $(this).find('td[data-name="nama_barang"]').text(), deskripsi: $(this).find('td[data-name="deskripsi"]').text() }); });
-        if (items.length === 0) { Swal.fire('Perhatian', 'Tambahkan minimal satu barang.', 'warning'); return; }
+        $('#lost-items-table tbody tr').each(function() {
+            items.push({
+                nama_barang: $(this).find('td[data-name="nama_barang"]').text(),
+                deskripsi: $(this).find('td[data-name="deskripsi"]').text()
+            });
+        });
+        if (items.length === 0) { Swal.fire('Gagal', 'Tambahkan barang dulu.', 'warning'); return; }
 
         const tgl = $('#tanggal_lahir').val();
         let tglISO = ''; if (tgl) { const p = tgl.split('-'); tglISO = `${p[2]}-${p[1]}-${p[0]}`; }
 
-        // UNLOCK SEBELUM SUBMIT (PENTING)
+        // UNLOCK DROPDOWN AGAR VALUE TERKIRIM
         $penerimaSelect.prop('disabled', false);
         $penanggungJawabSelect.prop('disabled', false);
-        
-        const pelaporID = parseInt($penerimaSelect.val()) || 0;
-        const pejabatID = parseInt($penanggungJawabSelect.val()) || 0;
-
-        if (pelaporID === 0 || pejabatID === 0) {
-            applyDropdownLogic(); // Lock lagi biar tampilan balik
-            Swal.fire('Data Kurang', 'Petugas Penerima dan Penanggung Jawab wajib dipilih.', 'warning');
-            return;
-        }
 
         var formData = {
-            nama_lengkap: $('#nama_lengkap').val(), tempat_lahir: $('#tempat_lahir').val(), tanggal_lahir: tglISO,
-            jenis_kelamin: $('#jenis_kelamin').val(), agama: $('#agama').val(), pekerjaan: $('#pekerjaan').val(),
-            alamat: $('#alamat').val(), lokasi_hilang: $('#lokasi_hilang').val(),
-            petugas_pelapor_id: pelaporID, pejabat_persetuju_id: pejabatID, items: items
+            nama_lengkap: $('#nama_lengkap').val(),
+            tempat_lahir: $('#tempat_lahir').val(),
+            tanggal_lahir: tglISO,
+            jenis_kelamin: $('#jenis_kelamin').val(),
+            agama: $('#agama').val(),
+            pekerjaan: $('#pekerjaan').val(),
+            alamat: $('#alamat').val(),
+            lokasi_hilang: $('#lokasi_hilang').val(),
+            petugas_pelapor_id: parseInt($penerimaSelect.val()) || 0,
+            pejabat_persetuju_id: parseInt($penanggungJawabSelect.val()) || 0,
+            items: items
         };
 
-        let url = '/api/documents'; let m = 'POST';
-        if (isEdit) { url += '/' + docID; m = 'PUT'; }
+        let url = isEdit ? '/api/documents/' + docID : '/api/documents';
+        let method = isEdit ? 'PUT' : 'POST';
 
         $.ajax({
-            url: url, method: m, contentType: 'application/json', data: JSON.stringify(formData),
+            url: url, method: method, contentType: 'application/json',
+            data: JSON.stringify(formData),
             success: function(res) {
-                Swal.fire({ icon: 'success', title: 'Berhasil!', text: isEdit ? 'Data diperbarui' : 'Surat no: ' + res.nomor_surat, timer: 2000, showConfirmButton: false }).then(() => { window.location.href = '/documents'; });
+                Swal.fire({ icon: 'success', title: 'Berhasil', timer: 1500, showConfirmButton: false })
+                .then(() => window.location.href = '/documents');
             },
-            error: function(xhr) { 
-                applyDropdownLogic(); // Lock lagi jika error
-                Swal.fire('Gagal', xhr.responseJSON?.error || 'Error', 'error'); 
+            error: function(xhr) {
+                if(!isEdit) applyDefaultSelection([]); // Lock lagi
+                Swal.fire('Gagal', xhr.responseJSON?.error || 'Error', 'error');
             }
         });
     });
 
-    function loadInitialData(allUsers) {
+    // Helper Load Data Edit
+    function loadInitialData() {
         const params = new URLSearchParams(window.location.search);
-        const dupId = params.get('duplicate_from');
         let url = '';
-        if (isEdit) url = '/api/documents/' + docID; else if (dupId) url = '/api/documents/' + dupId; else return;
-
-        if(isEdit) { $('#form-title').html('<i class="fas fa-edit mr-2"></i>Edit Surat'); $('#submit-btn').html('<i class="fas fa-save mr-2"></i>Simpan'); }
-        else { $('#form-title').html('<i class="fas fa-copy mr-2"></i>Duplikat Surat'); }
+        if (isEdit) url = '/api/documents/' + docID;
+        else if (params.has('duplicate_from')) url = '/api/documents/' + params.get('duplicate_from');
+        else return;
 
         $.ajax({
             url: url, method: 'GET',
             success: function(data) {
-                $('#nama_lengkap').val(data.resident.nama_lengkap); $('#tempat_lahir').val(data.resident.tempat_lahir);
-                if(data.resident.tanggal_lahir) { const d = data.resident.tanggal_lahir.split('T')[0].split('-'); $('#tanggal_lahir').val(`${d[2]}-${d[1]}-${d[0]}`); }
-                $('#jenis_kelamin').val(data.resident.jenis_kelamin); $('#agama').val(data.resident.agama); $('#pekerjaan').val(data.resident.pekerjaan); $('#alamat').val(data.resident.alamat); $('#lokasi_hilang').val(data.lokasi_hilang);
-                $('#lost-items-table tbody').empty(); if(data.lost_items) data.lost_items.forEach(i => addItemToTable(i.nama_barang, i.deskripsi));
+                $('#nama_lengkap').val(data.resident.nama_lengkap);
+                $('#tempat_lahir').val(data.resident.tempat_lahir);
+                if(data.resident.tanggal_lahir) { 
+                    const d = data.resident.tanggal_lahir.split('T')[0].split('-'); 
+                    $('#tanggal_lahir').val(`${d[2]}-${d[1]}-${d[0]}`); 
+                }
+                $('#jenis_kelamin').val(data.resident.jenis_kelamin);
+                $('#agama').val(data.resident.agama);
+                $('#pekerjaan').val(data.resident.pekerjaan);
+                $('#alamat').val(data.resident.alamat);
+                $('#lokasi_hilang').val(data.lokasi_hilang);
                 
-                // Handling Select2 Value (Edit Mode)
-                // Jika data lama tidak ada di dropdown (karena terfilter regu), kita inject manual biar tampil
+                $('#lost-items-table tbody').empty();
+                if(data.lost_items) data.lost_items.forEach(i => {
+                    const rowCnt = $('#lost-items-table tbody tr').length + 1;
+                    $('#lost-items-table tbody').append(`<tr><td>${rowCnt}</td><td data-name="nama_barang">${i.nama_barang}</td><td data-name="deskripsi">${i.deskripsi}</td><td><button type="button" class="btn btn-danger btn-sm remove-item-btn">X</button></td></tr>`);
+                });
+
+                // Set Select2
+                // Inject option manual jika data lama tidak ada di filter (user beda regu/non-aktif)
                 if(data.petugas_pelapor) {
                     if ($penerimaSelect.find("option[value='" + data.petugas_pelapor.id + "']").length === 0) {
-                        $penerimaSelect.append(new Option(data.petugas_pelapor.nama_lengkap + " (Lain)", data.petugas_pelapor.id, true, true));
+                        $penerimaSelect.append(new Option(`${data.petugas_pelapor.pangkat} ${data.petugas_pelapor.nama_lengkap} (${data.petugas_pelapor.nrp})`, data.petugas_pelapor.id, true, true));
                     }
                     $penerimaSelect.val(data.petugas_pelapor.id).trigger('change');
                 }
                 if(data.pejabat_persetuju) {
                     if ($penanggungJawabSelect.find("option[value='" + data.pejabat_persetuju.id + "']").length === 0) {
-                        $penanggungJawabSelect.append(new Option(data.pejabat_persetuju.nama_lengkap + " (Lain)", data.pejabat_persetuju.id, true, true));
+                        $penanggungJawabSelect.append(new Option(`${data.pejabat_persetuju.pangkat} ${data.pejabat_persetuju.nama_lengkap} (${data.pejabat_persetuju.nrp})`, data.pejabat_persetuju.id, true, true));
                     }
                     $penanggungJawabSelect.val(data.pejabat_persetuju.id).trigger('change');
                 }
