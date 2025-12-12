@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -10,8 +11,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"simdokpol/internal/config"
@@ -42,6 +45,7 @@ import (
 var (
 	version         = "dev"
 	changelogBase64 = ""
+	shutdownChan    = make(chan struct{})
 )
 
 func main() {
@@ -74,11 +78,13 @@ func onReady() {
 
 	vhost := utils.NewVHostSetup()
 	isVhostSetup, _ := vhost.IsSetup()
-	var appURL string
 	
 	port := os.Getenv("PORT")
-	if port == "" { port = "8080" }
+	if port == "" {
+		port = "8080"
+	}
 
+	var appURL string
 	if isVhostSetup {
 		appURL = vhost.GetURL(port)
 	} else {
@@ -89,7 +95,7 @@ func onReady() {
 
 	db, err := setupDatabase(cfg)
 	if err != nil {
-		log.Printf("❌ GAGAL KONEKSI DATABASE: %v", err)
+		log.Printf("❌ GAGAL KONEKSI DATABASE: %v. Cek config/restart.", err)
 		beeep.Alert("SIMDOKPOL Error", "Gagal koneksi database. Cek log.", "assets/warning.png")
 	} else {
 		seedDefaultTemplates(db)
@@ -132,8 +138,6 @@ func onReady() {
 	updateService := services.NewUpdateService()
 
 	authController := controllers.NewAuthController(authService, configService, version)
-	updateController := controllers.NewUpdateController(updateService, version)
-	
 	userController := controllers.NewUserController(userService)
 	docController := controllers.NewLostDocumentController(docService)
 	dashboardController := controllers.NewDashboardController(dashboardService)
@@ -145,6 +149,7 @@ func onReady() {
 	reportController := controllers.NewReportController(reportService, configService)
 	itemTemplateController := controllers.NewItemTemplateController(itemTemplateService)
 	dbTestController := controllers.NewDBTestController(dbTestService)
+	updateController := controllers.NewUpdateController(updateService, version)
 
 	if os.Getenv("APP_ENV") == "production" {
 		gin.SetMode(gin.ReleaseMode)
@@ -166,7 +171,6 @@ func onReady() {
 		c.Next()
 	})
 
-	// --- ROUTES ---
 	r.GET("/login", authController.ShowLoginPage)
 	r.POST("/api/login", middleware.LoginRateLimiter.GetLimiterMiddleware(), authController.Login)
 	r.POST("/api/logout", authController.Logout)
@@ -266,7 +270,6 @@ func onReady() {
 	})
 	admin.POST("/api/users", userController.Create)
 	admin.GET("/api/users", userController.FindAll)
-	
 	admin.GET("/api/users/:id", userController.FindByID)
 	admin.PUT("/api/users/:id", userController.Update)
 	admin.DELETE("/api/users/:id", userController.Delete)
@@ -308,29 +311,32 @@ func onReady() {
 	pro.PUT("/api/item-templates/:id", itemTemplateController.Update)
 	pro.DELETE("/api/item-templates/:id", itemTemplateController.Delete)
 
-	
-	// --- SERVER STARTUP ---
 	srv := &http.Server{Addr: ":" + port, Handler: r}
 
-	go func() {
-		isHTTPS := os.Getenv("ENABLE_HTTPS") == "true"
-		certFile, keyFile := "", ""
-		
-		if isHTTPS {
-			var errCert error
-			certFile, keyFile, errCert = utils.EnsureCertificates()
-			if errCert != nil {
-				log.Printf("⚠️ ERROR CERT: %v. Fallback ke HTTP.", errCert)
-				isHTTPS = false
-			}
-		}
+	quitChan := make(chan os.Signal, 1)
+	signal.Notify(quitChan, syscall.SIGINT, syscall.SIGTERM)
 
+	isHTTPS := os.Getenv("ENABLE_HTTPS") == "true"
+	certFile, keyFile := "", ""
+	if isHTTPS {
+		var errCert error
+		certFile, keyFile, errCert = utils.EnsureCertificates()
+		if errCert != nil {
+			log.Printf("⚠️ ERROR CERT: %v. Fallback ke HTTP.", errCert)
+			isHTTPS = false
+		}
+	}
+
+	if isHTTPS {
+		if isVhostSetup {
+			appURL = strings.Replace(appURL, "http://", "https://", 1)
+		} else {
+			appURL = fmt.Sprintf("https://localhost:%s", port)
+		}
+	}
+
+	go func() {
 		if isHTTPS {
-			if isVhostSetup {
-				appURL = strings.Replace(appURL, "http://", "https://", 1)
-			} else {
-				appURL = fmt.Sprintf("https://localhost:%s", port)
-			}
 			log.Printf("🔒 Server berjalan di %s (HTTPS)", appURL)
 			if err := srv.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
 				log.Fatalf("Server Error: %s\n", err)
@@ -343,11 +349,10 @@ func onReady() {
 		}
 	}()
 
-	// Auto Open Browser
 	go func() {
 		time.Sleep(2 * time.Second)
 		log.Println("✨ Membuka browser...")
-		utils.OpenBrowser(appURL) // SEKARANG SUDAH ADA DI UTILS
+		utils.OpenBrowser(appURL)
 		beeep.Notify("SIMDOKPOL Berjalan", fmt.Sprintf("Akses di %s", appURL), "web/static/img/icon.png")
 	}()
 
@@ -358,13 +363,28 @@ func onReady() {
 				utils.OpenBrowser(appURL)
 			case <-mQuit.ClickedCh:
 				systray.Quit()
+			case <-shutdownChan:
+				return
 			}
 		}
+	}()
+
+	go func() {
+		<-quitChan
+		log.Println("🛑 Shutting down server...")
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
+			log.Printf("⚠️ Shutdown error: %v", err)
+		}
+		log.Println("✅ Server stopped.")
+		close(shutdownChan)
+		systray.Quit()
 	}()
 }
 
 func onExit() {
-	log.Println("🛑 Shutting down server...")
+	log.Println("👋 SIMDOKPOL Desktop ditutup.")
 }
 
 func setupEnvironment() {
@@ -425,36 +445,52 @@ func setupDatabase(cfg *config.Config) (*gorm.DB, error) {
 	case "mysql":
 		var tlsOption string
 		switch cfg.DBSSLMode {
-		case "require", "verify-full": tlsOption = "true"
-		default: tlsOption = "false"
+		case "require", "verify-full":
+			tlsOption = "true"
+		default:
+			tlsOption = "false"
 		}
 		dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local&tls=%s", cfg.DBUser, cfg.DBPass, cfg.DBHost, cfg.DBPort, cfg.DBName, tlsOption)
 		db, err = gorm.Open(mysql.Open(dsn), gormConfig)
 	case "postgres":
 		sslMode := cfg.DBSSLMode
-		if sslMode == "" { sslMode = "disable" }
+		if sslMode == "" {
+			sslMode = "disable"
+		}
 		dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=Asia/Jakarta", cfg.DBHost, cfg.DBUser, cfg.DBPass, cfg.DBName, cfg.DBPort, sslMode)
 		db, err = gorm.Open(postgres.Open(dsn), gormConfig)
 	default:
 		db, err = gorm.Open(sqlite.Open(cfg.DBDSN), gormConfig)
-		if err == nil { 
-			db.Exec("PRAGMA journal_mode = WAL;") 
-			db.Exec("PRAGMA synchronous = NORMAL;") 
+		if err == nil {
+			db.Exec("PRAGMA journal_mode = WAL;")
+			db.Exec("PRAGMA synchronous = NORMAL;")
 			db.Exec("PRAGMA foreign_keys = ON;")
 		}
 	}
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	sqlDB, _ := db.DB()
-	sqlDB.SetMaxIdleConns(10); sqlDB.SetMaxOpenConns(100); sqlDB.SetConnMaxLifetime(time.Hour)
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetMaxOpenConns(100)
+	sqlDB.SetConnMaxLifetime(time.Hour)
 	err = db.AutoMigrate(&models.User{}, &models.Resident{}, &models.LostDocument{}, &models.LostItem{}, &models.AuditLog{}, &models.Configuration{}, &models.ItemTemplate{}, &models.License{})
-	if err != nil { return nil, fmt.Errorf("migrasi gagal: %w", err) }
+	if err != nil {
+		return nil, fmt.Errorf("migrasi gagal: %w", err)
+	}
 	return db, nil
 }
 
 func setupLogging() {
 	logPath := filepath.Join(utils.GetAppDataDir(), "logs", "simdokpol.log")
 	_ = os.MkdirAll(filepath.Dir(logPath), 0755)
-	fileLogger := &lumberjack.Logger{Filename: logPath, MaxSize: 10, MaxBackups: 3, MaxAge: 28, Compress: true}
+	fileLogger := &lumberjack.Logger{
+		Filename:   logPath,
+		MaxSize:    10,
+		MaxBackups: 3,
+		MaxAge:     28,
+		Compress:   true,
+	}
 	mw := io.MultiWriter(os.Stdout, fileLogger)
 	log.SetOutput(mw)
 }
@@ -467,16 +503,142 @@ func mustGetConfig(s services.ConfigService) *dto.AppConfig {
 func seedDefaultTemplates(db *gorm.DB) {
 	var count int64
 	db.Model(&models.ItemTemplate{}).Unscoped().Count(&count)
-	if count > 0 { return }
-	log.Println("🔹 Seeding templates...")
-	templates := []models.ItemTemplate{
-		{NamaBarang: "KTP", Urutan: 1, IsActive: true, FieldsConfig: models.JSONFieldArray{{Label: "NIK", Type: "text", DataLabel: "NIK", Regex: "^[0-9]{16}$", RequiredLength: 16, IsNumeric: true, Placeholder: "16 Digit NIK"}}},
-		{NamaBarang: "SIM", Urutan: 2, IsActive: true, FieldsConfig: models.JSONFieldArray{{Label: "Golongan SIM", Type: "select", DataLabel: "Gol", Options: []string{"A", "B I", "B II", "C", "D"}}, {Label: "Nomor SIM", Type: "text", DataLabel: "No. SIM", Regex: "^[0-9]{12,14}$", MinLength: 12, MaxLength: 14, IsNumeric: true}}},
-		{NamaBarang: "STNK", Urutan: 3, IsActive: true, FieldsConfig: models.JSONFieldArray{{Label: "Nomor Polisi", Type: "text", DataLabel: "No. Pol"}, {Label: "Nomor Rangka", Type: "text", DataLabel: "No. Rangka"}, {Label: "Nomor Mesin", Type: "text", DataLabel: "No. Mesin"}}},
-		{NamaBarang: "BPKB", Urutan: 4, IsActive: true, FieldsConfig: models.JSONFieldArray{{Label: "Nomor BPKB", Type: "text", DataLabel: "No. BPKB"}, {Label: "Atas Nama", Type: "text", DataLabel: "a.n."}}},
-		{NamaBarang: "IJAZAH", Urutan: 5, IsActive: true, FieldsConfig: models.JSONFieldArray{{Label: "Tingkat", Type: "select", DataLabel: "Tingkat", Options: []string{"SD", "SMP", "SMA", "D3", "S1", "S2"}}, {Label: "Nomor Ijazah", Type: "text", DataLabel: "No. Ijazah"}}},
-		{NamaBarang: "ATM", Urutan: 6, IsActive: true, FieldsConfig: models.JSONFieldArray{{Label: "Nama Bank", Type: "select", DataLabel: "Bank", Options: []string{"BRI", "BCA", "Mandiri"}}, {Label: "Nomor Rekening", Type: "text", DataLabel: "No. Rek"}}},
-		{NamaBarang: "LAINNYA", Urutan: 99, IsActive: true, FieldsConfig: models.JSONFieldArray{}},
+	if count > 0 {
+		return
 	}
-	db.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "nama_barang"}}, DoNothing: true}).Create(&templates)
+
+	log.Println("🔹 Seeding templates...")
+
+	bankOptions := []string{
+		"BRI", "BCA", "Mandiri", "BNI", "BSI", "BTN", "CIMB Niaga", 
+		"Danamon", "Permata", "Panin", "Maybank", "Mega", 
+		"BTPN / Jenius", "Bank Daerah (BPD)", "Lainnya",
+	}
+
+	templates := []models.ItemTemplate{
+		{
+			NamaBarang: "KTP",
+			Urutan:     1,
+			IsActive:   true,
+			FieldsConfig: models.JSONFieldArray{
+				{
+					Label:          "NIK",
+					Type:           "text",
+					DataLabel:      "NIK",
+					Regex:          "^[0-9]{16}$",
+					RequiredLength: 16,
+					IsNumeric:      true,
+					Placeholder:    "16 Digit NIK",
+				},
+			},
+		},
+		{
+			NamaBarang: "SIM",
+			Urutan:     2,
+			IsActive:   true,
+			FieldsConfig: models.JSONFieldArray{
+				{
+					Label:     "Golongan SIM",
+					Type:      "select",
+					DataLabel: "Gol",
+					Options:   []string{"A", "B I", "B II", "C", "D"},
+				},
+				{
+					Label:     "Nomor SIM",
+					Type:      "text",
+					DataLabel: "No. SIM",
+					Regex:     "^[0-9]{12,14}$",
+					MinLength: 12,
+					MaxLength: 14,
+					IsNumeric: true,
+				},
+			},
+		},
+		{
+			NamaBarang: "STNK",
+			Urutan:     3,
+			IsActive:   true,
+			FieldsConfig: models.JSONFieldArray{
+				{
+					Label:     "Nomor Polisi",
+					Type:      "text",
+					DataLabel: "No. Pol",
+				},
+				{
+					Label:     "Nomor Rangka",
+					Type:      "text",
+					DataLabel: "No. Rangka",
+				},
+				{
+					Label:     "Nomor Mesin",
+					Type:      "text",
+					DataLabel: "No. Mesin",
+				},
+			},
+		},
+		{
+			NamaBarang: "BPKB",
+			Urutan:     4,
+			IsActive:   true,
+			FieldsConfig: models.JSONFieldArray{
+				{
+					Label:     "Nomor BPKB",
+					Type:      "text",
+					DataLabel: "No. BPKB",
+				},
+				{
+					Label:     "Atas Nama",
+					Type:      "text",
+					DataLabel: "a.n.",
+				},
+			},
+		},
+		{
+			NamaBarang: "IJAZAH",
+			Urutan:     5,
+			IsActive:   true,
+			FieldsConfig: models.JSONFieldArray{
+				{
+					Label:     "Tingkat",
+					Type:      "select",
+					DataLabel: "Tingkat",
+					Options:   []string{"SD", "SMP", "SMA", "D3", "S1", "S2"},
+				},
+				{
+					Label:     "Nomor Ijazah",
+					Type:      "text",
+					DataLabel: "No. Ijazah",
+				},
+			},
+		},
+		{
+			NamaBarang: "ATM",
+			Urutan:     6,
+			IsActive:   true,
+			FieldsConfig: models.JSONFieldArray{
+				{
+					Label:     "Nama Bank",
+					Type:      "select",
+					DataLabel: "Bank",
+					Options:   bankOptions,
+				},
+				{
+					Label:     "Nomor Rekening",
+					Type:      "text",
+					DataLabel: "No. Rek",
+				},
+			},
+		},
+		{
+			NamaBarang:   "LAINNYA",
+			Urutan:       99,
+			IsActive:     true,
+			FieldsConfig: models.JSONFieldArray{},
+		},
+	}
+
+	db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "nama_barang"}},
+		DoNothing: true,
+	}).Create(&templates)
 }
