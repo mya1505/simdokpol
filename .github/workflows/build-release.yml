@@ -16,7 +16,7 @@ permissions:
 
 env:
   APP_NAME: simdokpol
-  GO_VERSION: '1.25.0'
+  GO_VERSION: '1.23.0'
 
 jobs:
   prepare:
@@ -248,6 +248,18 @@ jobs:
             -delete 0 app-icon.ico
           
           echo "✓ ICO file created: app-icon.ico"
+          
+          echo "Copying ICO to embed directory for Go embedding..."
+          mkdir -p web/static/img
+          cp app-icon.ico web/static/img/icon.ico
+          
+          if [ -f "web/static/img/icon.ico" ]; then
+            echo "✓ ICO file copied to web/static/img/icon.ico"
+            ls -lh web/static/img/icon.ico
+          else
+            echo "ERROR: Failed to copy ICO file"
+            exit 1
+          fi
           
           echo "Generating Windows resource file..."
           rsrc -ico app-icon.ico -o rsrc.syso
@@ -682,9 +694,9 @@ jobs:
           cd -
           rm -rf "${TEMP_DIR}"
           
-          cat > ~/rpmbuild/SPECS/${{ env.APP_NAME }}.spec << EOF
-          Name:           ${{ env.APP_NAME }}
-          Version:        ${VERSION}
+          cat > ~/rpmbuild/SPECS/${{ env.APP_NAME }}.spec << 'SPECEOF'
+          Name:           simdokpol
+          Version:        VERSION_PLACEHOLDER
           Release:        1%{?dist}
           Summary:        Sistem Informasi Manajemen Dokumen Kepolisian
           License:        MIT
@@ -720,8 +732,8 @@ jobs:
           Type=Application
           Name=SIMDOKPOL
           Comment=Sistem Informasi Manajemen Dokumen Kepolisian
-          Exec=/opt/%{name}/start.sh
-          Icon=%{name}
+          Exec=/opt/simdokpol/start.sh
+          Icon=simdokpol
           Terminal=false
           Categories=Office;Database;
           StartupWMClass=SIMDOKPOL
@@ -745,16 +757,19 @@ jobs:
           echo "Jalankan dengan perintah: %{name}"
           
           %postun
-          if [ \$1 -eq 0 ]; then
+          if [ $1 -eq 0 ]; then
               if [ -x /usr/bin/gtk-update-icon-cache ]; then
                   gtk-update-icon-cache -f -t /usr/share/icons/hicolor || :
               fi
           fi
           
           %changelog
-          * $(date "+%a %b %d %Y") SIMDOKPOL Team
-          - Release ${VERSION}
-          EOF
+          * CHANGELOG_DATE_PLACEHOLDER SIMDOKPOL Team
+          - Release VERSION_PLACEHOLDER
+          SPECEOF
+          
+          sed -i "s/VERSION_PLACEHOLDER/${VERSION}/g" ~/rpmbuild/SPECS/${{ env.APP_NAME }}.spec
+          sed -i "s/CHANGELOG_DATE_PLACEHOLDER/$(date "+%a %b %d %Y")/g" ~/rpmbuild/SPECS/${{ env.APP_NAME }}.spec
           
           rpmbuild -ba ~/rpmbuild/SPECS/${{ env.APP_NAME }}.spec
           
@@ -845,7 +860,7 @@ jobs:
             echo "WARNING: Icon not found at $ICON_SRC"
           fi
           
-          cat > "${BUNDLE_NAME}/Contents/Info.plist" << 'PLISTEOF'
+          cat > "${BUNDLE_NAME}/Contents/Info.plist" << PLISTEOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -928,7 +943,7 @@ jobs:
         run: |
           set -e
           mkdir -p release-assets
-          find artifacts -type f -name "*.zip" -o -name "*.exe" -o -name "*.deb" -o -name "*.rpm" -o -name "*.dmg" -o -name "*.tar.gz" | while read file; do
+          find artifacts -type f \( -name "*.zip" -o -name "*.exe" -o -name "*.deb" -o -name "*.rpm" -o -name "*.dmg" -o -name "*.tar.gz" \) | while read file; do
             mv "$file" release-assets/
           done
           cd release-assets
@@ -940,7 +955,7 @@ jobs:
         run: |
           VERSION="${{ needs.prepare.outputs.version }}"
           
-          cat > release-notes.md << 'EOF'
+          cat > release-notes.md << 'NOTESEOF'
           ${{ needs.generate-changelog.outputs.changelog }}
           
           ---
@@ -948,7 +963,7 @@ jobs:
           ### 📦 Windows (x64)
           
           **Installer (Recommended)**
-          - `simdokpol-windows-x64-v${{ needs.prepare.outputs.version }}-installer.exe`
+          - `simdokpol-windows-x64-vVERSION-installer.exe`
             - ✅ Instalasi otomatis ke Program Files
             - ✅ Shortcut desktop & Start Menu
             - ✅ Uninstaller terintegrasi
@@ -956,7 +971,7 @@ jobs:
             - ✅ GUI mode & Console mode
           
           **Portable**
-          - `simdokpol-windows-x64-v${{ needs.prepare.outputs.version }}-portable.zip`
+          - `simdokpol-windows-x64-vVERSION-portable.zip`
             - 📁 Extract & run, tidak perlu install
             - 💾 Cocok untuk USB drive
           
@@ -965,9 +980,9 @@ jobs:
           ### 🐧 Linux (amd64)
           
           **DEB Package (Ubuntu/Debian)**
-          - `simdokpol_${{ needs.prepare.outputs.version }}_amd64.deb`
+          - `simdokpol_VERSION_amd64.deb`
             ```bash
-            sudo dpkg -i simdokpol_${{ needs.prepare.outputs.version }}_amd64.deb
+            sudo dpkg -i simdokpol_VERSION_amd64.deb
             sudo apt-get install -f
             ```
             - ✅ Menu entry otomatis
@@ -975,15 +990,15 @@ jobs:
             - ✅ Systemd integration ready
           
           **RPM Package (Fedora/RHEL/CentOS)**
-          - `simdokpol-${{ needs.prepare.outputs.version }}-1.*.rpm`
+          - `simdokpol-VERSION-1.*.rpm`
             ```bash
-            sudo rpm -i simdokpol-${{ needs.prepare.outputs.version }}-1.*.rpm
+            sudo rpm -i simdokpol-VERSION-1.*.rpm
             ```
           
           **Portable**
-          - `simdokpol-linux-amd64-v${{ needs.prepare.outputs.version }}-portable.tar.gz`
+          - `simdokpol-linux-amd64-vVERSION-portable.tar.gz`
             ```bash
-            tar -xzf simdokpol-linux-amd64-v${{ needs.prepare.outputs.version }}-portable.tar.gz
+            tar -xzf simdokpol-linux-amd64-vVERSION-portable.tar.gz
             cd simdokpol
             ./start.sh
             ```
@@ -993,14 +1008,14 @@ jobs:
           ### 🍎 macOS (amd64)
           
           **DMG Installer (Recommended)**
-          - `simdokpol-macos-amd64-v${{ needs.prepare.outputs.version }}-installer.dmg`
+          - `simdokpol-macos-amd64-vVERSION-installer.dmg`
             - ✅ Drag & drop ke Applications
             - ✅ macOS App Bundle native
             - ✅ Icon aplikasi terintegrasi
             - ✅ Compatible dengan Intel & Apple Silicon (via Rosetta 2)
           
           **Portable**
-          - `simdokpol-macos-amd64-v${{ needs.prepare.outputs.version }}-portable.zip`
+          - `simdokpol-macos-amd64-vVERSION-portable.zip`
             - 📁 Extract & run SIMDOKPOL.app
           
           ---
@@ -1054,23 +1069,35 @@ jobs:
           
           ### 🚀 Menjalankan Aplikasi
           
-          Setelah instalasi selesai, cukup jalankan aplikasi melalui shortcut yang tersedia. Aplikasi akan otomatis membuka browser dan menampilkan halaman aplikasi, berjalan di background dengan icon di system tray, menampilkan notifikasi saat siap digunakan, generate file `.env` dengan JWT secret yang aman secara otomatis, serta membuat folder backups untuk database.
+          Setelah instalasi selesai, aplikasi akan:
+          - Otomatis membuka browser dan menampilkan halaman aplikasi
+          - Berjalan di background dengan icon di system tray
+          - Menampilkan notifikasi saat siap digunakan
+          - Generate file `.env` dengan JWT secret yang aman secara otomatis
+          - Membuat folder backups untuk database
           
           **Setup Pertama Kali:**
-          Anda akan diarahkan ke halaman setup untuk membuat akun admin pertama. Ikuti wizard setup yang mudah dan intuitif. File `.env` akan dibuat otomatis dengan konfigurasi keamanan yang optimal tanpa memerlukan konfigurasi manual.
+          - Anda akan diarahkan ke halaman setup untuk membuat akun admin pertama
+          - Ikuti wizard setup yang mudah dan intuitif
+          - File `.env` akan dibuat otomatis dengan konfigurasi keamanan yang optimal
           
           ---
           
           ### 🆘 Troubleshooting
           
           **Port 8080 sudah digunakan?**
-          Edit file `.env` di folder instalasi aplikasi, ganti `PORT=8080` ke port lain (misal `PORT=8081`), kemudian restart aplikasi.
+          - Edit file `.env` di folder instalasi aplikasi
+          - Ganti `PORT=8080` ke port lain (misal `PORT=8081`)
+          - Restart aplikasi
           
           **Aplikasi tidak muncul di system tray?**
-          Pastikan desktop environment Anda mendukung system tray. Untuk Linux, pastikan ekstensi AppIndicator terinstall. Untuk Windows, cek Windows Notification Settings dan pastikan aplikasi diizinkan. Untuk macOS, periksa System Preferences → Notifications.
+          - Windows: Cek Windows Notification Settings dan pastikan aplikasi diizinkan
+          - Linux: Pastikan ekstensi AppIndicator terinstall
+          - macOS: Periksa System Preferences → Notifications
           
           **File .env tidak ditemukan?**
-          Aplikasi akan membuat file `.env` secara otomatis saat pertama kali dijalankan. Jika file hilang atau rusak, hapus dan restart aplikasi untuk regenerasi otomatis. JWT secret key akan di-generate ulang dengan algoritma cryptographically secure.
+          - Aplikasi akan membuat file `.env` secara otomatis saat pertama kali dijalankan
+          - Jika file hilang atau rusak, hapus dan restart aplikasi untuk regenerasi otomatis
           
           ---
           
@@ -1083,32 +1110,19 @@ jobs:
           
           ---
           
-          ### 🙏 Kontribusi
-          
-          Kami sangat menghargai kontribusi dari komunitas. Jika Anda ingin berkontribusi, fork repository ini, buat branch untuk fitur baru Anda, submit pull request dengan deskripsi yang jelas, dan pastikan code Anda mengikuti style guide yang ada.
-          
-          ---
-          
-          ### 📜 Lisensi
-          
-          SIMDOKPOL dirilis di bawah lisensi MIT. Lihat file LICENSE untuk detail lengkap.
-          
-          ---
-          
           **Terima kasih telah menggunakan SIMDOKPOL!** 🙏
           
           Jika aplikasi ini membantu pekerjaan Anda, pertimbangkan untuk memberikan ⭐ star di repository ini!
-          EOF
+          NOTESEOF
+          
+          sed -i "s/VERSION/${{ needs.prepare.outputs.version }}/g" release-notes.md
 
-      - name: Create GitHub Release to Public Repo
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          token: ${{ secrets.RELEASE_TOKEN }}
-          repository: muhammad1505/simdokpol-release
           tag_name: v${{ needs.prepare.outputs.version }}
           name: Release v${{ needs.prepare.outputs.version }}
           body_path: release-notes.md
           files: release-assets/*
-          target_commitish: main
           draft: false
           prerelease: false
