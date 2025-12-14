@@ -9,6 +9,7 @@ import (
 	"simdokpol/internal/models"
 	"simdokpol/web"
 	"strings"
+	"time"
 
 	"github.com/jung-kurt/gofpdf"
 )
@@ -39,14 +40,84 @@ func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, ex
 
 	setFont := func(style string, size float64) { pdf.SetFont("Courier", style, size) }
 	
+	// Dapatkan dimensi halaman dan margin terlebih dahulu
+	pageWidth, _ := pdf.GetPageSize()
+	marginL, _, marginR, _ := pdf.GetMargins()
+	
 	// Helper untuk Hitung Lebar Text Terpanjang di Blok TTD
 	calcMaxW := func(lines ...string) float64 {
-		setFont("B", 9) // Asumsi font terbesar di TTD
+		setFont("B", 9)
 		max := 0.0
 		for _, l := range lines {
 			if w := pdf.GetStringWidth(l); w > max { max = w }
 		}
-		return max + 2.0 // Padding
+		return max + 2.0
+	}
+
+	// Helper untuk menambahkan garis putus-putus yang lebih presisi
+	addDashedLine := func(startX, startY, endX float64) {
+		pdf.SetLineWidth(0.2)
+		// Pattern: 1mm dash, 0.8mm space untuk hasil yang mirip dengan contoh
+		pdf.SetDashPattern([]float64{1.0, 0.8}, 0)
+		pdf.Line(startX, startY, endX, startY)
+		pdf.SetDashPattern([]float64{}, 0)
+	}
+
+	// Helper untuk menulis teks dengan garis putus-putus di belakangnya
+	// indentFirstLine: indentasi untuk baris pertama
+	// indentNextLines: indentasi untuk baris kedua dan seterusnya
+	writeTextWithDash := func(indentFirstLine, indentNextLines float64, text string, font string, size float64) {
+		setFont(font, size)
+		
+		// Hitung lebar area yang tersedia dari posisi indentasi baris pertama hingga margin kanan
+		availableWidth := pageWidth - marginR - indentFirstLine
+		
+		// Pecah teks jika terlalu panjang
+		lines := pdf.SplitLines([]byte(text), availableWidth)
+		
+		for i, line := range lines {
+			lineText := string(line)
+			
+			// Gunakan indentasi yang sesuai
+			currentIndent := indentFirstLine
+			if i > 0 {
+				currentIndent = indentNextLines
+				// Recalculate available width untuk baris berikutnya
+				availableWidthNext := pageWidth - marginR - indentNextLines
+				// Re-split jika perlu dengan lebar baru
+				if i == 1 && indentFirstLine != indentNextLines {
+					remainingText := strings.Join(func() []string {
+						result := make([]string, len(lines)-1)
+						for j := 1; j < len(lines); j++ {
+							result[j-1] = string(lines[j])
+						}
+						return result
+					}(), " ")
+					newLines := pdf.SplitLines([]byte(remainingText), availableWidthNext)
+					lines = append(lines[:1], newLines...)
+					lineText = string(lines[i])
+				}
+			}
+			
+			pdf.SetX(currentIndent)
+			textWidth := pdf.GetStringWidth(lineText)
+			pdf.Cell(textWidth, lineHeight, lineText)
+			
+			// Hanya tambahkan garis putus-putus di baris terakhir
+			if i == len(lines)-1 {
+				dashStartX := currentIndent + textWidth + 0.5
+				dashEndX := pageWidth - marginR
+				dashY := pdf.GetY() + (lineHeight / 2) + 0.5
+				
+				if dashStartX < dashEndX {
+					addDashedLine(dashStartX, dashY, dashEndX)
+				}
+			}
+			
+			if i < len(lines)-1 {
+				pdf.Ln(lineHeight)
+			}
+		}
 	}
 
 	// --- 1. KOP SURAT (DINAMIS) ---
@@ -82,12 +153,7 @@ func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, ex
 	pdf.SetY(56)
 	
 	// --- 3. BODY (JUDUL & ISI) ---
-	// ... (Bagian Body ini sama seperti sebelumnya, dipersingkat) ...
-	// Gunakan kode sebelumnya untuk bagian Judul s.d. Tindakan Yang Diambil
-	
 	setFont("BU", 12)
-	pageWidth, _ := pdf.GetPageSize()
-	marginL, _, marginR, _ := pdf.GetMargins()
 	printableWidth := pageWidth - marginL - marginR
 	
 	// Helper Center
@@ -103,9 +169,29 @@ func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, ex
 	center(fmt.Sprintf("Nomor: %s", doc.NomorSurat))
 	pdf.Ln(8)
 
+	// BAGIAN 1: Paragraf pembuka dengan garis putus-putus (JUSTIFIED)
 	setFont("", 11)
+	introText := fmt.Sprintf("---- Yang bertanda tangan dibawah ini A.n. KEPALA KEPOLISIAN %s, Menerangkan dengan benar bahwa :", strings.ToUpper(config.KopBaris3))
+	
 	pdf.SetX(20)
-	pdf.MultiCell(170, lineHeight, fmt.Sprintf("---- Yang bertanda tangan dibawah ini A.n. KEPALA KEPOLISIAN %s, Menerangkan dengan benar bahwa :", strings.ToUpper(config.KopBaris3)), "", "J", false)
+	// Split manual untuk kontrol penuh
+	lines := pdf.SplitLines([]byte(introText), 170)
+	
+	for i, line := range lines {
+		lineText := string(line)
+		
+		if i == len(lines)-1 {
+			// Baris terakhir dengan garis putus-putus, tanpa justify
+			pdf.SetY(pdf.GetY())
+			writeTextWithDash(20, 20, lineText, "", 11)
+			pdf.Ln(lineHeight)
+		} else {
+			// Baris sebelumnya dengan justify
+			pdf.SetX(20)
+			pdf.CellFormat(170, lineHeight, lineText, "", 0, "J", false, 0, "")
+			pdf.Ln(lineHeight)
+		}
+	}
 	pdf.Ln(lineHeight)
 
 	// Data Pemohon
@@ -117,20 +203,62 @@ func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, ex
 	pdf.SetX(30); pdf.Cell(40, lineHeight, "Pekerjaan"); pdf.Cell(5, lineHeight, ":"); pdf.Cell(0, lineHeight, doc.Resident.Pekerjaan); pdf.Ln(lineHeight)
 	pdf.SetX(30); pdf.Cell(40, lineHeight, "Alamat"); pdf.Cell(5, lineHeight, ":"); pdf.MultiCell(115, lineHeight, doc.Resident.Alamat, "", "L", false); pdf.Ln(3)
 
-	// Barang Hilang
-	pdf.SetX(20)
-	pdf.MultiCell(170, lineHeight, fmt.Sprintf("Yang bersangkutan tersebut di atas benar telah datang di Kantor %s dan melaporkan bahwa telah kehilangan surat berharga berupa :", config.NamaKantor), "", "J", false)
-	pdf.Ln(3)
-	for i, item := range doc.LostItems {
-		pdf.SetX(30)
-		pdf.MultiCell(160, lineHeightItem, fmt.Sprintf("- 1 (Buah) %s Dengan Keterangan : %s A.n Pelapor", strings.ToUpper(item.NamaBarang), item.Deskripsi), "", "L", false)
-		if i < len(doc.LostItems)-1 { pdf.Ln(0.5) }
+	// BAGIAN 3: Paragraf sebelum barang hilang dengan garis putus-putus (JUSTIFIED)
+	reportText := fmt.Sprintf("Yang bersangkutan tersebut di atas benar telah datang di Kantor %s dan melaporkan bahwa telah kehilangan surat berharga berupa :", config.NamaKantor)
+	
+	lines = pdf.SplitLines([]byte(reportText), 170)
+	for i, line := range lines {
+		lineText := string(line)
+		
+		if i == len(lines)-1 {
+			pdf.SetY(pdf.GetY())
+			writeTextWithDash(20, 20, lineText, "", 11)
+			pdf.Ln(lineHeight)
+		} else {
+			pdf.SetX(20)
+			pdf.CellFormat(170, lineHeight, lineText, "", 0, "J", false, 0, "")
+			pdf.Ln(lineHeight)
+		}
 	}
 	pdf.Ln(3)
 
-	// Penutup
-	pdf.SetX(20)
-	pdf.MultiCell(170, lineHeight, fmt.Sprintf("---- Surat/kartu tersebut hilang di sekitar %s, dan sudah dilakukan pencarian namun sampai dikeluarkan Surat Keterangan ini belum ditemukan.", doc.LokasiHilang), "", "J", false)
+	// BAGIAN 2: Barang Hilang dengan format ringkas dan garis putus-putus
+	for i, item := range doc.LostItems {
+		pdf.SetY(pdf.GetY())
+		// Format: "- 1 (Buah) NAMA_BARANG Dengan No: NOMOR A.n Pelapor"
+		itemText := fmt.Sprintf("1 (Buah) %s Dengan  %s A.n Pelapor", 
+			strings.ToUpper(item.NamaBarang), 
+			item.Deskripsi)
+		
+		// Indentasi pertama di posisi 30 (untuk "- "), indentasi berikutnya di 33 (sejajar dengan teks setelah "- ")
+		pdf.SetX(30)
+		pdf.Cell(3, lineHeight, "-")
+		writeTextWithDash(33, 33, itemText, "", 11)
+		pdf.Ln(lineHeightItem)
+		
+		if i < len(doc.LostItems)-1 { 
+			pdf.Ln(1) 
+		}
+	}
+	pdf.Ln(2)
+
+	// BAGIAN 4: Paragraf lokasi hilang dengan garis putus-putus (JUSTIFIED)
+	lostText := fmt.Sprintf("---- Surat/kartu tersebut hilang di sekitar %s, dan sudah dilakukan pencarian namun sampai dikeluarkan Surat Keterangan ini belum ditemukan.", doc.LokasiHilang)
+	
+	lines = pdf.SplitLines([]byte(lostText), 170)
+	for i, line := range lines {
+		lineText := string(line)
+		
+		if i == len(lines)-1 {
+			pdf.SetY(pdf.GetY())
+			writeTextWithDash(20, 20, lineText, "", 11)
+			pdf.Ln(lineHeight)
+		} else {
+			pdf.SetX(20)
+			pdf.CellFormat(170, lineHeight, lineText, "", 0, "J", false, 0, "")
+			pdf.Ln(lineHeight)
+		}
+	}
 	pdf.Ln(3)
 
 	// TTD Pemohon
@@ -141,27 +269,70 @@ func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, ex
 	setFont("BU", 11)
 	pdf.MultiCell(70, lineHeight, strings.ToUpper(doc.Resident.NamaLengkap), "", "C", false)
 	
-	// Demikian & Tindakan
+	// BAGIAN 5: Demikian dengan garis putus-putus (JUSTIFIED)
 	setFont("", 11)
 	pdf.Ln(3)
-	pdf.SetX(20)
-	pdf.MultiCell(170, lineHeight, "----- Demikian Surat Keterangan ini dibuat dengan sebenar-benarnya dan dapat dipergunakan sebagaimana perlunya.", "", "J", false)
+	demiText := "----- Demikian Surat Keterangan ini dibuat dengan sebenar-benarnya dan dapat dipergunakan sebagaimana perlunya."
+	
+	lines = pdf.SplitLines([]byte(demiText), 170)
+	for i, line := range lines {
+		lineText := string(line)
+		
+		if i == len(lines)-1 {
+			pdf.SetY(pdf.GetY())
+			writeTextWithDash(20, 20, lineText, "", 11)
+			pdf.Ln(lineHeight)
+		} else {
+			pdf.SetX(20)
+			pdf.CellFormat(170, lineHeight, lineText, "", 0, "J", false, 0, "")
+			pdf.Ln(lineHeight)
+		}
+	}
 	pdf.Ln(3)
+
+	// Tindakan Yang Diambil
 	setFont("BU", 11)
 	pdf.SetX(20); pdf.Cell(0, lineHeight, "Tindakan Yang Diambil :"); pdf.Ln(lineHeight)
-	setFont("", 11)
-	pdf.SetX(25); pdf.MultiCell(165, lineHeightItem, "1. Menerima laporan dan membuat Surat Keterangan Kehilangan barang guna seperlunya;", "", "L", false)
 	
+	// Item 1
+	setFont("", 11)
+	pdf.SetY(pdf.GetY())
+	item1Text := "Menerima laporan dan membuat Surat Keterangan Kehilangan barang guna seperlunya;"
+	pdf.SetX(25)
+	pdf.Cell(5, lineHeight, "1.")
+	writeTextWithDash(30, 30, item1Text, "", 11)
+	pdf.Ln(lineHeightItem)
+	
+	// Item 2
 	archiveDays := 15
 	if config.ArchiveDurationDays > 0 { archiveDays = config.ArchiveDurationDays }
-	pdf.SetX(25); pdf.MultiCell(165, lineHeightItem, fmt.Sprintf("2. Surat keterangan kehilangan ini berlaku selama %d (%s) hari, berlaku mulai tanggal dikeluarkan;", archiveDays, IntToIndonesianWords(archiveDays)), "", "L", false)
-	pdf.SetX(25); pdf.MultiCell(165, lineHeightItem, "3. Surat Keterangan ini bukan sebagai pengganti surat yang hilang tetapi berguna untuk mengurus kembali surat yang hilang.", "", "L", false)
+	pdf.SetY(pdf.GetY())
+	item2Text := fmt.Sprintf("Surat keterangan kehilangan ini berlaku selama %d (%s) hari, berlaku mulai tanggal dikeluarkan;", archiveDays, IntToIndonesianWords(archiveDays))
+	pdf.SetX(25)
+	pdf.Cell(5, lineHeight, "2.")
+	writeTextWithDash(30, 30, item2Text, "", 11)
+	pdf.Ln(lineHeightItem)
+	
+	// Item 3 dengan garis putus-putus
+	pdf.SetY(pdf.GetY())
+	item3Text := "Surat Keterangan ini bukan sebagai pengganti surat yang hilang tetapi berguna untuk mengurus kembali surat yang hilang."
+	pdf.SetX(25)
+	pdf.Cell(5, lineHeight, "3.")
+	writeTextWithDash(30, 30, item3Text, "", 11)
+	pdf.Ln(lineHeightItem)
 	pdf.Ln(3)
 
 	// --- 4. TANDA TANGAN (DINAMIS WIDTH) ---
+	// Helper untuk format tanggal Indonesia
+	formatTanggalIndonesia := func(t time.Time) string {
+		bulan := []string{
+			"Januari", "Februari", "Maret", "April", "Mei", "Juni",
+			"Juli", "Agustus", "September", "Oktober", "November", "Desember",
+		}
+		return fmt.Sprintf("%02d %s %d", t.Day(), bulan[t.Month()-1], t.Year())
+	}
 	
-	// Siapkan Data Teks
-	dateStr := fmt.Sprintf("%s, %s", config.TempatSurat, doc.TanggalLaporan.Format("02 January 2006"))
+	dateStr := fmt.Sprintf("%s, %s", config.TempatSurat, formatTanggalIndonesia(doc.TanggalLaporan))
 	
 	// KIRI: PEJABAT
 	jabatanKiri := fmt.Sprintf("a.n. KEPALA KEPOLISIAN %s", strings.ToUpper(config.KopBaris3))
@@ -181,8 +352,6 @@ func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, ex
 	namaKanan := strings.ToUpper(doc.PetugasPelapor.NamaLengkap)
 	nrpKanan := fmt.Sprintf("%s / NRP %s", strings.ToUpper(doc.PetugasPelapor.Pangkat), doc.PetugasPelapor.NRP)
 
-	// Hitung Lebar Kolom Dinamis
-	// Min 70mm, Max 90mm biar gak tabrakan
 	widthKiri := calcMaxW(jabatanKiri, jabatanKiri2, namaKiri, nrpKiri)
 	if widthKiri < 70 { widthKiri = 70 }
 	if widthKiri > 90 { widthKiri = 90 }
@@ -191,12 +360,10 @@ func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, ex
 	if widthKanan < 70 { widthKanan = 70 }
 	if widthKanan > 90 { widthKanan = 90 }
 
-	// Tentukan Posisi X (Kiri Fix di 20, Kanan disesuaikan agar margin kanan 20)
 	xKiri := 20.0
-	xKanan := pageWidth - marginR - widthKanan // Align Right terhadap Margin
+	xKanan := pageWidth - marginR - widthKanan
 
 	// Render TTD
-	// Tanggal (Kanan Saja)
 	pdf.SetX(xKanan)
 	setFont("", 10)
 	pdf.MultiCell(widthKanan, lineHeight, dateStr, "", "C", false)
@@ -204,7 +371,6 @@ func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, ex
 
 	yPosTtd := pdf.GetY()
 
-	// Blok Kiri
 	pdf.SetY(yPosTtd)
 	pdf.SetX(xKiri)
 	setFont("B", 9)
@@ -212,7 +378,6 @@ func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, ex
 	pdf.SetX(xKiri)
 	pdf.MultiCell(widthKiri, lineHeightKop, jabatanKiri2, "", "C", false)
 	
-	// Blok Kanan
 	pdf.SetY(yPosTtd)
 	pdf.SetX(xKanan)
 	setFont("B", 9)
@@ -223,7 +388,6 @@ func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, ex
 	pdf.Ln(spasiTtd)
 	yPosName := pdf.GetY()
 
-	// Nama Kiri
 	pdf.SetY(yPosName)
 	pdf.SetX(xKiri)
 	setFont("BU", 9)
@@ -232,7 +396,6 @@ func GenerateLostDocumentPDF(doc *models.LostDocument, config *dto.AppConfig, ex
 	pdf.SetX(xKiri)
 	pdf.MultiCell(widthKiri, lineHeightKop, nrpKiri, "", "C", false)
 
-	// Nama Kanan
 	pdf.SetY(yPosName)
 	pdf.SetX(xKanan)
 	setFont("BU", 9)
