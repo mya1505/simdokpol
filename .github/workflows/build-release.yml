@@ -17,7 +17,6 @@ permissions:
 env:
   APP_NAME: simdokpol
   GO_VERSION: '1.23.0'
-  # Repository target untuk release
   RELEASE_REPO: muhammad1505/simdokpol-release
 
 jobs:
@@ -435,7 +434,7 @@ jobs:
           !define APP_NAME "SIMDOKPOL"
           !define VERSION "${{ needs.prepare.outputs.version }}"
           !define PUBLISHER "SIMDOKPOL Team"
-          !define WEB_SITE "https://github.com/muhammad1505/simdokpol-release"
+          !define WEB_SITE "https://github.com/muhammad1505/simdokpol"
           !define INSTALLER_NAME "${{ env.APP_NAME }}-windows-x64-v${{ needs.prepare.outputs.version }}-installer.exe"
           
           Name "${APP_NAME} ${VERSION}"
@@ -850,6 +849,7 @@ jobs:
             sips -z 128 128   "$ICON_SRC" --out "icon.iconset/icon_128x128.png"
             sips -z 256 256   "$ICON_SRC" --out "icon.iconset/icon_128x128@2x.png"
             sips -z 256 256   "$ICON_SRC" --out "icon.iconset/icon_256x256.png"
+            sips -z 512 512   "$ICON_SRC" --out "icon.iconset/icon_256x256@2x.png"
             sips -z 512 512   "$ICON_SRC" --out "icon.iconset/icon_512x512.png"
             sips -z 1024 1024 "$ICON_SRC" --out "icon.iconset/icon_512x512@2x.png"
             
@@ -925,113 +925,117 @@ jobs:
             ${{ env.APP_NAME }}-macos-amd64-v${{ needs.prepare.outputs.version }}-installer.dmg
           retention-days: 5
           
-  create-release:
-    name: Create GitHub Release in Release Repository
+  upload-to-release-repo:
+    name: Upload to Release Repository
     needs: [prepare, generate-changelog, build-windows, build-linux, build-macos]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
     steps:
-      - name: Checkout code
+      - name: Checkout release repository
         uses: actions/checkout@v4
+        with:
+          repository: ${{ env.RELEASE_REPO }}
+          token: ${{ secrets.RELEASE_TOKEN }}
+          path: release-repo
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      - name: Prepare release assets
-        id: prep_assets
+      - name: Prepare and organize release files
         run: |
           set -e
-          mkdir -p release-assets
+          VERSION="${{ needs.prepare.outputs.version }}"
+          
+          mkdir -p "release-repo/v${VERSION}"
+          
           find artifacts -type f \( -name "*.zip" -o -name "*.exe" -o -name "*.deb" -o -name "*.rpm" -o -name "*.dmg" -o -name "*.tar.gz" \) | while read file; do
-            mv "$file" release-assets/
+            cp "$file" "release-repo/v${VERSION}/"
           done
-          cd release-assets
+          
+          cd "release-repo/v${VERSION}"
           sha256sum * > checksums.txt
-          ls -lh
-          echo "ASSETS_PATH=release-assets/*" >> $GITHUB_OUTPUT
+          cd ../..
+          
+          if [ -f "artifacts/changelog/CHANGELOG_${VERSION}.md" ]; then
+            cp "artifacts/changelog/CHANGELOG_${VERSION}.md" "release-repo/v${VERSION}/CHANGELOG.md"
+          fi
+          
+          ls -lh "release-repo/v${VERSION}/"
 
-      - name: Create release notes template
+      - name: Create release notes
         run: |
           VERSION="${{ needs.prepare.outputs.version }}"
           
-          cat > release-notes.md << 'NOTESEOF'
+          cat > "release-repo/v${VERSION}/README.md" << 'NOTESEOF'
+          # SIMDOKPOL v${{ needs.prepare.outputs.version }}
+          
           ${{ needs.generate-changelog.outputs.changelog }}
           
           ---
           
-          ### 📦 Windows (x64)
+          ## 📦 Download Files
+          
+          ### Windows (x64)
           
           **Installer (Recommended)**
-          - `simdokpol-windows-x64-vVERSION-installer.exe`
-            - ✅ Instalasi otomatis ke Program Files
+          - [`simdokpol-windows-x64-v${{ needs.prepare.outputs.version }}-installer.exe`](simdokpol-windows-x64-v${{ needs.prepare.outputs.version }}-installer.exe)
+            - ✅ Instalasi otomatis
             - ✅ Shortcut desktop & Start Menu
-            - ✅ Uninstaller terintegrasi
-            - ✅ Icon aplikasi menarik
-            - ✅ GUI mode & Console mode
+            - ✅ GUI & Console mode
           
           **Portable**
-          - `simdokpol-windows-x64-vVERSION-portable.zip`
-            - 📁 Extract & run, tidak perlu install
-            - 💾 Cocok untuk USB drive
+          - [`simdokpol-windows-x64-v${{ needs.prepare.outputs.version }}-portable.zip`](simdokpol-windows-x64-v${{ needs.prepare.outputs.version }}-portable.zip)
+            - 📁 Extract & run
           
           ---
           
-          ### 🐧 Linux (amd64)
+          ### Linux (amd64)
           
           **DEB Package (Ubuntu/Debian)**
-          - `simdokpol_VERSION_amd64.deb`
+          - [`simdokpol_${{ needs.prepare.outputs.version }}_amd64.deb`](simdokpol_${{ needs.prepare.outputs.version }}_amd64.deb)
             ```bash
-            sudo dpkg -i simdokpol_VERSION_amd64.deb
+            sudo dpkg -i simdokpol_${{ needs.prepare.outputs.version }}_amd64.deb
             sudo apt-get install -f
             ```
-            - ✅ Menu entry otomatis
-            - ✅ Icon desktop
-            - ✅ Systemd integration ready
           
           **RPM Package (Fedora/RHEL/CentOS)**
-          - `simdokpol-VERSION-1.*.rpm`
+          - File RPM tersedia dengan pattern: `simdokpol-${{ needs.prepare.outputs.version }}-1.*.rpm`
             ```bash
-            sudo rpm -i simdokpol-VERSION-1.*.rpm
+            sudo rpm -i simdokpol-${{ needs.prepare.outputs.version }}-1.*.rpm
             ```
           
           **Portable**
-          - `simdokpol-linux-amd64-vVERSION-portable.tar.gz`
+          - [`simdokpol-linux-amd64-v${{ needs.prepare.outputs.version }}-portable.tar.gz`](simdokpol-linux-amd64-v${{ needs.prepare.outputs.version }}-portable.tar.gz)
             ```bash
-            tar -xzf simdokpol-linux-amd64-vVERSION-portable.tar.gz
+            tar -xzf simdokpol-linux-amd64-v${{ needs.prepare.outputs.version }}-portable.tar.gz
             cd simdokpol
             ./start.sh
             ```
           
           ---
           
-          ### 🍎 macOS (amd64)
+          ### macOS (amd64)
           
           **DMG Installer (Recommended)**
-          - `simdokpol-macos-amd64-vVERSION-installer.dmg`
+          - [`simdokpol-macos-amd64-v${{ needs.prepare.outputs.version }}-installer.dmg`](simdokpol-macos-amd64-v${{ needs.prepare.outputs.version }}-installer.dmg)
             - ✅ Drag & drop ke Applications
-            - ✅ macOS App Bundle native
-            - ✅ Icon aplikasi terintegrasi
-            - ✅ Compatible dengan Intel & Apple Silicon (via Rosetta 2)
+            - ✅ Native macOS App Bundle
           
           **Portable**
-          - `simdokpol-macos-amd64-vVERSION-portable.zip`
-            - 📁 Extract & run SIMDOKPOL.app
+          - [`simdokpol-macos-amd64-v${{ needs.prepare.outputs.version }}-portable.zip`](simdokpol-macos-amd64-v${{ needs.prepare.outputs.version }}-portable.zip)
           
           ---
           
-          ### 🔐 Verifikasi Integritas
+          ## 🔐 Verifikasi Integritas
           
-          Gunakan file `checksums.txt` untuk memverifikasi integritas file yang diunduh:
+          Download file [`checksums.txt`](checksums.txt) untuk memverifikasi integritas:
           
-          **Linux/macOS:**
           ```bash
+          # Linux/macOS
           sha256sum -c checksums.txt
-          ```
           
-          **Windows (PowerShell):**
-          ```powershell
+          # Windows PowerShell
           Get-Content checksums.txt | ForEach-Object {
               $hash, $file = $_ -split '\s+', 2
               $computed = (Get-FileHash $file -Algorithm SHA256).Hash.ToLower()
@@ -1045,89 +1049,97 @@ jobs:
           
           ---
           
-          ### 📝 Petunjuk Instalasi
+          ## 📚 Dokumentasi
           
-          #### Windows
-          1. Download installer `.exe`
-          2. Jalankan installer (Klik kanan → Run as Administrator jika perlu)
-          3. Ikuti wizard instalasi
-          4. Jalankan dari Start Menu atau Desktop shortcut
-          
-          #### Linux (DEB/RPM)
-          1. Download package sesuai distro
-          2. Install menggunakan package manager
-          3. Jalankan dari Application Menu atau terminal: `simdokpol`
-          
-          #### macOS
-          1. Download file `.dmg`
-          2. Buka DMG dan drag SIMDOKPOL.app ke Applications
-          3. Jalankan dari Launchpad atau Applications folder
-          4. Jika muncul warning "from unidentified developer":
-             - Buka System Preferences → Security & Privacy
-             - Klik "Open Anyway"
-          
-          ---
-          
-          ### 🚀 Menjalankan Aplikasi
-          
-          Setelah instalasi selesai, aplikasi akan:
-          - Otomatis membuka browser dan menampilkan halaman aplikasi
-          - Berjalan di background dengan icon di system tray
-          - Menampilkan notifikasi saat siap digunakan
-          - Generate file `.env` dengan JWT secret yang aman secara otomatis
-          - Membuat folder backups untuk database
-          
-          **Setup Pertama Kali:**
-          - Anda akan diarahkan ke halaman setup untuk membuat akun admin pertama
-          - Ikuti wizard setup yang mudah dan intuitif
-          - File `.env` akan dibuat otomatis dengan konfigurasi keamanan yang optimal
-          
-          ---
-          
-          ### 🆘 Troubleshooting
-          
-          **Port 8080 sudah digunakan?**
-          - Edit file `.env` di folder instalasi aplikasi
-          - Ganti `PORT=8080` ke port lain (misal `PORT=8081`)
-          - Restart aplikasi
-          
-          **Aplikasi tidak muncul di system tray?**
-          - Windows: Cek Windows Notification Settings dan pastikan aplikasi diizinkan
-          - Linux: Pastikan ekstensi AppIndicator terinstall
-          - macOS: Periksa System Preferences → Notifications
-          
-          **File .env tidak ditemukan?**
-          - Aplikasi akan membuat file `.env` secara otomatis saat pertama kali dijalankan
-          - Jika file hilang atau rusak, hapus dan restart aplikasi untuk regenerasi otomatis
-          
-          ---
-          
-          ### 📚 Dokumentasi & Support
-          
-          - 📖 **Dokumentasi Lengkap**: [README.md](https://github.com/muhammad1505/simdokpol)
-          - 🐛 **Laporkan Bug**: [Issues](https://github.com/muhammad1505/simdokpol/issues)
-          - 💬 **Diskusi & Pertanyaan**: [Discussions](https://github.com/muhammad1505/simdokpol/discussions)
-          - 📧 **Kontak**: emailbaruku50@gmail.com
-          
-          ---
+          - [Main Repository](https://github.com/muhammad1505/simdokpol)
+          - [Issues](https://github.com/muhammad1505/simdokpol/issues)
+          - [Wiki](https://github.com/muhammad1505/simdokpol/wiki)
           
           **Terima kasih telah menggunakan SIMDOKPOL!** 🙏
-          
-          Jika aplikasi ini membantu pekerjaan Anda, pertimbangkan untuk memberikan ⭐ star di repository ini!
           NOTESEOF
-          
-          sed -i "s/VERSION/${{ needs.prepare.outputs.version }}/g" release-notes.md
 
-      - name: Create GitHub Release in Release Repository
-        uses: softprops/action-gh-release@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          # Mengarahkan release ke repository release
-          repository: ${{ env.RELEASE_REPO }}
-          tag_name: v${{ needs.prepare.outputs.version }}
-          name: SIMDOKPOL v${{ needs.prepare.outputs.version }}
-          body_path: release-notes.md
-          files: release-assets/*
-          draft: false
-          prerelease: false
+      - name: Update main README
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          
+          cd release-repo
+          
+          if [ -f "README.md" ]; then
+            cp README.md README.md.bak
+          fi
+          
+          cat > README.md << 'MAINREADME'
+          # SIMDOKPOL Release Repository
+          
+          Repository ini berisi semua rilis binary SIMDOKPOL untuk berbagai platform.
+          
+          ## 🎯 Latest Release
+          
+          **v${{ needs.prepare.outputs.version }}** - [Download](v${{ needs.prepare.outputs.version }}/)
+          
+          ---
+          
+          ## 📥 Cara Download
+          
+          1. Pilih versi yang ingin diunduh (folder `vX.X.X`)
+          2. Pilih file sesuai platform Anda:
+             - **Windows**: File `.exe` (installer) atau `.zip` (portable)
+             - **Linux**: File `.deb`, `.rpm`, atau `.tar.gz`
+             - **macOS**: File `.dmg` (installer) atau `.zip` (portable)
+          3. Verifikasi integritas dengan file `checksums.txt`
+          
+          ---
+          
+          ## 📋 Daftar Versi
+          
+          MAINREADME
+          
+          echo "" >> README.md
+          for dir in v*/; do
+            if [ -d "$dir" ]; then
+              version=${dir%/}
+              echo "- [${version}](${version}/)" >> README.md
+            fi
+          done | sort -rV >> README.md
+          
+          cat >> README.md << 'MAINREADME'
+          
+          ---
+          
+          ## 🔗 Links
+          
+          - **Source Code**: [github.com/muhammad1505/simdokpol](https://github.com/muhammad1505/simdokpol)
+          - **Issues**: [Report Bug](https://github.com/muhammad1505/simdokpol/issues)
+          - **Documentation**: [Wiki](https://github.com/muhammad1505/simdokpol/wiki)
+          
+          ---
+          
+          ## 📄 License
+          
+          Lihat [LICENSE](https://github.com/muhammad1505/simdokpol/blob/main/LICENSE) di repository utama.
+          
+          **SIMDOKPOL** - Sistem Informasi Manajemen Dokumen Kepolisian
+          MAINREADME
+
+      - name: Commit and push to release repository
+        run: |
+          cd release-repo
+          
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          
+          git add .
+          
+          VERSION="${{ needs.prepare.outputs.version }}"
+          git commit -m "Release v${VERSION}" || echo "No changes to commit"
+          
+          git push origin main
+
+      - name: Create tag in release repository
+        run: |
+          cd release-repo
+          
+          VERSION="${{ needs.prepare.outputs.version }}"
+          
+          git tag -a "v${VERSION}" -m "Release v${VERSION}"
+          git push origin "v${VERSION}" || echo "Tag already exists"
