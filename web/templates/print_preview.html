@@ -5,6 +5,103 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Pratinjau Cetak - {{ .Document.NomorSurat }}</title>
         <script src="/static/vendor/tailwindcss/tailwind.min.js"></script>
+        <style>
+            /* Font Courier untuk meniru gaya mesin ketik dinas */
+            body {
+                font-family: "Courier New", Courier, monospace;
+                line-height: 1.3;
+                color: #000;
+                font-size: 11pt;
+                background-color: #f3f4f6;
+            }
+
+            /* Simulasi Kertas A4 */
+            .container-A4 {
+                width: 210mm;
+                min-height: 297mm;
+                /* Margin sesuai pdf_generator.go: Kiri 25mm, Atas 15mm, Kanan 15mm */
+                padding: 15mm 15mm 15mm 25mm; 
+                margin: 2rem auto;
+                border: 1px #d1d5db solid;
+                background: white;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                position: relative;
+                box-sizing: border-box;
+            }
+
+            /* Helper untuk Garis Putus-putus Otomatis (Smart Filler) */
+            .dashed-line-container {
+                display: flex;
+                align-items: baseline;
+                width: 100%;
+                overflow: hidden;
+            }
+            
+            .dashed-text {
+                white-space: pre-wrap; /* Biarkan teks wrap jika panjang */
+                margin-right: 2px;
+            }
+
+            .dashed-fill {
+                flex-grow: 1;
+                border-bottom: 1px dashed #000;
+                margin-bottom: 4px; /* Sesuaikan posisi garis dengan baseline text */
+                min-width: 20px; /* Minimal panjang garis */
+            }
+
+            /* Garis Kop Surat (Double Line) */
+            .header-line {
+                border-top: 2px solid black; /* Garis tebal */
+                border-bottom: 1px solid black; /* Garis tipis */
+                height: 2px; /* Jarak antar garis */
+                margin-top: 2px;
+                margin-bottom: 10px;
+            }
+
+            /* Toolbar tombol (Disembunyikan saat print) */
+            .toolbar {
+                width: 210mm;
+                margin: 1rem auto;
+                display: flex;
+                justify-content: center;
+                gap: 10px;
+            }
+            
+            .btn {
+                padding: 8px 16px;
+                border-radius: 4px;
+                font-family: sans-serif;
+                font-size: 14px;
+                font-weight: bold;
+                text-decoration: none;
+                cursor: pointer;
+                transition: background 0.2s;
+            }
+            .btn-blue { background: #2563eb; color: white; }
+            .btn-red { background: #dc2626; color: white; }
+            .btn-gray { background: #4b5563; color: white; }
+            .btn:hover { opacity: 0.9; }
+
+            /* Pengaturan Print */
+            @media print {
+                body { background: white; margin: 0; }
+                .container-A4 {
+                    width: 100%;
+                    height: auto;
+                    margin: 0;
+                    padding: 15mm 15mm 15mm 25mm !important; /* Paksa margin */
+                    border: none;
+                    box-shadow: none;
+                }
+                .toolbar { display: none; }
+                @page {
+                    size: A4;<!doctype html>
+<html lang="id">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Pratinjau Cetak - {{ .Document.NomorSurat }}</title>
+        <script src="/static/vendor/tailwindcss/tailwind.min.js"></script>
         <link href="/static/css/custom.css" rel="stylesheet" />
         <style>
             body {
@@ -305,6 +402,132 @@
                         </p>
                     </div>
                 </div>
+            </div>
+        </div>
+    </body>
+</html>
+                    margin: 0; /* Kita atur margin via padding .container-A4 */
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="toolbar">
+            <a class="btn btn-red" href="/api/documents/{{ .Document.ID }}/pdf" target="_blank">
+                ⬇ Download PDF (Presisi)
+            </a>
+            <button class="btn btn-blue" onclick="window.print()">
+                🖨 Cetak Halaman Ini
+            </button>
+            <a class="btn btn-gray" href="/documents">Kembali</a>
+        </div>
+
+        <div class="container-A4">
+            
+            <div class="relative mb-2">
+                <div class="absolute inset-x-0 top-0 flex justify-center pointer-events-none">
+                    <img src="/static/img/logo.png" alt="Logo" style="width: 80px; height: auto; margin-top: -5px;">
+                </div>
+
+                <div class="relative z-10">
+                    <p class="text-xs">{{ .Config.KopBaris1 }}</p>
+                    <p class="text-sm font-bold">{{ .Config.KopBaris2 }}</p>
+                    <p class="text-sm font-bold">{{ .Config.KopBaris3 }}</p>
+                    <p class="text-xs">{{ .Config.NamaKantor }}</p>
+                </div>
+            </div>
+
+            <div class="header-line"></div>
+
+            <div class="text-center mb-6 mt-4">
+                <p class="font-bold underline text-lg tracking-wide">SURAT KETERANGAN HILANG</p>
+                <p class="text-sm">Nomor: {{ .Document.NomorSurat }}</p>
+            </div>
+
+            <div class="text-sm text-justify leading-relaxed">
+                
+                <div class="dashed-line-container mb-2">
+                    <span class="dashed-text">----- Yang bertanda tangan dibawah ini A.n. KEPALA KEPOLISIAN {{ .Config.KopBaris3| ToUpper }}, Menerangkan dengan benar bahwa :</span>
+                    <span class="dashed-fill"></span>
+                </div>
+
+                <div class="ml-8 mb-2">
+                    <table class="w-full border-collapse">
+                        <tr><td class="w-32 align-top">Nama</td><td class="w-4 align-top">:</td><td class="font-bold">{{ .Document.Resident.NamaLengkap | ToUpper }}</td></tr>
+                        <tr><td class="align-top">TTL</td><td class="align-top">:</td><td>{{ .Document.Resident.TempatLahir }}, {{ .Document.Resident.TanggalLahir.Format "02 January 2006" }}</td></tr>
+                        <tr><td class="align-top">Agama</td><td class="align-top">:</td><td>{{ .Document.Resident.Agama }}</td></tr>
+                        <tr><td class="align-top">Jenis kelamin</td><td class="align-top">:</td><td>{{ .Document.Resident.JenisKelamin }}</td></tr>
+                        <tr><td class="align-top">Pekerjaan</td><td class="align-top">:</td><td>{{ .Document.Resident.Pekerjaan }}</td></tr>
+                        <tr><td class="align-top">Alamat</td><td class="align-top">:</td><td>{{ .Document.Resident.Alamat }}</td></tr>
+                    </table>
+                </div>
+
+                <div class="dashed-line-container mb-2">
+                    <span class="dashed-text">Yang bersangkutan tersebut di atas benar telah datang di Kantor {{ .Config.NamaKantor }} dan melaporkan bahwa telah kehilangan surat berharga berupa :</span>
+                    <span class="dashed-fill"></span>
+                </div>
+
+                <div class="ml-4 space-y-1 mb-4">
+                    {{range .Document.LostItems}}
+                    <div class="dashed-line-container">
+                        <span class="dashed-text">- 1 (Buah) {{ .NamaBarang | ToUpper }} Dengan No : {{ .Deskripsi }} A.n Pelapor</span>
+                        <span class="dashed-fill"></span>
+                    </div>
+                    {{end}}
+                </div>
+
+                <div class="dashed-line-container mb-6">
+                    <span class="dashed-text">----- Surat/kartu tersebut hilang di sekitar {{ .Document.LokasiHilang }}, dan sudah dilakukan pencarian namun sampai dikeluarkan Surat Keterangan ini belum ditemukan.</span>
+                    <span class="dashed-fill"></span>
+                </div>
+
+                <div class="flex justify-end mb-4">
+                    <div class="text-center w-64">
+                        <p class="mb-10">Yang Bermohon</p> <p class="font-bold underline">{{ .Document.Resident.NamaLengkap | ToUpper }}</p>
+                    </div>
+                </div>
+
+                <div class="dashed-line-container mb-2">
+                    <span class="dashed-text">----- Demikian Surat Keterangan ini dibuat dengan sebenar-benarnya dan dapat dipergunakan sebagaimana perlunya.</span>
+                    <span class="dashed-fill"></span>
+                </div>
+
+                <div class="mb-8">
+                    <p class="font-bold underline mb-1">Tindakan Yang Diambil :</p>
+                    <ol class="list-decimal ml-8 space-y-1">
+                        <li>Menerima laporan dan membuat Surat Keterangan Kehilangan barang guna seperlunya;</li>
+                        <li>Surat keterangan kehilangan ini berlaku selama {{ .Config.ArchiveDurationDays }} ({{ .ArchiveDaysWords }}) hari, berlaku mulai tanggal dikeluarkan;</li>
+                        <li>
+                            <div class="dashed-line-container inline-flex align-bottom w-full">
+                                <span class="dashed-text">Surat Keterangan ini bukan sebagai pengganti surat yang hilang tetapi berguna untuk mengurus kembali surat yang hilang.</span>
+                                <span class="dashed-fill"></span>
+                            </div>
+                        </li>
+                    </ol>
+                </div>
+
+                <div class="grid grid-cols-2 gap-8 text-center text-sm">
+                    <div>
+                        <p>a.n. KEPALA KEPOLISIAN {{ .Config.KopBaris3 | ToUpper }}</p>
+                        <p>{{ .Document.PejabatPersetuju.Jabatan }} 
+                           {{ if ne .Document.PejabatPersetuju.Regu "-" }} {{ .Document.PejabatPersetuju.Regu }} {{ end }}
+                        </p>
+                        <div class="h-20"></div> <p class="font-bold underline">{{ .Document.PejabatPersetuju.NamaLengkap | ToUpper }}</p>
+                        <p>{{ .Document.PejabatPersetuju.Pangkat }} NRP {{ .Document.PejabatPersetuju.NRP }}</p>
+                    </div>
+
+                    <div>
+                        <p class="mb-2">{{ .Config.TempatSurat }}, {{ .Document.TanggalLaporan.Format "02 January 2006" }}</p>
+                        
+                        <p>Penerima Laporan</p>
+                        <p>{{ .Document.PetugasPelapor.Jabatan }} 
+                           {{ if ne .Document.PetugasPelapor.Regu "-" }} {{ .Document.PetugasPelapor.Regu }} {{ end }}
+                        </p>
+                        <div class="h-20"></div> <p class="font-bold underline">{{ .Document.PetugasPelapor.NamaLengkap | ToUpper }}</p>
+                        <p>{{ .Document.PetugasPelapor.Pangkat }} NRP {{ .Document.PetugasPelapor.NRP }}</p>
+                    </div>
+                </div>
+
             </div>
         </div>
     </body>
