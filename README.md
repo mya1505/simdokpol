@@ -9,7 +9,7 @@
 
 **Solusi Manajemen Dokumen Kepolisian yang Modern, Aman, dan Efisien**
 
-[📥 Download](#memulai) • [📖 Dokumentasi](https://github.com/muhammad1505/simdokpol/wiki) • [🐛 Laporkan Bug](https://github.com/muhammad1505/simdokpol/issues) • [💬 Diskusi](https://github.com/muhammad1505/simdokpol/discussions)
+[📥 Download](#memulai) • [📖 Dokumentasi](https://github.com/mya1505/simdokpol/wiki) • [🐛 Laporkan Bug](https://github.com/mya1505/simdokpol/issues) • [💬 Diskusi](https://github.com/mya1505/simdokpol/discussions)
 
 </div>
 
@@ -51,8 +51,8 @@ Menghasilkan laporan PDF profesional yang berisi analisis statistik mendalam ten
 ### 🔄 Migrasi Data Streaming *(Fitur Profesional)*
 Alat migrasi bawaan memfasilitasi perpindahan data yang aman dari SQLite ke MySQL atau PostgreSQL dengan progress monitoring real-time. Proses streaming memastikan integritas data terjaga dan meminimalkan downtime selama transisi infrastruktur.
 
-### 🔐 Sistem Lisensi Terenkripsi
-Implementasi freemium model dengan aktivasi fitur profesional melalui serial key yang diamankan menggunakan Hardware ID dan HMAC signature. Mekanisme ini mencegah penggunaan tidak sah dan memastikan setiap lisensi terikat pada perangkat spesifik.
+### 🔐 Sistem Lisensi Terenkripsi (Offline)
+Freemium model dengan activation code berbasis ECDSA (Base64URL) yang terikat pada Hardware ID, diverifikasi offline di perangkat (tanpa internet). Mekanisme ini mencegah penggunaan tidak sah dan tidak memerlukan server lisensi.
 
 ### 📄 Generasi Dokumen Presisi Tinggi
 Ekspor dokumen ke format PDF dengan kualitas cetak profesional menggunakan rendering server-side yang konsisten. Fitur profesional menyediakan ekspor tambahan ke format Excel untuk kebutuhan analisis data dan reporting yang lebih fleksibel.
@@ -69,8 +69,24 @@ Fungsi hot-backup untuk database SQLite memungkinkan pencadangan data tanpa meng
 ### 🔒 Mode HTTPS Secure
 Dukungan enkripsi SSL lokal dengan fitur auto-install certificate ke Windows Trusted Root Store. Implementasi ini memastikan komunikasi antara browser dan aplikasi terenkripsi penuh, melindungi data sensitif dari intersepsi jaringan.
 
+### ⚡ Optimasi Performa & Paging
+Server-side pagination dengan batas aman, limit pencarian global, preload yang efisien, dan indeks database siap pakai untuk SQLite/MySQL/PostgreSQL agar tetap ringan di data besar.
+
 ### 🔄 Update Checker Otomatis
 Sistem secara otomatis memeriksa ketersediaan versi terbaru dari GitHub releases dan memberikan notifikasi kepada administrator. Fitur ini memastikan organisasi selalu mendapatkan patch keamanan dan peningkatan fitur terkini.
+
+---
+
+## 🧭 Menu & Alur Utama
+
+- **Dashboard**: ringkasan statistik, grafik, dan shortcut aksi cepat.
+- **Dokumen Kehilangan**: CRUD, pencarian global, server-side paging, PDF/Excel export, dan cetak.
+- **Template Barang**: daftar & editor template barang (Pro) dengan drag-and-drop.
+- **Laporan & Print Preview**: laporan agregat PDF, preview cetak, dan ekspor Excel (Pro).
+- **Pengguna & Audit Log**: manajemen user RBAC, log aktivitas dengan filter dan ekspor.
+- **Backup & Migrasi**: backup/restore SQLite, migrasi ke MySQL/PostgreSQL, test koneksi DB.
+- **Pengaturan Sistem**: kop surat, format nomor surat, HTTPS toggle, domain/vhost, durasi arsip.
+- **Upgrade & Tentang**: info lisensi, Hardware ID (copy/paste), aktivasi kode Pro, panduan & kontak.
 
 ---
 
@@ -143,7 +159,7 @@ Pipeline packaging menggunakan NSIS untuk Windows installer dengan custom brandi
 
 ### 💿 Instalasi untuk Pengguna Akhir
 
-Unduh installer terbaru yang sesuai dengan sistem operasi dari halaman [Releases](https://github.com/muhammad1505/simdokpol-release/releases) resmi kami.
+Unduh installer terbaru yang sesuai dengan sistem operasi dari halaman [Releases](https://github.com/mya1505/simdokpol/releases) resmi kami.
 
 **🪟 Windows**
 Jalankan file installer dengan format `SIMDOKPOL-windows-x64-vX.X.X-installer.exe` menggunakan hak akses administrator. Wizard instalasi akan memandu proses setup termasuk pemilihan direktori instalasi dan pembuatan shortcut. Setelah instalasi selesai, aplikasi dapat diakses melalui Desktop shortcut atau Start Menu.
@@ -177,7 +193,7 @@ Pengembangan memerlukan Go versi 1.23 atau lebih tinggi yang dapat diunduh dari 
 
 Kloning repository dan navigasi ke direktori proyek:
 ```bash
-git clone https://github.com/muhammad1505/simdokpol.git
+git clone https://github.com/mya1505/simdokpol.git
 cd simdokpol
 ```
 
@@ -279,7 +295,7 @@ Arsitektur backend dan frontend yang bersih dengan separation of concerns yang j
 Kustomisasi template barang dengan editor drag-and-drop visual memungkinkan administrator menyesuaikan formulir tanpa coding. Pembuatan laporan agregat PDF dengan analisis statistik komprehensif mendukung kebutuhan reporting manajemen. Alat migrasi data streaming antar database dengan progress monitoring real-time memfasilitasi transisi infrastruktur yang aman.
 
 **Sistem Keamanan & Lisensi**
-Implementasi sistem lisensi freemium dengan HMAC-secured hardware binding mencegah penggunaan tidak sah. Update checker otomatis via GitHub releases memastikan sistem selalu up-to-date dengan security patches terbaru. HTTPS secure mode dengan auto-install certificate ke system trust store melindungi komunikasi dari intersepsi.
+Implementasi sistem lisensi freemium dengan activation code ECDSA terikat Hardware ID dan diverifikasi offline, mencegah penggunaan tidak sah tanpa perlu server lisensi. Update checker otomatis via GitHub releases memastikan sistem selalu up-to-date dengan security patches terbaru. HTTPS secure mode dengan auto-install certificate ke system trust store melindungi komunikasi dari intersepsi.
 
 **Manajemen Dokumen & Pengguna**
 Alur kerja surat keterangan hilang dengan CRUD operations lengkap dan validation rules yang ketat. Autentikasi dan otorisasi berbasis peran dengan pembagian hak akses yang granular. Manajemen pengguna komprehensif dengan capabilities untuk create, update, activate, dan deactivate accounts.
@@ -368,7 +384,7 @@ Untuk pertanyaan teknis lain atau issues yang tidak tercakup dalam guide ini, si
 
 Proyek ini dilisensikan di bawah ketentuan MIT License yang memberikan kebebasan untuk menggunakan, memodifikasi, dan mendistribusikan software ini dengan minimal restrictions. Lisensi MIT dipilih untuk mendorong kolaborasi open-source dan memungkinkan organisasi kepolisian untuk mengadaptasi software sesuai kebutuhan spesifik mereka tanpa hambatan legal yang kompleks.
 
-Untuk membaca teks lengkap lisensi termasuk disclaimer of warranty dan limitation of liability, silakan rujuk ke file [LICENSE](https://github.com/muhammad1505/simdokpol/blob/main/LICENSE) yang tersedia di repository root. Dengan menggunakan software ini, pengguna dianggap telah membaca dan menyetujui seluruh terms and conditions yang tercantum dalam lisensi.
+Untuk membaca teks lengkap lisensi termasuk disclaimer of warranty dan limitation of liability, silakan rujuk ke file [LICENSE](https://github.com/mya1505/simdokpol/blob/main/LICENSE) yang tersedia di repository root. Dengan menggunakan software ini, pengguna dianggap telah membaca dan menyetujui seluruh terms and conditions yang tercantum dalam lisensi.
 
 ---
 
@@ -380,7 +396,7 @@ Proyek SIMDOKPOL dikembangkan dengan dedikasi penuh untuk memberikan solusi terb
 
 Kami menyambut kontribusi dari komunitas developer dan praktisi kepolisian untuk terus meningkatkan kualitas aplikasi. Kontribusi dapat berupa pelaporan bug yang ditemukan, saran fitur baru yang dibutuhkan, perbaikan dokumentasi untuk kejelasan, atau pull request untuk implementasi fitur. Setiap kontribusi akan direview dengan teliti dan diapresiasi sebagai bagian dari upaya kolektif untuk meningkatkan efisiensi layanan kepolisian.
 
-Untuk melihat daftar lengkap kontributor yang telah berpartisipasi dalam pengembangan proyek ini, silakan kunjungi halaman [Contributors](https://github.com/muhammad1505/simdokpol/graphs/contributors) di repository GitHub kami. Kami berterima kasih kepada setiap individu yang telah meluangkan waktu dan keahliannya untuk membuat SIMDOKPOL menjadi lebih baik.
+Untuk melihat daftar lengkap kontributor yang telah berpartisipasi dalam pengembangan proyek ini, silakan kunjungi halaman [Contributors](https://github.com/mya1505/simdokpol/graphs/contributors) di repository GitHub kami. Kami berterima kasih kepada setiap individu yang telah meluangkan waktu dan keahliannya untuk membuat SIMDOKPOL menjadi lebih baik.
 
 ---
 
@@ -424,7 +440,7 @@ Untuk masalah yang dikategorikan sebagai critical dan memerlukan penanganan sege
 
 Selain dukungan langsung, kami juga menyediakan berbagai sumber daya pembelajaran yang dapat diakses secara mandiri untuk memaksimalkan penggunaan aplikasi.
 
-Dokumentasi lengkap tersedia di [Wiki GitHub](https://github.com/muhammad1505/simdokpol/wiki) yang mencakup panduan instalasi step-by-step untuk setiap platform, penjelasan fitur komprehensif dengan screenshot ilustratif, best practices untuk keamanan dan backup, troubleshooting guide untuk masalah umum, dan API documentation untuk developer yang ingin melakukan integrasi.
+Dokumentasi lengkap tersedia di [Wiki GitHub](https://github.com/mya1505/simdokpol/wiki) yang mencakup panduan instalasi step-by-step untuk setiap platform, penjelasan fitur komprehensif dengan screenshot ilustratif, best practices untuk keamanan dan backup, troubleshooting guide untuk masalah umum, dan API documentation untuk developer yang ingin melakukan integrasi.
 
 Video tutorial yang demonstratif dapat ditemukan di channel YouTube kami yang memuat walkthrough setup awal, tutorial penggunaan fitur-fitur utama, tips dan trik produktivitas, dan session recording dari webinar yang pernah dilaksanakan.
 
@@ -452,7 +468,7 @@ Terima kasih kepada seluruh pengguna yang telah mempercayai SIMDOKPOL sebagai so
 
 **Dikembangkan dengan dedikasi untuk Unit Kepolisian Indonesia**
 
-[🌐 Website](https://github.com/muhammad1505/simdokpol) • [📖 Dokumentasi](https://github.com/muhammad1505/simdokpol/wiki) • [📥 Releases](https://github.com/muhammad1505/simdokpol/releases) • [📋 Changelog](https://github.com/muhammad1505/simdokpol/blob/main/CHANGELOG.md)
+[🌐 Website](https://github.com/mya1505/simdokpol) • [📖 Dokumentasi](https://github.com/mya1505/simdokpol/wiki) • [📥 Releases](https://github.com/mya1505/simdokpol/releases) • [📋 Changelog](https://github.com/mya1505/simdokpol/blob/main/CHANGELOG.md)
 
 ---
 
