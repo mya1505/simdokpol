@@ -117,7 +117,17 @@ func (c *LostDocumentController) FindByID(ctx *gin.Context) {
 // @Router /search [get]
 func (c *LostDocumentController) SearchGlobal(ctx *gin.Context) {
 	query := ctx.Query("q")
-	documents, err := c.docService.SearchGlobal(query)
+
+	limitStr := ctx.DefaultQuery("limit", "50")
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		limit = 50
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	documents, err := c.docService.SearchGlobal(query, limit)
 	if err != nil {
 		APIError(ctx, http.StatusInternalServerError, "Gagal melakukan pencarian dokumen.")
 		return

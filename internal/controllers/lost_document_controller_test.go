@@ -306,7 +306,7 @@ func TestLostDocumentController_SearchGlobal(t *testing.T) {
 			userInContext: adminUser,
 			query:         "?q=Budi",
 			mockSetup: func(mockSvc *mocks.LostDocumentService) {
-				mockSvc.On("SearchGlobal", "Budi").Return(mockDocs, nil).Once()
+				mockSvc.On("SearchGlobal", "Budi", 50).Return(mockDocs, nil).Once()
 			},
 			expectedStatusCode: http.StatusOK,
 		},

@@ -48,7 +48,7 @@ $(document).ready(function() {
         const key = $input.val().trim();
         
         if (key.length < 20) { 
-            Swal.fire('Format Salah', 'Serial Key tampaknya terlalu pendek.', 'warning');
+            Swal.fire('Format Salah', 'Activation Code tampaknya terlalu pendek.', 'warning');
             return;
         }
 
@@ -65,9 +65,9 @@ $(document).ready(function() {
                 Swal.fire({
                     icon: 'success',
                     title: 'Aktivasi Berhasil!',
-                    html: 'Fitur Pro terbuka. Sistem sedang dimuat ulang...<br>Mohon tunggu.',
+                    html: 'Fitur Pro terbuka. Mengalihkan ke halaman Tentang...',
                     allowOutsideClick: false,
-                    timer: 5000, 
+                    timer: 3000, 
                     timerProgressBar: true,
                     didOpen: () => {
                         Swal.showLoading();
@@ -76,7 +76,7 @@ $(document).ready(function() {
                         clearInterval(timerInterval);
                     }
                 }).then(() => {
-                    window.location.reload(); 
+                    window.location.href = "/tentang";
                 });
             },
             error: function(jqXHR) {

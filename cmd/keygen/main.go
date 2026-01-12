@@ -2,58 +2,33 @@ package main
 
 import (
 	"bufio"
-	"crypto/hmac"
+	"crypto/ecdsa"
 	"crypto/sha256"
-	"encoding/base32"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"simdokpol/internal/utils" // Import Utils untuk dapat path folder
-
-	"github.com/joho/godotenv" // Import Dotenv
+	"simdokpol/internal/utils"
 )
 
-// Variabel ini KOSONG defaultnya.
-var appSecretKey = ""
-
 func main() {
-	// 1. SETUP ENV (Baca file .env dari folder config)
-	envPath := filepath.Join(utils.GetAppDataDir(), ".env")
-	_ = godotenv.Overload(envPath)
-
-	// 2. PARSE FLAGS
-	secretFlag := flag.String("secret", "", "App Secret Key manual (opsional)")
+	// 1. PARSE FLAGS
+	privateKeyPath := flag.String("key", "", "Path private key PEM (opsional)")
 	flag.Parse()
 
-	// 3. RESOLUSI SECRET KEY (Prioritas: Flag -> Env -> LDFLAGS)
-	if *secretFlag != "" {
-		appSecretKey = *secretFlag
-	}
-
-	if appSecretKey == "" {
-		// Coba ambil dari Environment (yang sudah di-load dari file .env)
-		appSecretKey = os.Getenv("APP_SECRET_KEY")
-	}
-
-	// 4. VALIDASI AKHIR
-	if appSecretKey == "" {
-		fmt.Println("❌ CRITICAL ERROR: Secret Key tidak ditemukan!")
-		fmt.Printf("   File .env di '%s' tidak memiliki APP_SECRET_KEY.\n", envPath)
-		fmt.Println("   Solusi: Jalankan aplikasi utama (simdokpol) dulu minimal sekali untuk generate key.")
-		os.Exit(1)
-	}
+	keyPath := resolvePrivateKeyPath(*privateKeyPath)
+	privateKey, keyHash := loadPrivateKey(keyPath)
 
 	reader := bufio.NewReader(os.Stdin)
 
 	fmt.Println(strings.Repeat("=", 60))
-	fmt.Println("   SIMDOKPOL KEY GENERATOR (SMART MODE)")
+	fmt.Println("   SIMDOKPOL KEY GENERATOR (OFFLINE)")
 	fmt.Println(strings.Repeat("=", 60))
 	// Tampilkan fingerprint key biar Admin yakin ini key yang benar
-	fmt.Printf("📁 Config Source : %s\n", envPath)
-	fmt.Printf("🔑 Key Checksum  : %s...\n", sha256Sum(appSecretKey)) 
+	fmt.Printf("📁 Private Key    : %s\n", keyPath)
+	fmt.Printf("🔑 Key Checksum   : %s...\n", keyHash)
 	fmt.Println(strings.Repeat("-", 60))
 
 	fmt.Print("👉 Masukkan Hardware ID User: ")
@@ -65,29 +40,51 @@ func main() {
 		return
 	}
 
-	// Generate Logic (HMAC-SHA256)
-	h := hmac.New(sha256.New, []byte(appSecretKey))
-	h.Write([]byte(hwid))
-	hash := h.Sum(nil)
-
-	truncatedHash := hash[:15]
-	rawKey := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(truncatedHash)
-
-	var formattedKey strings.Builder
-	for i, r := range rawKey {
-		if i > 0 && i%5 == 0 {
-			formattedKey.WriteRune('-')
-		}
-		formattedKey.WriteRune(r)
+	formattedKey, err := utils.SignActivationKey(hwid, privateKey)
+	if err != nil {
+		fmt.Printf("❌ Error: Gagal generate key: %v\n", err)
+		return
 	}
 
 	fmt.Println("\n✅ SERIAL KEY VALID:")
 	fmt.Println("--------------------------------------------------")
-	fmt.Println(formattedKey.String())
+	fmt.Println(formattedKey)
 	fmt.Println("--------------------------------------------------")
 }
 
-func sha256Sum(s string) string {
-	h := sha256.Sum256([]byte(s))
+func sha256Sum(b []byte) string {
+	h := sha256.Sum256(b)
 	return fmt.Sprintf("%x", h[:8])
+}
+
+func resolvePrivateKeyPath(flagPath string) string {
+	if flagPath != "" {
+		return flagPath
+	}
+
+	if envPath := os.Getenv("LICENSE_PRIVATE_KEY"); envPath != "" {
+		return envPath
+	}
+
+	if _, err := os.Stat("private.pem"); err == nil {
+		return "private.pem"
+	}
+
+	return filepath.Join(utils.GetAppDataDir(), "private.pem")
+}
+
+func loadPrivateKey(path string) (*ecdsa.PrivateKey, string) {
+	pemBytes, err := os.ReadFile(path)
+	if err != nil {
+		fmt.Printf("❌ CRITICAL ERROR: Gagal membaca private key: %v\n", err)
+		os.Exit(1)
+	}
+
+	privateKey, err := utils.ParsePrivateKeyPEM(pemBytes)
+	if err != nil {
+		fmt.Printf("❌ CRITICAL ERROR: Private key tidak valid: %v\n", err)
+		os.Exit(1)
+	}
+
+	return privateKey, sha256Sum(pemBytes)
 }

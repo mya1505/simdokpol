@@ -26,7 +26,7 @@ type LostDocumentRepository interface {
 	// Update Signature: Tambah userID dan userRole
 	FindAllPaged(req dto.DataTableRequest, statusFilter string, archiveDurationDays int, userID uint, userRole string) ([]models.LostDocument, int64, int64, error)
 	
-	SearchGlobal(query string) ([]models.LostDocument, error)
+	SearchGlobal(query string, limit int) ([]models.LostDocument, error)
 	Update(tx *gorm.DB, doc *models.LostDocument) (*models.LostDocument, error)
 	Delete(tx *gorm.DB, id uint) error
 	GetLastDocumentOfYear(tx *gorm.DB, year int) (*models.LostDocument, error)
@@ -84,6 +84,14 @@ func (r *lostDocumentRepository) FindAllPaged(req dto.DataTableRequest, statusFi
 	var docs []models.LostDocument
 	var total, filtered int64
 
+	limit := req.Length
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
 	db := r.db.Model(&models.LostDocument{})
 
 	// 1. Filter Status Dasar (Active/Archived)
@@ -133,7 +141,7 @@ func (r *lostDocumentRepository) FindAllPaged(req dto.DataTableRequest, statusFi
 		Preload("PetugasPelapor").
 		Preload("PejabatPersetuju").
 		Order(orderClause).
-		Limit(req.Length).
+		Limit(limit).
 		Offset(req.Start).
 		Find(&docs).Error
 
@@ -194,15 +202,23 @@ func (r *lostDocumentRepository) Delete(tx *gorm.DB, id uint) error {
 	return db.Delete(&models.LostDocument{}, id).Error
 }
 
-func (r *lostDocumentRepository) SearchGlobal(query string) ([]models.LostDocument, error) {
+func (r *lostDocumentRepository) SearchGlobal(query string, limit int) ([]models.LostDocument, error) {
 	var docs []models.LostDocument
+
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
 	db := r.db.Preload("Resident").Preload("Operator").Order("tanggal_laporan desc")
 	if query != "" {
 		searchQuery := fmt.Sprintf("%%%s%%", query)
 		db = db.Joins("JOIN residents ON lost_documents.resident_id = residents.id").
 			Where("lost_documents.nomor_surat LIKE ? OR residents.nama_lengkap LIKE ?", searchQuery, searchQuery)
 	}
-	err := db.Find(&docs).Error
+	err := db.Limit(limit).Find(&docs).Error
 	return docs, err
 }
 

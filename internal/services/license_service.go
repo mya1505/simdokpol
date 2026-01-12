@@ -1,9 +1,6 @@
 package services
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base32"
 	"errors"
 	"fmt"
 	"log"
@@ -12,7 +9,6 @@ import (
 	"simdokpol/internal/models"
 	"simdokpol/internal/repositories"
 	"simdokpol/internal/utils"
-	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -52,12 +48,6 @@ func NewLicenseService(licenseRepo repositories.LicenseRepository, configService
 		licenseRepo:   licenseRepo,
 		configService: configService,
 		auditService:  auditService,
-	}
-	
-	// Safety Check: Pastikan Key sudah di-inject
-	if AppSecretKeyString == "" {
-		log.Println("⚠️ WARNING: AppSecretKeyString kosong! Menggunakan fallback dev key (TIDAK AMAN UNTUK PRODUCTION).")
-		AppSecretKeyString = "DEV_FALLBACK_KEY_CHANGE_ME"
 	}
 
 	svc.verifyRuntimeIntegrity()
@@ -101,10 +91,7 @@ func (s *licenseService) IsLicensed() bool {
 
 	// 2. Verifikasi Kriptografi
 	hwid := s.GetHardwareID()
-	expectedSignature := generateSignatureRaw(hwid)
-	cleanInputKey := strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(currentKey, "-", ""), " ", ""))
-
-	if cleanInputKey == expectedSignature {
+	if utils.VerifyActivationKey(hwid, currentKey) {
 		status, _ := s.GetLicenseStatus()
 		if status != LicenseStatusValid {
 			_ = s.configService.SaveConfig(map[string]string{LicenseStatusKey: LicenseStatusValid})
@@ -141,11 +128,10 @@ func (s *licenseService) GetLicenseStatus() (string, error) {
 }
 
 func (s *licenseService) ActivateLicense(inputKey string, actorID uint) (*models.License, error) {
-	cleanInputKey := strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(inputKey, "-", ""), " ", ""))
+	cleanInputKey := utils.NormalizeActivationKey(inputKey)
 	hwid := s.GetHardwareID()
-	expectedSignature := generateSignatureRaw(hwid)
 
-	if cleanInputKey != expectedSignature {
+	if !utils.VerifyActivationKey(hwid, inputKey) {
 		if actorID != 0 {
 			s.auditService.LogActivity(actorID, "GAGAL AKTIVASI", fmt.Sprintf("Key salah. HWID: %s", hwid))
 		}
@@ -178,25 +164,16 @@ func (s *licenseService) ActivateLicense(inputKey string, actorID uint) (*models
 	}
 
 	// Paksa tulis ke .env
-	if err := utils.UpdateEnvFile(map[string]string{EnvLicenseKey: inputKey}); err != nil {
+	formattedKey := utils.FormatActivationKey(cleanInputKey)
+	if err := utils.UpdateEnvFile(map[string]string{EnvLicenseKey: formattedKey}); err != nil {
 		log.Printf("ERROR: Gagal menyimpan lisensi ke file .env: %v", err)
 	} else {
 		log.Println("SUCCESS: Lisensi tersimpan permanen di file .env")
 	}
-	os.Setenv(EnvLicenseKey, inputKey)
+	os.Setenv(EnvLicenseKey, formattedKey)
 
 	if actorID != 0 {
 		s.auditService.LogActivity(actorID, "AKTIVASI LISENSI", "Lisensi PRO berhasil diaktifkan.")
 	}
 	return license, nil
-}
-
-func generateSignatureRaw(data string) string {
-	// Gunakan variabel global dari vars.go
-	h := hmac.New(sha256.New, []byte(AppSecretKeyString))
-	h.Write([]byte(data))
-	hash := h.Sum(nil)
-	truncatedHash := hash[:15]
-	encoded := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(truncatedHash)
-	return encoded
 }

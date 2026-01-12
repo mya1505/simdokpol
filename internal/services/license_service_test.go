@@ -1,14 +1,11 @@
 package services
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base32"
+	"os"
+	"path/filepath"
 	"simdokpol/internal/dto"
 	"simdokpol/internal/mocks"
-	// "simdokpol/internal/models" // <-- HAPUS ATAU KOMENTARI BARIS INI
 	"simdokpol/internal/utils"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,29 +14,42 @@ import (
 )
 
 // Helper generate key
-func generateTestKey(hwid string) string {
-	AppSecretKeyString = "SIMDOKPOL_SECRET_KEY_2025"
+func loadTestPrivateKey(t *testing.T) []byte {
+	t.Helper()
 
-	h := hmac.New(sha256.New, []byte(AppSecretKeyString))
-	h.Write([]byte(hwid))
-	hash := h.Sum(nil)
-	truncatedHash := hash[:15]
-	rawKey := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(truncatedHash)
-	
-	var formattedKey strings.Builder
-	for i, r := range rawKey {
-		if i > 0 && i%5 == 0 {
-			formattedKey.WriteRune('-')
-		}
-		formattedKey.WriteRune(r)
+	paths := []string{
+		"private.pem",
+		filepath.Join("..", "..", "private.pem"),
 	}
-	return formattedKey.String()
+
+	for _, path := range paths {
+		if pemBytes, err := os.ReadFile(path); err == nil {
+			return pemBytes
+		}
+	}
+	t.Fatal("private.pem tidak ditemukan untuk test aktivasi")
+	return nil
+}
+
+func generateTestKey(t *testing.T, hwid string) string {
+	t.Helper()
+
+	pemBytes := loadTestPrivateKey(t)
+	privateKey, err := utils.ParsePrivateKeyPEM(pemBytes)
+	if err != nil {
+		t.Fatalf("gagal parse private key test: %v", err)
+	}
+
+	key, err := utils.SignActivationKey(hwid, privateKey)
+	if err != nil {
+		t.Fatalf("gagal sign activation key test: %v", err)
+	}
+	return key
 }
 
 func TestLicenseService_ActivateLicense(t *testing.T) {
-	AppSecretKeyString = "SIMDOKPOL_SECRET_KEY_2025"
 	realHWID := utils.GetHardwareID()
-	validKey := generateTestKey(realHWID)
+	validKey := generateTestKey(t, realHWID)
 	invalidKey := "AAAAA-BBBBB-CCCCC-DDDDD"
 	actorID := uint(1)
 
@@ -53,7 +63,7 @@ func TestLicenseService_ActivateLicense(t *testing.T) {
 
 		mockRepo.On("GetLicense", mock.AnythingOfType("string")).Return(nil, gorm.ErrRecordNotFound).Once()
 		mockRepo.On("SaveLicense", mock.Anything).Return(nil).Once()
-		
+
 		mockConfig.On("SaveConfig", map[string]string{"license_status": "VALID"}).Return(nil).Once()
 		mockAudit.On("LogActivity", actorID, "AKTIVASI LISENSI", mock.AnythingOfType("string")).Once()
 

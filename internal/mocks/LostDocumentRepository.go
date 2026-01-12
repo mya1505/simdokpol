@@ -41,8 +41,8 @@ func (m *LostDocumentRepository) FindAllPaged(req dto.DataTableRequest, statusFi
 	return args.Get(0).([]models.LostDocument), args.Get(1).(int64), args.Get(2).(int64), args.Error(3)
 }
 
-func (m *LostDocumentRepository) SearchGlobal(query string) ([]models.LostDocument, error) {
-	args := m.Called(query)
+func (m *LostDocumentRepository) SearchGlobal(query string, limit int) ([]models.LostDocument, error) {
+	args := m.Called(query, limit)
 	return args.Get(0).([]models.LostDocument), args.Error(1)
 }
 

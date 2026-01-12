@@ -22,7 +22,7 @@ type LostDocumentService interface {
 	CreateLostDocument(residentData models.Resident, items []models.LostItem, operatorID uint, lokasiHilang string, petugasPelaporID uint, pejabatPersetujuID uint) (*models.LostDocument, error)
 	UpdateLostDocument(docID uint, residentData models.Resident, items []models.LostItem, lokasiHilang string, petugasPelaporID uint, pejabatPersetujuID uint, loggedInUserID uint) (*models.LostDocument, error)
 	FindAll(query string, statusFilter string) ([]models.LostDocument, error)
-	SearchGlobal(query string) ([]models.LostDocument, error)
+	SearchGlobal(query string, limit int) ([]models.LostDocument, error)
 	FindByID(id uint, actorID uint) (*models.LostDocument, error)
 	DeleteLostDocument(id uint, loggedInUserID uint) error
 	ExportDocuments(query string, statusFilter string) (*bytes.Buffer, string, error)
@@ -431,8 +431,8 @@ func (s *lostDocumentService) processDocsStatus(docs []models.LostDocument) ([]m
 	return docs, nil
 }
 
-func (s *lostDocumentService) SearchGlobal(query string) ([]models.LostDocument, error) {
-	docs, err := s.docRepo.SearchGlobal(query)
+func (s *lostDocumentService) SearchGlobal(query string, limit int) ([]models.LostDocument, error) {
+	docs, err := s.docRepo.SearchGlobal(query, limit)
 	if err != nil { return nil, err }
 	return s.processDocsStatus(docs)
 }

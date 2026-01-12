@@ -33,8 +33,8 @@ func (m *LostDocumentService) FindAll(query string, statusFilter string) ([]mode
 	return args.Get(0).([]models.LostDocument), args.Error(1)
 }
 
-func (m *LostDocumentService) SearchGlobal(query string) ([]models.LostDocument, error) {
-	args := m.Called(query)
+func (m *LostDocumentService) SearchGlobal(query string, limit int) ([]models.LostDocument, error) {
+	args := m.Called(query, limit)
 	return args.Get(0).([]models.LostDocument), args.Error(1)
 }
 

@@ -84,10 +84,15 @@
                                 </div>
 
                                 <form id="license-form" class="user">
-                                    <div class="form-group">
-                                        <input type="text" class="form-control form-control-user text-center" 
-                                               id="serial_key" placeholder="Masukkan Serial Key: XXXXX-XXXXX-XXXXX-XXXXX" 
-                                               style="font-family: monospace; letter-spacing: 2px; font-size: 1.1rem;" required>
+                                    <div class="form-group d-flex">
+                                        <input type="text" class="form-control form-control-user text-center"
+                                               id="serial_key" placeholder="Activation Code"
+                                               style="font-family: monospace; letter-spacing: 0.5px; font-size: 1.1rem;" required>
+                                        <div class="input-group-append ml-2">
+                                            <button type="button" class="btn btn-outline-secondary" id="paste-key-btn" title="Paste dari clipboard">
+                                                <i class="fas fa-clipboard"></i>
+                                            </button>
+                                        </div>
                                     </div>
                                     <button type="submit" class="btn btn-primary btn-user btn-block font-weight-bold">
                                         <i class="fas fa-key mr-2"></i> Aktifkan Sekarang
@@ -190,17 +195,36 @@ $(document).ready(function() {
         }
     });
     
-    // Auto-format input serial key (tambah dash otomatis)
+    // Normalisasi sederhana: hilangkan spasi agar input rapi
     $('#serial_key').on('input', function() {
-        let val = $(this).val().toUpperCase().replace(/[^A-Z2-7]/g, ''); // Base32 chars only
-        let formatted = '';
-        for(let i = 0; i < val.length; i++) {
-            if(i > 0 && i % 5 === 0) {
-                formatted += '-';
+        let val = $(this).val().replace(/\s+/g, '');
+        $(this).val(val);
+    });
+
+    // Tombol Paste dari clipboard
+    $('#paste-key-btn').on('click', async function() {
+        try {
+            let text = '';
+            if (navigator.clipboard && window.isSecureContext) {
+                text = await navigator.clipboard.readText();
+            } else {
+                const tmp = $("<textarea>");
+                $("body").append(tmp);
+                tmp.focus();
+                document.execCommand('paste');
+                text = tmp.val();
+                tmp.remove();
             }
-            formatted += val[i];
+            if (text) {
+                $('#serial_key').val(text.replace(/\s+/g, '')).trigger('input');
+            }
+        } catch (err) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Gagal Paste',
+                text: 'Izinkan akses clipboard atau paste manual.',
+            });
         }
-        $(this).val(formatted);
     });
 });
 </script>

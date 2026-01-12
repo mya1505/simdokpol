@@ -1,16 +1,15 @@
 package main
 
 import (
-	"crypto/hmac"
+	"crypto/ecdsa"
 	"crypto/sha256"
-	"encoding/base32"
 	"fmt"
 	"image/color"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"simdokpol/internal/utils" // Import Utils
+	"simdokpol/internal/utils"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -20,24 +19,12 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"github.com/joho/godotenv" // Import Dotenv
 )
 
-// Variabel ini KOSONG. Harus diisi via LDFLAGS atau .env
-var appSecretKey = ""
-
 func main() {
-	// --- 1. LOAD .ENV OTOMATIS ---
-	envPath := filepath.Join(utils.GetAppDataDir(), ".env")
-	_ = godotenv.Overload(envPath)
-
-	// --- 2. VALIDASI SECRET KEY ---
-	// Prioritas: LDFLAGS -> ENV (.env)
-	if appSecretKey == "" {
-		appSecretKey = os.Getenv("APP_SECRET_KEY")
-	}
-
-	isKeyValid := appSecretKey != ""
+	keyPath := resolvePrivateKeyPath("")
+	privateKey, keyHash, err := loadPrivateKey(keyPath)
+	isKeyValid := err == nil
 
 	a := app.New()
 	w := a.NewWindow("SIMDOKPOL License Manager")
@@ -59,14 +46,14 @@ func main() {
 	// --- Status Warning jika Key Kosong ---
 	var statusContainer *fyne.Container
 	if !isKeyValid {
-		warnText := canvas.NewText(fmt.Sprintf("ERROR: Secret Key tidak ditemukan di %s", envPath), color.RGBA{R: 255, G: 0, B: 0, A: 255})
+		warnText := canvas.NewText(fmt.Sprintf("ERROR: Private key tidak ditemukan di %s", keyPath), color.RGBA{R: 255, G: 0, B: 0, A: 255})
 		warnText.TextStyle = fyne.TextStyle{Bold: true}
 		warnText.Alignment = fyne.TextAlignCenter
 		warnText.TextSize = 10
 		statusContainer = container.New(layout.NewCenterLayout(), warnText)
 	} else {
 		// Info Key Loaded
-		keyInfo := canvas.NewText(fmt.Sprintf("Key Loaded: %s... (Valid)", sha256Sum(appSecretKey)), color.RGBA{R: 0, G: 128, B: 0, A: 255})
+		keyInfo := canvas.NewText(fmt.Sprintf("Key Loaded: %s... (Valid)", keyHash), color.RGBA{R: 0, G: 128, B: 0, A: 255})
 		keyInfo.TextSize = 10
 		keyInfo.Alignment = fyne.TextAlignCenter
 		statusContainer = container.New(layout.NewCenterLayout(), keyInfo)
@@ -80,23 +67,13 @@ func main() {
 			return
 		}
 
-		// Logic Generate
-		h := hmac.New(sha256.New, []byte(appSecretKey))
-		h.Write([]byte(hwid))
-		hash := h.Sum(nil)
-
-		truncatedHash := hash[:15]
-		rawKey := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(truncatedHash)
-
-		var formattedKey strings.Builder
-		for i, r := range rawKey {
-			if i > 0 && i%5 == 0 {
-				formattedKey.WriteRune('-')
-			}
-			formattedKey.WriteRune(r)
+		formattedKey, signErr := utils.SignActivationKey(hwid, privateKey)
+		if signErr != nil {
+			dialog.ShowError(fmt.Errorf("Gagal generate key: %w", signErr), w)
+			return
 		}
 
-		entryResult.SetText(formattedKey.String())
+		entryResult.SetText(formattedKey)
 	})
 	btnGenerate.Importance = widget.HighImportance
 
@@ -132,7 +109,37 @@ func main() {
 	w.ShowAndRun()
 }
 
-func sha256Sum(s string) string {
-	h := sha256.Sum256([]byte(s))
+func sha256Sum(b []byte) string {
+	h := sha256.Sum256(b)
 	return fmt.Sprintf("%x", h[:8])
+}
+
+func resolvePrivateKeyPath(flagPath string) string {
+	if flagPath != "" {
+		return flagPath
+	}
+
+	if envPath := os.Getenv("LICENSE_PRIVATE_KEY"); envPath != "" {
+		return envPath
+	}
+
+	if _, err := os.Stat("private.pem"); err == nil {
+		return "private.pem"
+	}
+
+	return filepath.Join(utils.GetAppDataDir(), "private.pem")
+}
+
+func loadPrivateKey(path string) (*ecdsa.PrivateKey, string, error) {
+	pemBytes, err := os.ReadFile(path)
+	if err != nil {
+		return nil, "", err
+	}
+
+	privateKey, err := utils.ParsePrivateKeyPEM(pemBytes)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return privateKey, sha256Sum(pemBytes), nil
 }

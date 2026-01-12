@@ -6,7 +6,6 @@ import (
 	"log"
 	"math"
 	"simdokpol/internal/dto"
-	"simdokpol/web"
 	"strconv"
 	"strings"
 	"time"
@@ -55,7 +54,7 @@ func GenerateAggregateReportPDF(data *dto.AggregateReportData, config *dto.AppCo
 	}
 
 	// Load Logo
-	logoBytes, err := web.Assets.ReadFile("static/img/logo.png")
+	logoBytes, err := loadLogoBytes()
 	if err == nil {
 		logoReader := bytes.NewReader(logoBytes)
 		r.pdf.RegisterImageOptionsReader("logo_embed", gofpdf.ImageOptions{ImageType: "PNG"}, logoReader)

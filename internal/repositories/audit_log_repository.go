@@ -39,6 +39,14 @@ func (r *auditLogRepository) FindAllPaged(req dto.DataTableRequest) ([]models.Au
 	var total int64
 	var filtered int64
 
+	limit := req.Length
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
 	db := r.db.Model(&models.AuditLog{})
 	
 	// 1. Hitung Total
@@ -55,7 +63,7 @@ func (r *auditLogRepository) FindAllPaged(req dto.DataTableRequest) ([]models.Au
 	// 3. Paging & Ordering
 	err := db.Preload("User").
 		Order("timestamp desc").
-		Limit(req.Length).
+		Limit(limit).
 		Offset(req.Start).
 		Find(&logs).Error
 
