@@ -4,530 +4,436 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Pratinjau Cetak - {{ .Document.NomorSurat }}</title>
-        <script src="/static/vendor/tailwindcss/tailwind.min.js"></script>
         <style>
-            /* Font Courier untuk meniru gaya mesin ketik dinas */
-            body {
-                font-family: "Courier New", Courier, monospace;
-                line-height: 1.3;
-                color: #000;
-                font-size: 11pt;
-                background-color: #f3f4f6;
+            :root {
+                --page-width: 210mm;
+                --page-height: 297mm;
+                --margin-top: 15mm;
+                --margin-right: 20mm;
+                --margin-bottom: 15mm;
+                --margin-left: 20mm;
+                --font-size: 11pt;
+                --line-height: 1.2;
             }
 
-            /* Simulasi Kertas A4 */
-            .container-A4 {
-                width: 210mm;
-                min-height: 297mm;
-                /* Margin sesuai pdf_generator.go: Kiri 25mm, Atas 15mm, Kanan 15mm */
-                padding: 15mm 15mm 15mm 25mm; 
-                margin: 2rem auto;
-                border: 1px #d1d5db solid;
-                background: white;
-                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                position: relative;
+            * {
                 box-sizing: border-box;
             }
 
-            /* Helper untuk Garis Putus-putus Otomatis (Smart Filler) */
-            .dashed-line-container {
-                display: flex;
-                align-items: baseline;
-                width: 100%;
-                overflow: hidden;
-            }
-            
-            .dashed-text {
-                white-space: pre-wrap; /* Biarkan teks wrap jika panjang */
-                margin-right: 2px;
+            body {
+                margin: 0;
+                font-family: "Courier New", Courier, monospace;
+                font-size: var(--font-size);
+                line-height: var(--line-height);
+                color: #000;
+                background-color: #f3f4f6;
             }
 
-            .dashed-fill {
-                flex-grow: 1;
-                border-bottom: 1px dashed #000;
-                margin-bottom: 4px; /* Sesuaikan posisi garis dengan baseline text */
-                min-width: 20px; /* Minimal panjang garis */
-            }
-
-            /* Garis Kop Surat (Double Line) */
-            .header-line {
-                border-top: 2px solid black; /* Garis tebal */
-                border-bottom: 1px solid black; /* Garis tipis */
-                height: 2px; /* Jarak antar garis */
-                margin-top: 2px;
-                margin-bottom: 10px;
-            }
-
-            /* Toolbar tombol (Disembunyikan saat print) */
             .toolbar {
-                width: 210mm;
-                margin: 1rem auto;
+                width: var(--page-width);
+                margin: 12px auto 8px;
                 display: flex;
                 justify-content: center;
                 gap: 10px;
             }
-            
+
             .btn {
-                padding: 8px 16px;
+                padding: 8px 14px;
                 border-radius: 4px;
                 font-family: sans-serif;
-                font-size: 14px;
-                font-weight: bold;
+                font-size: 13px;
+                font-weight: 700;
                 text-decoration: none;
                 cursor: pointer;
-                transition: background 0.2s;
+                transition: opacity 0.2s;
+                border: none;
             }
-            .btn-blue { background: #2563eb; color: white; }
-            .btn-red { background: #dc2626; color: white; }
-            .btn-gray { background: #4b5563; color: white; }
-            .btn:hover { opacity: 0.9; }
 
-            /* Pengaturan Print */
-            @media print {
-                body { background: white; margin: 0; }
-                .container-A4 {
-                    width: 100%;
-                    height: auto;
-                    margin: 0;
-                    padding: 15mm 15mm 15mm 25mm !important; /* Paksa margin */
-                    border: none;
-                    box-shadow: none;
-                }
-                .toolbar { display: none; }
-                @page {
-                    size: A4;<!doctype html>
-<html lang="id">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Pratinjau Cetak - {{ .Document.NomorSurat }}</title>
-        <script src="/static/vendor/tailwindcss/tailwind.min.js"></script>
-        <link href="/static/css/custom.css" rel="stylesheet" />
-        <style>
-            body {
-                font-family: "Courier New", Courier, monospace;
-                line-height: 1.15;
-                color: #000;
+            .btn-primary {
+                background: #2563eb;
+                color: #fff;
+            }
+
+            .btn-danger {
+                background: #dc2626;
+                color: #fff;
+            }
+
+            .btn-muted {
+                background: #4b5563;
+                color: #fff;
+            }
+
+            .btn:hover {
+                opacity: 0.9;
+            }
+
+            .page {
+                width: var(--page-width);
+                min-height: var(--page-height);
+                padding: var(--margin-top) var(--margin-right)
+                    var(--margin-bottom) var(--margin-left);
+                margin: 0 auto 16px;
+                background: #fff;
+                border: 1px solid #d1d5db;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }
+
+            .kop {
+                min-width: 60mm;
+                max-width: 75mm;
+                text-align: center;
+                font-weight: 700;
+                font-size: 9pt;
+            }
+
+            .kop .line {
+                border-top: 1px solid #000;
+                margin-top: 2mm;
+            }
+
+            .logo-wrap {
+                text-align: center;
+                margin: 4mm 0 2mm;
+            }
+
+            .logo {
+                width: 12mm;
+                height: auto;
+            }
+
+            .title {
+                text-align: center;
+                font-weight: 700;
+                text-decoration: underline;
+                font-size: 12pt;
+                letter-spacing: 0.5px;
+                margin: 0;
+            }
+
+            .subtitle {
+                text-align: center;
+                margin: 2mm 0 0;
                 font-size: 11pt;
             }
-            .container-A4 {
-                width: 210mm;
-                min-height: 297mm;
-                padding: 1.5cm;
-                margin: 1rem auto;
-                border: 1px #d1d5db solid;
-                background: white;
-                box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+
+            .section {
+                margin-top: 3mm;
             }
-            .content-table td {
-                padding: 0;
-                vertical-align: top;
+
+            .dashed-line {
+                display: flex;
+                align-items: baseline;
+                gap: 3px;
+                width: 100%;
             }
-            .toolbar {
-                width: 210mm;
-                margin: 1rem auto;
-                padding: 10px;
+
+            .dashed-line .text {
+                flex: 0 1 auto;
+            }
+
+            .dashed-line .fill {
+                flex: 1 1 auto;
+                border-bottom: 1px dashed #000;
+                transform: translateY(-2px);
+            }
+
+            .data-table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+
+            .data-label {
+                width: 40mm;
+            }
+
+            .data-colon {
+                width: 4mm;
+            }
+
+            .data-value {
+                flex: 0 1 auto;
+            }
+            .data-row {
+                display: flex;
+                align-items: baseline;
+                gap: 3px;
+            }
+
+            .signature-bermohon {
+                width: 70mm;
+                margin-left: auto;
                 text-align: center;
-                background-color: #333;
-                border-radius: 5px;
             }
-            .toolbar button,
-            .toolbar a {
-                padding: 8px 16px;
-                margin: 0 10px;
-                background-color: #007bff;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                cursor: pointer;
-                text-decoration: none;
-                font-family: sans-serif;
+
+            .signature-space {
+                height: 16mm;
             }
-            .toolbar a.back {
-                background-color: #6c757d;
+
+            .signature-row {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                gap: 8mm;
+                margin-top: 4mm;
             }
-            .toolbar button.pdf,
-            .toolbar a.pdf {
-                background-color: #d33;
+
+            .signature-block {
+                text-align: center;
+                min-width: 70mm;
+                max-width: 90mm;
+                font-size: 9pt;
+                line-height: 1.1;
+            }
+
+            .action-item {
+                display: flex;
+                align-items: baseline;
+                gap: 3px;
+            }
+
+            .action-item .number {
+                width: 5mm;
+            }
+
+            .action-item .text {
+                flex: 0 1 auto;
+            }
+
+            .action-item .fill {
+                flex: 1 1 auto;
+                border-bottom: 1px dashed #000;
+                transform: translateY(-2px);
             }
 
             @media print {
-                body,
-                .container-A4 {
-                    margin: 0;
-                    box-shadow: none;
-                    border: none;
+                body {
+                    background: #fff;
                 }
+
                 .toolbar {
                     display: none;
                 }
+
+                .page {
+                    margin: 0;
+                    border: none;
+                    box-shadow: none;
+                }
+
                 @page {
                     size: A4;
-                    margin: 1.27cm;
-                }
-            }
-        </style>
-    </head>
-    <body class="bg-gray-100">
-        <div class="toolbar">
-            <a class="pdf" href="/api/documents/{{ .Document.ID }}/pdf" target="_blank">
-                Download PDF (Presisi)
-            </a>
-            <button onclick="window.print()">
-                Cetak Langsung (Pratinjau)
-            </button>
-            <a class="back" href="/documents">Kembali ke Daftar</a>
-        </div>
-
-        <div class="container-A4">
-            <header>
-                <table class="w-full">
-                    <tbody>
-                        <tr>
-                            <td class="w-[40%] align-top leading-tight">
-                                <p class="font-bold text-xs" align="center">
-                                    {{ .Config.KopBaris1 }}
-                                </p>
-                                <p class="font-bold text-xs" align="center">
-                                    {{ .Config.KopBaris2 }}
-                                </p>
-                                <p
-                                    class="font-bold text-xs border-b-2 border-black"
-                                    align="center"
-                                >
-                                    {{ .Config.KopBaris3 }}
-                                </p>
-                            </td>
-                            <td class="w-[60%]"></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </header>
-
-            <div class="text-center my-1">
-                <img
-                    src="/static/img/logo.png"
-                    alt="Logo Polri"
-                    class="mx-auto mb-1"
-                    style="width: 50px; height: auto"
-                />
-                <p class="underline font-bold text-sm tracking-wider">
-                    SURAT KETERANGAN HILANG
-                </p>
-                <p class="text-xs">Nomor: {{ .Document.NomorSurat }}</p>
-            </div>
-
-            <div>
-                <p class="text-justify indent-8">
-                    ---- Yang bertanda tangan dibawah ini A.n. KEPALA KEPOLISIAN
-                    {{ .Config.KopBaris3| ToUpper }}, Menerangkan dengan benar
-                    bahwa :
-                </p>
-
-                <div class="mt-1 ml-8">
-                    <table class="w-full content-table">
-                        <tbody>
-                            <tr>
-                                <td style="width: 150px">Nama</td>
-                                <td>
-                                    :
-                                    <span class="font-bold pl-2"
-                                        >{{ .Document.Resident.NamaLengkap |
-                                        ToUpper }}</span
-                                    >
-                                </td>
-                            </tr>
-                            <tr>
-                                <td>TTL</td>
-                                <td>
-                                    :
-                                    <span class="pl-2"
-                                        >{{ .Document.Resident.TempatLahir }},
-                                        {{
-                                        .Document.Resident.TanggalLahir.Format
-                                        "02-01-2006" }}</span
-                                    >
-                                </td>
-                            </tr>
-                            <tr>
-                                <td>Agama</td>
-                                <td>
-                                    :
-                                    <span class="pl-2"
-                                        >{{ .Document.Resident.Agama }}</span
-                                    >
-                                </td>
-                            </tr>
-                            <tr>
-                                <td>Jenis kelamin</td>
-                                <td>
-                                    :
-                                    <span class="pl-2"
-                                        >{{ .Document.Resident.JenisKelamin
-                                        }}</span
-                                    >
-                                </td>
-                            </tr>
-                            <tr>
-                                <td>Pekerjaan</td>
-                                <td>
-                                    :
-                                    <span class="pl-2"
-                                        >{{ .Document.Resident.Pekerjaan
-                                        }}</span
-                                    >
-                                </td>
-                            </tr>
-                            <tr>
-                                <td>Alamat</td>
-                                <td>
-                                    :
-                                    <span class="pl-2"
-                                        >{{ .Document.Resident.Alamat }}</span
-                                    >
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="mt-1">
-                    <p class="text-justify indent-8">
-                        Yang bersangkutan tersebut di atas benar telah datang di
-                        Kantor {{ .Config.NamaKantor }} dan melaporkan bahwa
-                        telah kehilangan surat berharga berupa :
-                    </p>
-                </div>
-
-                <div class="mt-1 ml-8 space-y-0">
-                    {{range .Document.LostItems}}
-                    <p>
-                        - 1 (Satu) Buah {{ .NamaBarang }} Dengan Keterangan : {{
-                        .Deskripsi }} A.n Pelapor
-                    </p>
-                    {{end}}
-                </div>
-
-                <div class="mt-1">
-                    <p class="text-justify indent-8">
-                        ---- Surat/kartu tersebut hilang di sekitar {{
-                        .Document.LokasiHilang }}, dan sudah dilakukan pencarian
-                        namun sampai dikeluarkan Surat Keterangan ini belum
-                        ditemukan.
-                    </p>
-                </div>
-
-                <div class="mt-3 grid grid-cols-2 gap-4">
-                    <div></div>
-                    <div class="text-center">
-                        <p>Yang Bermohon</p>
-                        <div class="h-10"></div>
-                        <p class="font-bold underline">
-                            {{ .Document.Resident.NamaLengkap | ToUpper }}
-                        </p>
-                    </div>
-                </div>
-
-                <div class="mt-1">
-                    <p class="text-justify indent-8">
-                        ----- Demikian Surat Keterangan ini dibuat dengan
-                        sebenar-benarnya dan dapat dipergunakan sebagaimana
-                        perlunya.
-                    </p>
-                </div>
-
-                <div class="mt-1">
-                    <p class="underline font-bold">Tindakan Yang Diambil :</p>
-                    <ol class="list-decimal list-outside ml-6">
-                        <li>
-                            Menerima laporan dan membuat Surat Keterangan
-                            Kehilangan barang guna seperlunya;
-                        </li>
-                        <li>
-                            Surat keterangan kehilangan ini berlaku selama {{ .Config.ArchiveDurationDays }}
-                            ({{ .ArchiveDaysWords }}) hari, berlaku mulai tanggal
-                            dikeluarkan;
-                        </li>
-                        <li>
-                            Surat Keterangan ini bukan sebagai pengganti surat
-                            yang hilang tetapi berguna untuk mengurus kembali
-                            surat yang hilang.
-                        </li>
-                    </ol>
-                </div>
-            </div>
-
-            <div class="mt-2 text-xs">
-                <div class="grid grid-cols-2 gap-4">
-                    <div></div>
-                    <div class="text-center">
-                        <p>
-                            {{ .Config.TempatSurat }}, {{
-                            .Document.TanggalLaporan.Format "02 January 2006" }}
-                        </p>
-                    </div>
-                </div>
-                <div class="grid grid-cols-2 gap-4 mt-1">
-                    <div class="text-center">
-                        <p class="text-sm">
-                            a.n. KEPALA KEPOLISIAN {{ .Config.KopBaris3 | ToUpper }}
-                        </p>
-                        <p class="text-sm">
-                            {{ .Document.PejabatPersetuju.Jabatan }} {{
-                            .Document.PejabatPersetuju.Regu }}
-                        </p>
-                        <div class="h-10"></div>
-                        <p class="font-bold underline text-sm">
-                            {{ .Document.PejabatPersetuju.NamaLengkap | ToUpper
-                            }}
-                        </p>
-                        <p class="text-sm">
-                            {{ .Document.PejabatPersetuju.Pangkat }} / NRP {{
-                            .Document.PejabatPersetuju.NRP }}
-                        </p>
-                    </div>
-                    <div class="text-center">
-                        <p class="text-sm">Penerima Laporan</p>
-                        <p class="text-sm">
-                            {{ .Document.PetugasPelapor.Jabatan }} {{
-                            .Document.PetugasPelapor.Regu }}
-                        </p>
-                        <div class="h-10"></div>
-                        <p class="font-bold underline text-sm">
-                            {{ .Document.PetugasPelapor.NamaLengkap | ToUpper }}
-                        </p>
-                        <p class="text-sm">
-                            {{ .Document.PetugasPelapor.Pangkat }} / NRP {{
-                            .Document.PetugasPelapor.NRP }}
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </body>
-</html>
-                    margin: 0; /* Kita atur margin via padding .container-A4 */
+                    margin: 0;
                 }
             }
         </style>
     </head>
     <body>
         <div class="toolbar">
-            <a class="btn btn-red" href="/api/documents/{{ .Document.ID }}/pdf" target="_blank">
-                ⬇ Download PDF (Presisi)
+            <a
+                class="btn btn-danger"
+                href="/api/documents/{{ .Document.ID }}/pdf"
+                target="_blank"
+            >
+                Download PDF (Presisi)
             </a>
-            <button class="btn btn-blue" onclick="window.print()">
-                🖨 Cetak Halaman Ini
+            <button class="btn btn-primary" onclick="window.print()">
+                Cetak Halaman Ini
             </button>
-            <a class="btn btn-gray" href="/documents">Kembali</a>
+            <a class="btn btn-muted" href="/documents">Kembali</a>
         </div>
 
-        <div class="container-A4">
-            
-            <div class="relative mb-2">
-                <div class="absolute inset-x-0 top-0 flex justify-center pointer-events-none">
-                    <img src="/static/img/logo.png" alt="Logo" style="width: 80px; height: auto; margin-top: -5px;">
-                </div>
+        <div class="page">
+            <div class="kop">
+                <div>{{ .Config.KopBaris1 }}</div>
+                <div>{{ .Config.KopBaris2 }}</div>
+                <div style="font-size: 10pt;">{{ .Config.KopBaris3 }}</div>
+                <div class="line"></div>
+            </div>
 
-                <div class="relative z-10">
-                    <p class="text-xs">{{ .Config.KopBaris1 }}</p>
-                    <p class="text-sm font-bold">{{ .Config.KopBaris2 }}</p>
-                    <p class="text-sm font-bold">{{ .Config.KopBaris3 }}</p>
-                    <p class="text-xs">{{ .Config.NamaKantor }}</p>
+            <div class="logo-wrap">
+                <img class="logo" src="/static/img/logo.png" alt="Logo" />
+            </div>
+
+            <p class="title">SURAT KETERANGAN HILANG</p>
+            <p class="subtitle">Nomor: {{ .Document.NomorSurat }}</p>
+
+            <div class="section dashed-line">
+                <span class="text">
+                    ---- Yang bertanda tangan dibawah ini A.n. KEPALA KEPOLISIAN
+                    {{ .Config.KopBaris3 | ToUpper }}, Menerangkan dengan benar
+                    bahwa :
+                </span>
+                <span class="fill"></span>
+            </div>
+
+            <div class="section" style="margin-left: 10mm;">
+                <div class="data-row">
+                    <span class="data-label">Nama</span>
+                    <span class="data-colon">:</span>
+                    <span class="data-value" style="font-weight: 700;">
+                        {{ .Document.Resident.NamaLengkap | ToUpper }}
+                    </span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">TTL</span>
+                    <span class="data-colon">:</span>
+                    <span class="data-value">
+                        {{ .Document.Resident.TempatLahir }},
+                        {{ .Document.Resident.TanggalLahir.Format "02-01-2006" }}
+                    </span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Agama</span>
+                    <span class="data-colon">:</span>
+                    <span class="data-value">{{ .Document.Resident.Agama }}</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Jenis kelamin</span>
+                    <span class="data-colon">:</span>
+                    <span class="data-value">{{ .Document.Resident.JenisKelamin }}</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Pekerjaan</span>
+                    <span class="data-colon">:</span>
+                    <span class="data-value">{{ .Document.Resident.Pekerjaan }}</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Alamat</span>
+                    <span class="data-colon">:</span>
+                    <span class="data-value">{{ .Document.Resident.Alamat }}</span>
                 </div>
             </div>
 
-            <div class="header-line"></div>
-
-            <div class="text-center mb-6 mt-4">
-                <p class="font-bold underline text-lg tracking-wide">SURAT KETERANGAN HILANG</p>
-                <p class="text-sm">Nomor: {{ .Document.NomorSurat }}</p>
+            <div class="section dashed-line">
+                <span class="text">
+                    Yang bersangkutan tersebut di atas benar telah datang di
+                    Kantor {{ .Config.NamaKantor }} dan melaporkan bahwa telah
+                    kehilangan surat berharga berupa :
+                </span>
+                <span class="fill"></span>
             </div>
 
-            <div class="text-sm text-justify leading-relaxed">
-                
-                <div class="dashed-line-container mb-2">
-                    <span class="dashed-text">----- Yang bertanda tangan dibawah ini A.n. KEPALA KEPOLISIAN {{ .Config.KopBaris3| ToUpper }}, Menerangkan dengan benar bahwa :</span>
-                    <span class="dashed-fill"></span>
+            <div class="section" style="margin-left: 10mm;">
+                {{range .Document.LostItems}}
+                <div class="dashed-line">
+                    <span class="text">
+                        - 1 (Buah) {{ .NamaBarang | ToUpper }} Dengan {{ .Deskripsi }}
+                        A.n Pelapor
+                    </span>
+                    <span class="fill"></span>
                 </div>
+                {{end}}
+            </div>
 
-                <div class="ml-8 mb-2">
-                    <table class="w-full border-collapse">
-                        <tr><td class="w-32 align-top">Nama</td><td class="w-4 align-top">:</td><td class="font-bold">{{ .Document.Resident.NamaLengkap | ToUpper }}</td></tr>
-                        <tr><td class="align-top">TTL</td><td class="align-top">:</td><td>{{ .Document.Resident.TempatLahir }}, {{ .Document.Resident.TanggalLahir.Format "02 January 2006" }}</td></tr>
-                        <tr><td class="align-top">Agama</td><td class="align-top">:</td><td>{{ .Document.Resident.Agama }}</td></tr>
-                        <tr><td class="align-top">Jenis kelamin</td><td class="align-top">:</td><td>{{ .Document.Resident.JenisKelamin }}</td></tr>
-                        <tr><td class="align-top">Pekerjaan</td><td class="align-top">:</td><td>{{ .Document.Resident.Pekerjaan }}</td></tr>
-                        <tr><td class="align-top">Alamat</td><td class="align-top">:</td><td>{{ .Document.Resident.Alamat }}</td></tr>
-                    </table>
+            <div class="section dashed-line">
+                <span class="text">
+                    ---- Surat/kartu tersebut hilang di sekitar
+                    {{ .Document.LokasiHilang }}, dan sudah dilakukan pencarian
+                    namun sampai dikeluarkan Surat Keterangan ini belum
+                    ditemukan.
+                </span>
+                <span class="fill"></span>
+            </div>
+
+            <div class="section signature-bermohon">
+                <div>Yang Bermohon</div>
+                <div class="signature-space"></div>
+                <div style="font-weight: 700; text-decoration: underline;">
+                    {{ .Document.Resident.NamaLengkap | ToUpper }}
                 </div>
+            </div>
 
-                <div class="dashed-line-container mb-2">
-                    <span class="dashed-text">Yang bersangkutan tersebut di atas benar telah datang di Kantor {{ .Config.NamaKantor }} dan melaporkan bahwa telah kehilangan surat berharga berupa :</span>
-                    <span class="dashed-fill"></span>
+            <div class="section dashed-line">
+                <span class="text">
+                    ----- Demikian Surat Keterangan ini dibuat dengan
+                    sebenar-benarnya dan dapat dipergunakan sebagaimana
+                    perlunya.
+                </span>
+                <span class="fill"></span>
+            </div>
+
+            <div class="section">
+                <div style="font-weight: 700; text-decoration: underline;">
+                    Tindakan Yang Diambil :
                 </div>
-
-                <div class="ml-4 space-y-1 mb-4">
-                    {{range .Document.LostItems}}
-                    <div class="dashed-line-container">
-                        <span class="dashed-text">- 1 (Buah) {{ .NamaBarang | ToUpper }} Dengan No : {{ .Deskripsi }} A.n Pelapor</span>
-                        <span class="dashed-fill"></span>
+                <div class="section" style="margin-left: 5mm;">
+                    <div class="action-item">
+                        <span class="number">1.</span>
+                        <span class="text">
+                            Menerima laporan dan membuat Surat Keterangan
+                            Kehilangan barang guna seperlunya;
+                        </span>
+                        <span class="fill"></span>
                     </div>
-                    {{end}}
-                </div>
-
-                <div class="dashed-line-container mb-6">
-                    <span class="dashed-text">----- Surat/kartu tersebut hilang di sekitar {{ .Document.LokasiHilang }}, dan sudah dilakukan pencarian namun sampai dikeluarkan Surat Keterangan ini belum ditemukan.</span>
-                    <span class="dashed-fill"></span>
-                </div>
-
-                <div class="flex justify-end mb-4">
-                    <div class="text-center w-64">
-                        <p class="mb-10">Yang Bermohon</p> <p class="font-bold underline">{{ .Document.Resident.NamaLengkap | ToUpper }}</p>
+                    <div class="action-item" style="margin-top: 2mm;">
+                        <span class="number">2.</span>
+                        <span class="text">
+                            Surat keterangan kehilangan ini berlaku selama
+                            {{ .ArchiveDays }}
+                            ({{ .ArchiveDaysWords }}) hari, berlaku mulai tanggal
+                            dikeluarkan;
+                        </span>
+                        <span class="fill"></span>
+                    </div>
+                    <div class="action-item" style="margin-top: 2mm;">
+                        <span class="number">3.</span>
+                        <span class="text">
+                            Surat Keterangan ini bukan sebagai pengganti surat
+                            yang hilang tetapi berguna untuk mengurus kembali
+                            surat yang hilang.
+                        </span>
+                        <span class="fill"></span>
                     </div>
                 </div>
+            </div>
 
-                <div class="dashed-line-container mb-2">
-                    <span class="dashed-text">----- Demikian Surat Keterangan ini dibuat dengan sebenar-benarnya dan dapat dipergunakan sebagaimana perlunya.</span>
-                    <span class="dashed-fill"></span>
+            <div class="section signature-row">
+                <div></div>
+                <div class="signature-block" style="font-size: 10pt;">
+                    {{ .Config.TempatSurat }},
+                    {{ FormatTanggalIndonesia .Document.TanggalLaporan }}
                 </div>
+            </div>
 
-                <div class="mb-8">
-                    <p class="font-bold underline mb-1">Tindakan Yang Diambil :</p>
-                    <ol class="list-decimal ml-8 space-y-1">
-                        <li>Menerima laporan dan membuat Surat Keterangan Kehilangan barang guna seperlunya;</li>
-                        <li>Surat keterangan kehilangan ini berlaku selama {{ .Config.ArchiveDurationDays }} ({{ .ArchiveDaysWords }}) hari, berlaku mulai tanggal dikeluarkan;</li>
-                        <li>
-                            <div class="dashed-line-container inline-flex align-bottom w-full">
-                                <span class="dashed-text">Surat Keterangan ini bukan sebagai pengganti surat yang hilang tetapi berguna untuk mengurus kembali surat yang hilang.</span>
-                                <span class="dashed-fill"></span>
-                            </div>
-                        </li>
-                    </ol>
-                </div>
-
-                <div class="grid grid-cols-2 gap-8 text-center text-sm">
+            <div class="section signature-row">
+                <div class="signature-block">
                     <div>
-                        <p>a.n. KEPALA KEPOLISIAN {{ .Config.KopBaris3 | ToUpper }}</p>
-                        <p>{{ .Document.PejabatPersetuju.Jabatan }} 
-                           {{ if ne .Document.PejabatPersetuju.Regu "-" }} {{ .Document.PejabatPersetuju.Regu }} {{ end }}
-                        </p>
-                        <div class="h-20"></div> <p class="font-bold underline">{{ .Document.PejabatPersetuju.NamaLengkap | ToUpper }}</p>
-                        <p>{{ .Document.PejabatPersetuju.Pangkat }} NRP {{ .Document.PejabatPersetuju.NRP }}</p>
+                        a.n. KEPALA KEPOLISIAN
+                        {{ .Config.KopBaris3 | ToUpper }}
                     </div>
-
                     <div>
-                        <p class="mb-2">{{ .Config.TempatSurat }}, {{ .Document.TanggalLaporan.Format "02 January 2006" }}</p>
-                        
-                        <p>Penerima Laporan</p>
-                        <p>{{ .Document.PetugasPelapor.Jabatan }} 
-                           {{ if ne .Document.PetugasPelapor.Regu "-" }} {{ .Document.PetugasPelapor.Regu }} {{ end }}
-                        </p>
-                        <div class="h-20"></div> <p class="font-bold underline">{{ .Document.PetugasPelapor.NamaLengkap | ToUpper }}</p>
-                        <p>{{ .Document.PetugasPelapor.Pangkat }} NRP {{ .Document.PetugasPelapor.NRP }}</p>
+                        {{ .Document.PejabatPersetuju.Jabatan | ToUpper }}
+                        {{ if ne .Document.PejabatPersetuju.Regu "-" }}
+                        {{ .Document.PejabatPersetuju.Regu }}
+                        {{ end }}
+                    </div>
+                    <div class="signature-space"></div>
+                    <div style="font-weight: 700; text-decoration: underline;">
+                        {{ .Document.PejabatPersetuju.NamaLengkap | ToUpper }}
+                    </div>
+                    <div>
+                        {{ .Document.PejabatPersetuju.Pangkat | ToUpper }} / NRP
+                        {{ .Document.PejabatPersetuju.NRP }}
                     </div>
                 </div>
-
+                <div class="signature-block">
+                    <div>Penerima Laporan</div>
+                    <div>
+                        {{ .Document.PetugasPelapor.Jabatan | ToUpper }}
+                        {{ if ne .Document.PetugasPelapor.Regu "-" }}
+                        {{ .Document.PetugasPelapor.Regu }}
+                        {{ end }}
+                    </div>
+                    <div class="signature-space"></div>
+                    <div style="font-weight: 700; text-decoration: underline;">
+                        {{ .Document.PetugasPelapor.NamaLengkap | ToUpper }}
+                    </div>
+                    <div>
+                        {{ .Document.PetugasPelapor.Pangkat | ToUpper }} / NRP
+                        {{ .Document.PetugasPelapor.NRP }}
+                    </div>
+                </div>
             </div>
         </div>
     </body>

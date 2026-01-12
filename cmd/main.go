@@ -58,7 +58,7 @@ func onReady() {
 	setupLogging()
 
 	appData := utils.GetAppDataDir()
-	
+
 	h := sha256.Sum256([]byte(services.AppSecretKeyString))
 	keyHash := fmt.Sprintf("%x", h[:4])
 
@@ -78,7 +78,7 @@ func onReady() {
 
 	vhost := utils.NewVHostSetup()
 	isVhostSetup, _ := vhost.IsSetup()
-	
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -159,7 +159,10 @@ func onReady() {
 	r.Use(gzip.Gzip(gzip.DefaultCompression))
 	r.MaxMultipartMemory = 8 << 20
 
-	funcMap := template.FuncMap{"ToUpper": strings.ToUpper}
+	funcMap := template.FuncMap{
+		"ToUpper":                strings.ToUpper,
+		"FormatTanggalIndonesia": utils.FormatTanggalIndonesia,
+	}
 	templ := template.Must(template.New("").Funcs(funcMap).ParseFS(web.Assets, "templates/*.html", "templates/partials/*.html"))
 	r.SetHTMLTemplate(templ)
 	r.StaticFS("/static", web.GetStaticFS())
@@ -223,7 +226,12 @@ func onReady() {
 		if conf.ArchiveDurationDays > 0 {
 			archiveDays = conf.ArchiveDurationDays
 		}
-		controllers.RenderHTML(c, "print_preview.html", gin.H{"Document": doc, "Config": conf, "ArchiveDaysWords": utils.IntToIndonesianWords(archiveDays)})
+		controllers.RenderHTML(c, "print_preview.html", gin.H{
+			"Document":         doc,
+			"Config":           conf,
+			"ArchiveDays":      archiveDays,
+			"ArchiveDaysWords": utils.IntToIndonesianWords(archiveDays),
+		})
 	})
 
 	authorized.POST("/api/documents", docController.Create)
@@ -407,7 +415,7 @@ func initializeSecrets() {
 	}
 
 	updates := make(map[string]string)
-	
+
 	if services.AppSecretKeyString == "" {
 		log.Println("🔑 Generating new APP_SECRET_KEY...")
 		b := make([]byte, 32)
@@ -510,8 +518,8 @@ func seedDefaultTemplates(db *gorm.DB) {
 	log.Println("🔹 Seeding templates...")
 
 	bankOptions := []string{
-		"BRI", "BCA", "Mandiri", "BNI", "BSI", "BTN", "CIMB Niaga", 
-		"Danamon", "Permata", "Panin", "Maybank", "Mega", 
+		"BRI", "BCA", "Mandiri", "BNI", "BSI", "BTN", "CIMB Niaga",
+		"Danamon", "Permata", "Panin", "Maybank", "Mega",
 		"BTPN / Jenius", "Bank Daerah (BPD)", "Lainnya",
 	}
 

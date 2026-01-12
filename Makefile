@@ -371,7 +371,7 @@ installer-linux: linux check-linux-installer-deps
 	@cp $(BUILD_DIR)/linux/$(APP_NAME) $(BUILD_DIR)/installer/linux/
 	@cp -r web migrations $(BUILD_DIR)/installer/linux/ 2>/dev/null || true
 	@[ -f LICENSE ] && cp LICENSE $(BUILD_DIR)/installer/linux/ || true
-	@printf '#!/bin/bash\necho "========================================"\necho "  SIMDOKPOL - System Startup"\necho "========================================"\necho ""\necho "[INFO] Memulai SIMDOKPOL Server..."\n./simdokpol\n' > $(BUILD_DIR)/installer/linux/start.sh
+	@printf '#!/bin/bash\nset -e\necho "========================================"\necho "  SIMDOKPOL - System Startup"\necho "========================================"\necho ""\necho "[INFO] Memulai SIMDOKPOL Server..."\necho "[INFO] Aplikasi akan terbuka otomatis di browser"\necho "[INFO] Icon aplikasi tersedia di system tray"\necho "[INFO] Tekan Ctrl+C untuk menghentikan server"\necho ""\nSCRIPT_DIR="$$(cd "$$(dirname "$$0")" && pwd)"\nexec "$$SCRIPT_DIR/simdokpol"\n' > $(BUILD_DIR)/installer/linux/start.sh
 	@chmod +x $(BUILD_DIR)/installer/linux/start.sh
 	@echo "$(YELLOW)Membangun paket DEB...$(RESET)"
 	@mkdir -p $(BUILD_DIR)/installer/linux/deb/DEBIAN

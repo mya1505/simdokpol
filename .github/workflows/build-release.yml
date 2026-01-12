@@ -593,6 +593,7 @@ jobs:
           
           cat > "release/start.sh" << 'EOF'
           #!/bin/bash
+          set -e
           
           echo "========================================"
           echo "  SIMDOKPOL - System Startup"
@@ -604,7 +605,8 @@ jobs:
           echo "[INFO] Tekan Ctrl+C untuk menghentikan server"
           echo ""
           
-          ./simdokpol
+          SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+          exec "$SCRIPT_DIR/simdokpol"
           EOF
           chmod +x "release/start.sh"
 

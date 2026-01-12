@@ -52,9 +52,9 @@ func main() {
 	setupLogging()
 
 	appData := utils.GetAppDataDir()
-	
+
 	h := sha256.Sum256([]byte(services.AppSecretKeyString))
-	keyHash := fmt.Sprintf("%x", h[:4]) 
+	keyHash := fmt.Sprintf("%x", h[:4])
 
 	log.Println("==========================================")
 	log.Printf("🚀 SIMDOKPOL MOBILE - v%s", version)
@@ -130,7 +130,10 @@ func main() {
 	r.Use(gzip.Gzip(gzip.DefaultCompression))
 	r.MaxMultipartMemory = 8 << 20
 
-	funcMap := template.FuncMap{"ToUpper": strings.ToUpper}
+	funcMap := template.FuncMap{
+		"ToUpper":                strings.ToUpper,
+		"FormatTanggalIndonesia": utils.FormatTanggalIndonesia,
+	}
 	templ := template.Must(template.New("").Funcs(funcMap).ParseFS(web.Assets, "templates/*.html", "templates/partials/*.html"))
 	r.SetHTMLTemplate(templ)
 	r.StaticFS("/static", web.GetStaticFS())
@@ -194,7 +197,12 @@ func main() {
 		if conf.ArchiveDurationDays > 0 {
 			archiveDays = conf.ArchiveDurationDays
 		}
-		controllers.RenderHTML(c, "print_preview.html", gin.H{"Document": doc, "Config": conf, "ArchiveDaysWords": utils.IntToIndonesianWords(archiveDays)})
+		controllers.RenderHTML(c, "print_preview.html", gin.H{
+			"Document":         doc,
+			"Config":           conf,
+			"ArchiveDays":      archiveDays,
+			"ArchiveDaysWords": utils.IntToIndonesianWords(archiveDays),
+		})
 	})
 
 	authorized.POST("/api/documents", docController.Create)
@@ -241,7 +249,7 @@ func main() {
 	})
 	admin.POST("/api/users", userController.Create)
 	admin.GET("/api/users", userController.FindAll)
-	
+
 	admin.GET("/api/users/:id", userController.FindByID)
 	admin.PUT("/api/users/:id", userController.Update)
 	admin.DELETE("/api/users/:id", userController.Delete)
@@ -284,8 +292,10 @@ func main() {
 	pro.DELETE("/api/item-templates/:id", itemTemplateController.Delete)
 
 	port := os.Getenv("PORT")
-	if port == "" { port = "8080" }
-	
+	if port == "" {
+		port = "8080"
+	}
+
 	srv := &http.Server{Addr: ":" + port, Handler: r}
 
 	quitChan := make(chan os.Signal, 1)
@@ -319,7 +329,9 @@ func main() {
 	go func() {
 		time.Sleep(2 * time.Second)
 		url := fmt.Sprintf("http://localhost:%s", port)
-		if isHTTPS { url = fmt.Sprintf("https://localhost:%s", port) }
+		if isHTTPS {
+			url = fmt.Sprintf("https://localhost:%s", port)
+		}
 		log.Println("✨ Buka browser di:", url)
 		openBrowserTermux(url)
 	}()
@@ -354,7 +366,7 @@ func initializeSecrets() {
 	}
 
 	updates := make(map[string]string)
-	
+
 	if services.AppSecretKeyString == "" {
 		log.Println("🔑 Generating new APP_SECRET_KEY...")
 		b := make([]byte, 32)
@@ -392,29 +404,39 @@ func setupDatabase(cfg *config.Config) (*gorm.DB, error) {
 	case "mysql":
 		var tlsOption string
 		switch cfg.DBSSLMode {
-		case "require", "verify-full": tlsOption = "true"
-		default: tlsOption = "false"
+		case "require", "verify-full":
+			tlsOption = "true"
+		default:
+			tlsOption = "false"
 		}
 		dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local&tls=%s", cfg.DBUser, cfg.DBPass, cfg.DBHost, cfg.DBPort, cfg.DBName, tlsOption)
 		db, err = gorm.Open(mysql.Open(dsn), gormConfig)
 	case "postgres":
 		sslMode := cfg.DBSSLMode
-		if sslMode == "" { sslMode = "disable" }
+		if sslMode == "" {
+			sslMode = "disable"
+		}
 		dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=Asia/Jakarta", cfg.DBHost, cfg.DBUser, cfg.DBPass, cfg.DBName, cfg.DBPort, sslMode)
 		db, err = gorm.Open(postgres.Open(dsn), gormConfig)
 	default:
 		db, err = gorm.Open(sqlite.Open(cfg.DBDSN), gormConfig)
-		if err == nil { 
-			db.Exec("PRAGMA journal_mode = WAL;") 
-			db.Exec("PRAGMA synchronous = NORMAL;") 
+		if err == nil {
+			db.Exec("PRAGMA journal_mode = WAL;")
+			db.Exec("PRAGMA synchronous = NORMAL;")
 			db.Exec("PRAGMA foreign_keys = ON;")
 		}
 	}
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	sqlDB, _ := db.DB()
-	sqlDB.SetMaxIdleConns(10); sqlDB.SetMaxOpenConns(100); sqlDB.SetConnMaxLifetime(time.Hour)
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetMaxOpenConns(100)
+	sqlDB.SetConnMaxLifetime(time.Hour)
 	err = db.AutoMigrate(&models.User{}, &models.Resident{}, &models.LostDocument{}, &models.LostItem{}, &models.AuditLog{}, &models.Configuration{}, &models.ItemTemplate{}, &models.License{})
-	if err != nil { return nil, fmt.Errorf("migrasi gagal: %w", err) }
+	if err != nil {
+		return nil, fmt.Errorf("migrasi gagal: %w", err)
+	}
 	return db, nil
 }
 
@@ -434,10 +456,12 @@ func mustGetConfig(s services.ConfigService) *dto.AppConfig {
 func seedDefaultTemplates(db *gorm.DB) {
 	var count int64
 	db.Model(&models.ItemTemplate{}).Unscoped().Count(&count)
-	if count > 0 { return } // Kalau sudah ada data, skip (makanya kita butuh seeder di atas buat update)
-	
+	if count > 0 {
+		return
+	} // Kalau sudah ada data, skip (makanya kita butuh seeder di atas buat update)
+
 	log.Println("🔹 Seeding templates...")
-	
+
 	// Daftar Bank Lengkap
 	bankOptions := []string{"BRI", "BCA", "Mandiri", "BNI", "BSI", "BTN", "CIMB Niaga", "Danamon", "Permata", "Panin", "Maybank", "Mega", "BTPN / Jenius", "Bank Daerah (BPD)", "Lainnya"}
 
@@ -447,10 +471,10 @@ func seedDefaultTemplates(db *gorm.DB) {
 		{NamaBarang: "STNK", Urutan: 3, IsActive: true, FieldsConfig: models.JSONFieldArray{{Label: "Nomor Polisi", Type: "text", DataLabel: "No. Pol"}, {Label: "Nomor Rangka", Type: "text", DataLabel: "No. Rangka"}, {Label: "Nomor Mesin", Type: "text", DataLabel: "No. Mesin"}}},
 		{NamaBarang: "BPKB", Urutan: 4, IsActive: true, FieldsConfig: models.JSONFieldArray{{Label: "Nomor BPKB", Type: "text", DataLabel: "No. BPKB"}, {Label: "Atas Nama", Type: "text", DataLabel: "a.n."}}},
 		{NamaBarang: "IJAZAH", Urutan: 5, IsActive: true, FieldsConfig: models.JSONFieldArray{{Label: "Tingkat", Type: "select", DataLabel: "Tingkat", Options: []string{"SD", "SMP", "SMA", "D3", "S1", "S2"}}, {Label: "Nomor Ijazah", Type: "text", DataLabel: "No. Ijazah"}}},
-		
+
 		// UPDATE INI
 		{NamaBarang: "ATM", Urutan: 6, IsActive: true, FieldsConfig: models.JSONFieldArray{{Label: "Nama Bank", Type: "select", DataLabel: "Bank", Options: bankOptions}, {Label: "Nomor Rekening", Type: "text", DataLabel: "No. Rek"}}},
-		
+
 		{NamaBarang: "LAINNYA", Urutan: 99, IsActive: true, FieldsConfig: models.JSONFieldArray{}},
 	}
 	db.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "nama_barang"}}, DoNothing: true}).Create(&templates)
