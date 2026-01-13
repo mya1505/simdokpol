@@ -1,0 +1,82 @@
+{{template "_header.html" .}}
+{{template "_sidebar.html" .}}
+
+<style>
+    .guide-section { margin-bottom: 2rem; }
+    .guide-title {
+        border-left: 5px solid #4e73df;
+        padding-left: 15px;
+        margin-bottom: 1rem;
+        font-weight: 700;
+        color: #2e59d9;
+    }
+</style>
+
+<div id="content-wrapper" class="d-flex flex-column">
+    <div id="content">
+        {{template "_topbar.html" .}}
+        <div class="container-fluid">
+            <div class="d-sm-flex align-items-center justify-content-between mb-4">
+                <h1 class="h3 mb-0 text-gray-800">Panduan Operasional Dokumen</h1>
+            </div>
+
+            {{template "_panduanTabs.html" .}}
+
+            <div class="card shadow mb-4 guide-section">
+                <div class="card-body">
+                    <h4 class="guide-title">1. Buat Surat Keterangan Baru</h4>
+                    <ul>
+                        <li>Masuk menu <strong>Surat Keterangan</strong> → <strong>Buat Surat Baru</strong>.</li>
+                        <li>Isi data pemohon sesuai KTP. Sistem otomatis ubah huruf ke kapital.</li>
+                        <li>Lengkapi lokasi kejadian dan tanggal laporan jika diperlukan.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card shadow mb-4 guide-section">
+                <div class="card-body">
+                    <h4 class="guide-title">2. Barang Hilang & Template</h4>
+                    <ul>
+                        <li>Klik <strong>Tambah Barang</strong> untuk setiap item yang hilang.</li>
+                        <li>Form isian menyesuaikan jenis barang (misal STNK meminta nomor rangka/mesin).</li>
+                        <li>Super Admin bisa mengatur <strong>Template Barang</strong> agar sesuai kebutuhan setempat.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card shadow mb-4 guide-section">
+                <div class="card-body">
+                    <h4 class="guide-title">3. Petugas & Pejabat Persetujuan</h4>
+                    <ul>
+                        <li>Petugas pelapor/pejabat persetujuan dipilih dari pengguna aktif.</li>
+                        <li>Jabatan dan regu akan otomatis terbaca dari data pengguna.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card shadow mb-4 guide-section">
+                <div class="card-body">
+                    <h4 class="guide-title">4. Preview, PDF, dan Cetak</h4>
+                    <ul>
+                        <li>Gunakan tombol <strong>Preview</strong> untuk cek tata letak sebelum cetak.</li>
+                        <li>Gunakan tombol <strong>PDF</strong> untuk simpan atau kirim dokumen.</li>
+                    </ul>
+                    <div class="alert alert-info mb-0"><i class="fas fa-info-circle mr-2"></i>Template print sudah disesuaikan agar presisi ukuran A4.</div>
+                </div>
+            </div>
+
+            <div class="card shadow mb-4 guide-section">
+                <div class="card-body">
+                    <h4 class="guide-title">5. Arsip Otomatis</h4>
+                    <ul>
+                        <li>Dokumen yang melewati batas durasi arsip akan dipindah otomatis.</li>
+                        <li>Menu <strong>Arsip Dokumen</strong> menyimpan semua surat lama.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    {{template "_footer.html" .}}
+</div>
+
+{{template "_scripts.html" .}}

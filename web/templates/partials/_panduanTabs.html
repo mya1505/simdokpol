@@ -1,0 +1,14 @@
+<div class="d-flex flex-wrap gap-2 mb-4">
+    <a class="btn btn-sm {{if eq .ActiveTab "overview"}}btn-primary{{else}}btn-outline-primary{{end}}" href="/panduan">
+        <i class="fas fa-map mr-1"></i> Ringkasan
+    </a>
+    <a class="btn btn-sm {{if eq .ActiveTab "setup"}}btn-primary{{else}}btn-outline-primary{{end}}" href="/panduan/setup">
+        <i class="fas fa-sliders-h mr-1"></i> Setup & Konfigurasi
+    </a>
+    <a class="btn btn-sm {{if eq .ActiveTab "dokumen"}}btn-primary{{else}}btn-outline-primary{{end}}" href="/panduan/dokumen">
+        <i class="fas fa-file-alt mr-1"></i> Operasional Dokumen
+    </a>
+    <a class="btn btn-sm {{if eq .ActiveTab "admin"}}btn-primary{{else}}btn-outline-primary{{end}}" href="/panduan/admin">
+        <i class="fas fa-user-shield mr-1"></i> Administrasi & Sistem
+    </a>
+</div>

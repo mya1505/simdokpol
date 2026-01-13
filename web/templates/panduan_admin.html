@@ -1,0 +1,93 @@
+{{template "_header.html" .}}
+{{template "_sidebar.html" .}}
+
+<style>
+    .guide-section { margin-bottom: 2rem; }
+    .guide-title {
+        border-left: 5px solid #4e73df;
+        padding-left: 15px;
+        margin-bottom: 1rem;
+        font-weight: 700;
+        color: #2e59d9;
+    }
+</style>
+
+<div id="content-wrapper" class="d-flex flex-column">
+    <div id="content">
+        {{template "_topbar.html" .}}
+        <div class="container-fluid">
+            <div class="d-sm-flex align-items-center justify-content-between mb-4">
+                <h1 class="h3 mb-0 text-gray-800">Panduan Administrasi & Sistem</h1>
+            </div>
+
+            {{template "_panduanTabs.html" .}}
+
+            <div class="card shadow mb-4 guide-section">
+                <div class="card-body">
+                    <h4 class="guide-title">1. Manajemen Pengguna</h4>
+                    <ul>
+                        <li>Tambah operator/petugas baru di menu <strong>Manajemen Pengguna</strong>.</li>
+                        <li>Peran menentukan akses (Super Admin atau Operator).</li>
+                        <li>Akun non-aktif tetap tercatat di dokumen lama, namun tidak bisa login.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card shadow mb-4 guide-section">
+                <div class="card-body">
+                    <h4 class="guide-title">2. Master Jabatan</h4>
+                    <ul>
+                        <li>Kelola daftar jabatan agar input petugas konsisten.</li>
+                        <li>Dropdown jabatan mengambil data dari master ini.</li>
+                        <li>Jika ada jabatan khusus, gunakan opsi <strong>LAINNYA</strong>.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card shadow mb-4 guide-section">
+                <div class="card-body">
+                    <h4 class="guide-title">3. Log Audit</h4>
+                    <ul>
+                        <li>Aktivitas penting (tambah/ubah data, pengaturan, jabatan) tercatat di Log Audit.</li>
+                        <li>Gunakan untuk pelacakan perubahan dan monitoring.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card shadow mb-4 guide-section">
+                <div class="card-body">
+                    <h4 class="guide-title">4. Backup, Restore, dan Migrasi</h4>
+                    <ul>
+                        <li><strong>Backup</strong> dan <strong>Restore</strong> berlaku untuk SQLite.</li>
+                        <li><strong>Migrasi</strong> menyalin seluruh data ke MySQL/Postgres.</li>
+                        <li>Pastikan DB target kosong sebelum migrasi.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card shadow mb-4 guide-section">
+                <div class="card-body">
+                    <h4 class="guide-title">5. HTTPS & Sertifikat</h4>
+                    <ul>
+                        <li>Aktifkan HTTPS di menu Pengaturan untuk jaringan kantor.</li>
+                        <li>Gunakan fitur <strong>Install Sertifikat</strong> agar browser percaya pada sertifikat lokal.</li>
+                        <li>Untuk akses via perangkat lain, pastikan sertifikat CA sudah terpasang.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card shadow mb-4 guide-section">
+                <div class="card-body">
+                    <h4 class="guide-title">6. Lisensi & Aktivasi</h4>
+                    <ul>
+                        <li>Menu Upgrade menampilkan status lisensi dan QR HWID.</li>
+                        <li>Masukkan Activation Code sesuai prosedur aktivasi offline.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    {{template "_footer.html" .}}
+</div>
+
+{{template "_scripts.html" .}}

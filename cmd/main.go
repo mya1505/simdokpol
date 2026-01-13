@@ -258,7 +258,16 @@ func onReady() {
 	authorized.PUT("/api/profile", userController.UpdateProfile)
 	authorized.PUT("/api/profile/password", userController.ChangePassword)
 	authorized.GET("/panduan", func(c *gin.Context) {
-		controllers.RenderHTML(c, "panduan.html", gin.H{"Title": "Panduan"})
+		controllers.RenderHTML(c, "panduan.html", gin.H{"Title": "Panduan", "ActiveTab": "overview"})
+	})
+	authorized.GET("/panduan/setup", func(c *gin.Context) {
+		controllers.RenderHTML(c, "panduan_setup.html", gin.H{"Title": "Panduan", "ActiveTab": "setup"})
+	})
+	authorized.GET("/panduan/dokumen", func(c *gin.Context) {
+		controllers.RenderHTML(c, "panduan_dokumen.html", gin.H{"Title": "Panduan", "ActiveTab": "dokumen"})
+	})
+	authorized.GET("/panduan/admin", func(c *gin.Context) {
+		controllers.RenderHTML(c, "panduan_admin.html", gin.H{"Title": "Panduan", "ActiveTab": "admin"})
 	})
 	authorized.GET("/upgrade", func(c *gin.Context) {
 		conf, _ := configService.GetConfig()

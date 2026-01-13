@@ -1,0 +1,87 @@
+{{template "_header.html" .}}
+{{template "_sidebar.html" .}}
+
+<style>
+    .guide-section { margin-bottom: 2rem; }
+    .guide-title {
+        border-left: 5px solid #4e73df;
+        padding-left: 15px;
+        margin-bottom: 1rem;
+        font-weight: 700;
+        color: #2e59d9;
+    }
+    .step-badge {
+        background-color: #4e73df;
+        color: white;
+        padding: 0.2rem 0.6rem;
+        border-radius: 50%;
+        margin-right: 10px;
+        font-size: 0.9rem;
+        font-weight: bold;
+    }
+</style>
+
+<div id="content-wrapper" class="d-flex flex-column">
+    <div id="content">
+        {{template "_topbar.html" .}}
+        <div class="container-fluid">
+            <div class="d-sm-flex align-items-center justify-content-between mb-4">
+                <h1 class="h3 mb-0 text-gray-800">Panduan Setup & Konfigurasi</h1>
+            </div>
+
+            {{template "_panduanTabs.html" .}}
+
+            <div class="card shadow mb-4 guide-section">
+                <div class="card-body">
+                    <h4 class="guide-title">1. Setup Awal (Wizard 5 Langkah)</h4>
+                    <ul class="list-unstyled">
+                        <li class="mb-3"><span class="step-badge">1</span> <strong>Pilih Database:</strong> SQLite untuk satu perangkat, MySQL/Postgres untuk jaringan kantor.</li>
+                        <li class="mb-3"><span class="step-badge">2</span> <strong>Koneksi Database:</strong> Isi Host, Port, User, Password, DB Name jika memakai server.</li>
+                        <li class="mb-3"><span class="step-badge">3</span> <strong>Identitas Instansi:</strong> KOP surat (baris 1-3), nama kantor, dan tempat terbit.</li>
+                        <li class="mb-3"><span class="step-badge">4</span> <strong>Penomoran & Arsip:</strong> Isi kode surat, kode arsip, dan format nomor. Contoh: <code>{KODE_SURAT}/{NOMOR}/{BULAN_ROMAWI}/{KODE_ARSIP}/{TAHUN}</code>.</li>
+                        <li class="mb-3"><span class="step-badge">5</span> <strong>Akun Super Admin:</strong> Nama, NRP, Pangkat, Jabatan, Password minimal 8 karakter.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card shadow mb-4 guide-section">
+                <div class="card-body">
+                    <h4 class="guide-title">2. Format Nomor Surat Fleksibel</h4>
+                    <p>Format nomor dapat diubah kapan saja di Pengaturan. Token yang tersedia:</p>
+                    <ul>
+                        <li><strong>{KODE_SURAT}</strong>: kode surat (contoh: SKH)</li>
+                        <li><strong>{NOMOR}</strong>: nomor urut</li>
+                        <li><strong>{BULAN_ROMAWI}</strong>: bulan dalam angka Romawi</li>
+                        <li><strong>{KODE_ARSIP}</strong>: kode arsip (contoh: TUK.7.2.1)</li>
+                        <li><strong>{TAHUN}</strong>: tahun saat ini</li>
+                    </ul>
+                    <div class="alert alert-info mb-0"><i class="fas fa-info-circle mr-2"></i>Format lama berbasis <code>%</code> masih didukung.</div>
+                </div>
+            </div>
+
+            <div class="card shadow mb-4 guide-section">
+                <div class="card-body">
+                    <h4 class="guide-title">3. Pengaturan Sistem</h4>
+                    <p>Menu Pengaturan berisi konfigurasi lanjutan:</p>
+                    <ul>
+                        <li><strong>Zona Waktu</strong> untuk sinkronisasi waktu terbit surat.</li>
+                        <li><strong>Durasi Arsip</strong> untuk memindahkan dokumen lama otomatis.</li>
+                        <li><strong>Backup & Restore</strong> untuk SQLite.</li>
+                        <li><strong>Migrasi Data</strong> dari SQLite ke MySQL/Postgres.</li>
+                        <li><strong>HTTPS</strong> untuk keamanan jaringan lokal.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card shadow mb-4 guide-section">
+                <div class="card-body">
+                    <h4 class="guide-title">4. Restore Setup</h4>
+                    <p>Jika sudah punya file backup <code>.db</code>, gunakan tab Restore pada halaman Setup untuk memulihkan seluruh data.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {{template "_footer.html" .}}
+</div>
+
+{{template "_scripts.html" .}}
