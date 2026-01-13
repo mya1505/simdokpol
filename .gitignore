@@ -37,3 +37,6 @@ Thumbs.db
 coverage.out
 certs/
 backups/
+
+# --- Frontend Dependencies ---
+node_modules/

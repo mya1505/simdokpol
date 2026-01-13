@@ -171,6 +171,26 @@ func onReady() {
 	templ := template.Must(template.New("").Funcs(funcMap).ParseFS(web.Assets, "templates/*.html", "templates/partials/*.html"))
 	r.SetHTMLTemplate(templ)
 	r.StaticFS("/static", web.GetStaticFS())
+	spaDist := filepath.Join(".", "frontend", "dist")
+	serveSPA := func(c *gin.Context) {
+		requestedPath := strings.TrimPrefix(c.Param("filepath"), "/")
+		if requestedPath == "" {
+			requestedPath = "index.html"
+		}
+		distPath := filepath.Join(spaDist, requestedPath)
+		if _, err := os.Stat(distPath); err == nil {
+			c.File(distPath)
+			return
+		}
+		indexPath := filepath.Join(spaDist, "index.html")
+		if _, err := os.Stat(indexPath); err == nil {
+			c.File(indexPath)
+			return
+		}
+		c.String(http.StatusNotFound, "SPA build belum tersedia. Jalankan `cd frontend && npm run build`.")
+	}
+	r.GET("/app", serveSPA)
+	r.GET("/app/*filepath", serveSPA)
 
 	r.Use(func(c *gin.Context) {
 		c.Set("AppVersion", version)
@@ -197,6 +217,7 @@ func onReady() {
 	authorized.GET("/", func(c *gin.Context) {
 		controllers.RenderHTML(c, "dashboard.html", gin.H{"Title": "Beranda", "Config": mustGetConfig(configService)})
 	})
+	authorized.GET("/api/auth/me", authController.Me)
 	authorized.GET("/api/config/limits", configController.GetLimits)
 	authorized.GET("/api/stats", dashboardController.GetStats)
 	authorized.GET("/api/stats/monthly-issuance", dashboardController.GetMonthlyChart)

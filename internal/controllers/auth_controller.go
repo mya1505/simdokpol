@@ -69,3 +69,12 @@ func (c *AuthController) Logout(ctx *gin.Context) {
 	ctx.SetCookie("token", "", -1, "/", "", isProduction, true)
 	APIResponse(ctx, http.StatusOK, "Logout berhasil", nil)
 }
+
+func (c *AuthController) Me(ctx *gin.Context) {
+	user, exists := ctx.Get("currentUser")
+	if !exists || user == nil {
+		APIError(ctx, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+	APIResponse(ctx, http.StatusOK, "OK", gin.H{"user": user})
+}
