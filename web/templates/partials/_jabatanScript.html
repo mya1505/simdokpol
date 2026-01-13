@@ -17,16 +17,17 @@ $(document).ready(function() {
                     const statusBadge = item.is_active ? '<span class="badge badge-success">Aktif</span>' : '<span class="badge badge-secondary">Nonaktif</span>';
                     const toggleLabel = item.is_active ? 'Nonaktifkan' : 'Aktifkan';
                     const toggleClass = item.is_active ? 'btn-warning' : 'btn-success';
+                    const toggleIcon = item.is_active ? 'fa-user-slash' : 'fa-user-check';
                     const row = `
                         <tr>
                             <td>${item.nama}</td>
                             <td>${statusBadge}</td>
                             <td>
                                 <button class="btn btn-sm ${toggleClass} mr-1 btn-toggle" data-id="${item.id}" data-active="${item.is_active}">
-                                    ${toggleLabel}
+                                    <i class="fas ${toggleIcon} mr-1"></i>${toggleLabel}
                                 </button>
                                 <button class="btn btn-sm btn-danger btn-delete" data-id="${item.id}">
-                                    Hapus
+                                    <i class="fas fa-trash mr-1"></i>Hapus
                                 </button>
                             </td>
                         </tr>

@@ -298,7 +298,7 @@ $(document).ready(function() {
                 $('#lost-items-table tbody').empty();
                 if(data.lost_items) data.lost_items.forEach(i => {
                     const rowCnt = $('#lost-items-table tbody tr').length + 1;
-                    $('#lost-items-table tbody').append(`<tr><td>${rowCnt}</td><td data-name="nama_barang">${i.nama_barang}</td><td data-name="deskripsi">${i.deskripsi}</td><td><button type="button" class="btn btn-danger btn-sm remove-item-btn">X</button></td></tr>`);
+                    $('#lost-items-table tbody').append(`<tr><td>${rowCnt}</td><td data-name="nama_barang">${i.nama_barang}</td><td data-name="deskripsi">${i.deskripsi}</td><td><button type="button" class="btn btn-danger btn-sm remove-item-btn"><i class="fas fa-trash"></i></button></td></tr>`);
                 });
 
                 // Set Select2
