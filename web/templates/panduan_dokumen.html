@@ -10,6 +10,24 @@
         font-weight: 700;
         color: #2e59d9;
     }
+    .guide-illustration {
+        background: linear-gradient(135deg, rgba(78, 115, 223, 0.12), rgba(54, 185, 204, 0.12));
+        border: 1px solid #e3e6f0;
+        border-radius: 16px;
+        padding: 16px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+    }
+    .guide-illustration-text {
+        font-weight: 700;
+        color: #2e59d9;
+    }
+    .guide-illustration svg {
+        width: 160px;
+        height: auto;
+    }
 </style>
 
 <div id="content-wrapper" class="d-flex flex-column">
@@ -21,6 +39,19 @@
             </div>
 
             {{template "_panduanTabs.html" .}}
+
+            <div class="guide-illustration mb-4">
+                <div class="guide-illustration-text">Operasional Dokumen</div>
+                <svg viewBox="0 0 200 120" role="img" aria-label="Ilustrasi dokumen">
+                    <rect x="16" y="14" width="120" height="92" rx="10" fill="#ffffff" stroke="#cbd5e0" />
+                    <rect x="28" y="28" width="96" height="10" rx="5" fill="#4e73df" opacity="0.8" />
+                    <rect x="28" y="46" width="80" height="8" rx="4" fill="#e2e8f0" />
+                    <rect x="28" y="62" width="70" height="8" rx="4" fill="#e2e8f0" />
+                    <rect x="28" y="78" width="60" height="8" rx="4" fill="#e2e8f0" />
+                    <rect x="122" y="62" width="56" height="38" rx="8" fill="#36b9cc" opacity="0.2" />
+                    <circle cx="150" cy="80" r="10" fill="#36b9cc" />
+                </svg>
+            </div>
 
             <div class="card shadow mb-4 guide-section">
                 <div class="card-body">
