@@ -184,6 +184,20 @@ Khusus untuk database SQLite, pengguna dapat mengunggah file `simdokpol.db` dari
 
 Untuk meningkatkan keamanan komunikasi, administrator dapat mengaktifkan mode HTTPS melalui menu Pengaturan Sistem. Setelah aktivasi, aplikasi akan meminta izin untuk menginstal sertifikat SSL self-signed ke Windows Trusted Root Certificate Store. Proses ini memerlukan elevasi hak administrator dan akan menghilangkan peringatan keamanan browser pada akses berikutnya.
 
+### 🔑 Aktivasi Lisensi (Offline)
+
+Aktivasi dilakukan tanpa internet menggunakan activation code berbasis ECDSA.
+
+1. Buka menu **Upgrade**.
+2. Salin **Hardware ID** (atau scan QR).
+3. Admin menghasilkan activation code dari HWID menggunakan tool signer/keygen.
+4. Tempel activation code ke form, lalu aktifkan.
+
+### 📈 Health & Metrics
+
+- `GET /api/healthz` (public): status layanan, status DB, dan uptime.
+- `GET /api/metrics` (admin): ringkasan jumlah user, dokumen, log audit, dan template.
+
 ### 👨‍💻 Setup untuk Pengembang
 
 **Prasyarat Sistem**
@@ -229,10 +243,10 @@ Flag `-s -w` menghapus debug symbols untuk mengurangi ukuran binary, sementara `
 ```
 simdokpol/
 ├── cmd/
-│   ├── keygen/             # 🔑 Generator Key Pair ECDSA (Dev Tool)
-│   ├── license-manager/    # 📜 GUI Manager Lisensi & Key (Dev Tool)
+│   ├── keygen/             # 🔑 Generator Activation Code (Offline)
+│   ├── license-manager/    # 📜 GUI Generator Activation Code (Offline)
 │   ├── seeder/             # 🌱 Seeder data dummy & migrator (Dev Tool)
-│   ├── signer/             # ✍️ Generator Serial Key CLI (Dev Tool)
+│   ├── signer/             # ✍️ Generator Activation Code CLI (Offline)
 │   └── main.go             # 🚀 Entrypoint aplikasi utama
 ├── internal/
 │   ├── config/             # ⚙️ Logic pemuatan config & .env

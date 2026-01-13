@@ -150,6 +150,7 @@ func onReady() {
 	itemTemplateController := controllers.NewItemTemplateController(itemTemplateService)
 	dbTestController := controllers.NewDBTestController(dbTestService)
 	updateController := controllers.NewUpdateController(updateService, version)
+	systemController := controllers.NewSystemController(db)
 
 	if os.Getenv("APP_ENV") == "production" {
 		gin.SetMode(gin.ReleaseMode)
@@ -181,6 +182,7 @@ func onReady() {
 	r.POST("/api/setup", configController.SaveSetup)
 	r.POST("/api/setup/restore", configController.RestoreSetup)
 	r.POST("/api/db/test", dbTestController.TestConnection)
+	r.GET("/api/healthz", systemController.Healthz)
 
 	authorized := r.Group("/")
 	authorized.Use(middleware.SetupMiddleware(configService))
@@ -293,12 +295,14 @@ func onReady() {
 	admin.GET("/api/settings/download-cert", settingsController.DownloadCertificate)
 	admin.GET("/api/audit-logs", auditController.FindAll)
 	admin.GET("/api/audit-logs/export", auditController.Export)
+	admin.GET("/api/metrics", systemController.Metrics)
 	admin.GET("/audit-logs", func(c *gin.Context) {
 		controllers.RenderHTML(c, "audit_log_list.html", gin.H{"Title": "Log Audit"})
 	})
 	admin.GET("/api/documents/export", docController.Export)
 	admin.POST("/api/license/activate", licenseController.ActivateLicense)
 	admin.GET("/api/license/hwid", licenseController.GetHardwareID)
+	admin.GET("/api/license/hwid/qr", licenseController.GetHardwareIDQR)
 
 	pro := admin.Group("/")
 	pro.Use(middleware.LicenseMiddleware(licenseService))

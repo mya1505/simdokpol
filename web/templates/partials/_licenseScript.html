@@ -13,9 +13,17 @@ $(document).ready(function() {
         method: "GET",
         success: function(resp) {
             $('#hardware-id-val').text(resp.hardware_id);
+            const $qr = $('#hardware-id-qr');
+            if ($qr.length) {
+                $qr.attr('src', '/api/license/hwid/qr?size=160');
+            }
         },
         error: function() {
             $('#hardware-id-val').text('ERROR').addClass('text-danger');
+            const $qr = $('#hardware-id-qr');
+            if ($qr.length) {
+                $qr.hide();
+            }
         }
     });
 
@@ -89,7 +97,7 @@ $(document).ready(function() {
                     icon: 'error',
                     title: 'Aktivasi Gagal',
                     text: errorMsg,
-                    footer: 'Pastikan Anda menyalin Serial Key yang sesuai dengan Hardware ID di atas.'
+                    footer: 'Pastikan Activation Code sesuai dengan Hardware ID di atas.'
                 });
                 $button.html(originalButtonText).prop('disabled', false);
             }

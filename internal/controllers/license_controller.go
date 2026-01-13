@@ -6,10 +6,12 @@ import (
 	"net/http"
 	"simdokpol/internal/dto"
 	"simdokpol/internal/services"
-	"simdokpol/internal/utils" // <-- Tambah Import Utils
-	"time"                     // <-- Tambah Import Time
+	"simdokpol/internal/utils"
+	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/skip2/go-qrcode"
 )
 
 type LicenseController struct {
@@ -20,6 +22,31 @@ type LicenseController struct {
 func (c *LicenseController) GetHardwareID(ctx *gin.Context) {
 	hwid := c.service.GetHardwareID()
 	ctx.JSON(http.StatusOK, gin.H{"hardware_id": hwid})
+}
+
+func (c *LicenseController) GetHardwareIDQR(ctx *gin.Context) {
+	hwid := c.service.GetHardwareID()
+	size := 160
+	if sizeParam := ctx.Query("size"); sizeParam != "" {
+		if parsed, err := strconv.Atoi(sizeParam); err == nil {
+			if parsed < 100 {
+				parsed = 100
+			}
+			if parsed > 400 {
+				parsed = 400
+			}
+			size = parsed
+		}
+	}
+
+	png, err := qrcode.Encode(hwid, qrcode.Medium, size)
+	if err != nil {
+		APIError(ctx, http.StatusInternalServerError, "Gagal membuat QR Code.")
+		return
+	}
+
+	ctx.Header("Cache-Control", "no-store")
+	ctx.Data(http.StatusOK, "image/png", png)
 }
 
 func NewLicenseController(service services.LicenseService, auditService services.AuditLogService) *LicenseController {
