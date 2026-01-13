@@ -68,8 +68,8 @@
                                 <li class="mb-3"><span class="step-badge">1</span> <strong>Pilih Database:</strong> Gunakan <em>SQLite</em> untuk penggunaan di satu laptop, atau <em>MySQL/PostgreSQL</em> untuk jaringan kantor (LAN).</li>
                                 <li class="mb-3"><span class="step-badge">2</span> <strong>Koneksi:</strong> Masukkan kredensial database (Host, User, Password) jika memilih mode server.</li>
                                 <li class="mb-3"><span class="step-badge">3</span> <strong>Identitas Instansi:</strong> Isi KOP surat (Kepolisian Negara, Daerah, Resor) dan nama kantor pelayanan.</li>
-                                <li class="mb-3"><span class="step-badge">4</span> <strong>Penomoran:</strong> Tentukan format nomor surat (contoh: <code>SKH/%03d/X/2025</code>) dan nomor urut terakhir.</li>
-                                <li class="mb-3"><span class="step-badge">5</span> <strong>Akun Admin:</strong> Buat akun Super Admin pertama Anda untuk mengelola sistem.</li>
+                                <li class="mb-3"><span class="step-badge">4</span> <strong>Penomoran:</strong> Atur format nomor surat, kode surat, dan kode arsip (contoh: <code>{KODE_SURAT}/{NOMOR}/{BULAN_ROMAWI}/{KODE_ARSIP}/{TAHUN}</code>).</li>
+                                <li class="mb-3"><span class="step-badge">5</span> <strong>Akun Admin:</strong> Buat akun Super Admin pertama (Nama, NRP, Pangkat, Jabatan, Password).</li>
                             </ul>
                         </div>
                         <div class="col-lg-6 text-center">
@@ -132,12 +132,20 @@
                             <p class="small text-muted">Tambah personel operator baru, reset password, atau non-aktifkan akun petugas yang mutasi.</p>
                         </div>
                         <div class="col-md-4">
+                            <h6 class="font-weight-bold text-dark"><i class="fas fa-id-badge mr-2"></i>Master Jabatan</h6>
+                            <p class="small text-muted">Kelola daftar jabatan agar input petugas konsisten dan bebas typo.</p>
+                        </div>
+                        <div class="col-md-4">
                             <h6 class="font-weight-bold text-dark"><i class="fas fa-chart-pie mr-2"></i>Laporan Agregat <span class="badge badge-warning">PRO</span></h6>
                             <p class="small text-muted">Unduh rekapitulasi bulanan dalam format PDF/Excel yang berisi statistik jumlah surat, kinerja operator, dan tren barang hilang.</p>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-4 mt-3">
                             <h6 class="font-weight-bold text-dark"><i class="fas fa-puzzle-piece mr-2"></i>Template Barang <span class="badge badge-warning">PRO</span></h6>
                             <p class="small text-muted">Sesuaikan formulir isian barang secara dinamis. Tambah field baru atau ubah urutan tanpa coding.</p>
+                        </div>
+                        <div class="col-md-4 mt-3">
+                            <h6 class="font-weight-bold text-dark"><i class="fas fa-history mr-2"></i>Log Audit</h6>
+                            <p class="small text-muted">Pantau aktivitas penting seperti perubahan data pengguna, jabatan, dan konfigurasi.</p>
                         </div>
                     </div>
                     <hr>
