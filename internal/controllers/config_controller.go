@@ -90,6 +90,7 @@ type SaveSetupRequest struct {
 	AdminNamaLengkap string `json:"admin_nama_lengkap" binding:"required"`
 	AdminNRP         string `json:"admin_nrp" binding:"required"`
 	AdminPangkat     string `json:"admin_pangkat" binding:"required"`
+	AdminJabatan     string `json:"admin_jabatan" binding:"required"`
 	AdminPassword    string `json:"admin_password" binding:"required,min=8"`
 }
 
@@ -176,7 +177,7 @@ func (c *ConfigController) SaveSetup(ctx *gin.Context) {
 		Pangkat:     req.AdminPangkat,
 		KataSandi:   string(hashedPassword),
 		Peran:       models.RoleSuperAdmin,
-		Jabatan:     models.RoleSuperAdmin,
+		Jabatan:     req.AdminJabatan,
 		Regu:        "-",
 	}
 

@@ -14,22 +14,19 @@ $(document).ready(function() {
     });
 
     // --- LOGIC TOGGLE PASSWORD (INTIP) ---
-    function togglePasswordVisibility(inputId, toggleId) {
-        const password = $(inputId);
-        const toggle = $(toggleId);
-        const type = password.attr('type') === 'password' ? 'text' : 'password';
-        password.attr('type', type);
-        toggle.toggleClass('fa-eye fa-eye-slash');
-    }
-
-    $('#togglePassword').on('click', function() {
-        togglePasswordVisibility('#admin_password', '#togglePassword');
-    });
-    $('#togglePasswordConfirm').on('click', function() {
-        togglePasswordVisibility('#admin_password_confirm', '#togglePasswordConfirm');
-    });
-    $('#toggleDbPassword').on('click', function() {
-        togglePasswordVisibility('#db_pass', '#toggleDbPassword');
+    $('body').on('click', '.password-peek', function() {
+        const $peek = $(this);
+        const target = $peek.data('target');
+        const $input = target ? $(target) : $peek.siblings('input');
+        if ($input.length === 0) {
+            return;
+        }
+        const type = $input.attr('type') === 'password' ? 'text' : 'password';
+        $input.attr('type', type);
+        const $icon = $peek.is('i') ? $peek : $peek.find('i');
+        if ($icon.length > 0) {
+            $icon.toggleClass('fa-eye fa-eye-slash');
+        }
     });
 
     // --- STEPPER LOGIC ---
@@ -216,6 +213,7 @@ $(document).ready(function() {
             admin_nama_lengkap: $('#admin_nama_lengkap').val(),
             admin_nrp: $('#admin_nrp').val(),
             admin_pangkat: $('#admin_pangkat').val(),
+            admin_jabatan: $('#admin_jabatan').val(),
             admin_password: password,
         };
 
