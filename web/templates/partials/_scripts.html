@@ -38,6 +38,31 @@
 
 <script>
 $(document).ready(function() {
+    function showPageLoader() {
+        $('#page-loader').fadeIn(120);
+    }
+
+    $(window).on('load', function() {
+        $('#page-loader').fadeOut(120);
+    });
+
+    $('body').on('click', 'a', function() {
+        const $link = $(this);
+        const href = $link.attr('href');
+        if (!href || href === '#' || href.startsWith('javascript:')) {
+            return;
+        }
+        if ($link.attr('target') === '_blank') {
+            return;
+        }
+        if ($link.data('toggle') === 'collapse') {
+            return;
+        }
+        if (href.startsWith('/')) {
+            showPageLoader();
+        }
+    });
+
     // Logout
     $('#logout-btn').on('click', function(e) {
         e.preventDefault();
