@@ -38,12 +38,45 @@
 
 <script>
 $(document).ready(function() {
+    let loaderTimer = null;
+    let loaderPercent = 0;
+
+    function updateLoaderUI(value) {
+        const percent = Math.min(100, Math.max(0, value));
+        $('#page-loader-percent').text(percent + '%');
+        $('#page-loader-progress').css('width', percent + '%');
+    }
+
     function showPageLoader() {
+        loaderPercent = 0;
+        updateLoaderUI(loaderPercent);
         $('#page-loader').addClass('is-active');
+        if (loaderTimer) {
+            clearInterval(loaderTimer);
+        }
+        loaderTimer = setInterval(function() {
+            if (loaderPercent >= 95) {
+                clearInterval(loaderTimer);
+                return;
+            }
+            loaderPercent += Math.floor(Math.random() * 6) + 2;
+            updateLoaderUI(loaderPercent);
+        }, 140);
+    }
+
+    function hidePageLoader() {
+        if (loaderTimer) {
+            clearInterval(loaderTimer);
+        }
+        updateLoaderUI(100);
+        setTimeout(function() {
+            $('#page-loader').removeClass('is-active');
+            updateLoaderUI(0);
+        }, 180);
     }
 
     $(window).on('load', function() {
-        $('#page-loader').removeClass('is-active');
+        hidePageLoader();
     });
 
     $('body').on('click', 'a', function() {
