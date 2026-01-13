@@ -79,7 +79,7 @@ $(document).ready(function() {
         hidePageLoader();
     });
 
-    $('body').on('click', 'a', function() {
+    $('body').on('click', 'a', function(e) {
         const $link = $(this);
         const href = $link.attr('href');
         if (!href || href === '#' || href.startsWith('javascript:')) {
@@ -91,8 +91,15 @@ $(document).ready(function() {
         if ($link.data('toggle') === 'collapse') {
             return;
         }
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+            return;
+        }
         if (href.startsWith('/')) {
+            e.preventDefault();
             showPageLoader();
+            setTimeout(function() {
+                window.location.href = href;
+            }, 120);
         }
     });
 
