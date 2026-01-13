@@ -39,11 +39,11 @@
 <script>
 $(document).ready(function() {
     function showPageLoader() {
-        $('#page-loader').fadeIn(120);
+        $('#page-loader').addClass('is-active');
     }
 
     $(window).on('load', function() {
-        $('#page-loader').fadeOut(120);
+        $('#page-loader').removeClass('is-active');
     });
 
     $('body').on('click', 'a', function() {
