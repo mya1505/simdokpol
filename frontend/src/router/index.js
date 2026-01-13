@@ -17,12 +17,18 @@ import ReportsView from '../views/ReportsView.vue'
 import UpgradeView from '../views/UpgradeView.vue'
 import PanduanView from '../views/PanduanView.vue'
 import TentangView from '../views/TentangView.vue'
+import SetupView from '../views/SetupView.vue'
 
 const routes = [
   {
     path: '/login',
     name: 'login',
     component: LoginView,
+  },
+  {
+    path: '/setup',
+    name: 'setup',
+    component: SetupView,
   },
   {
     path: '/',
@@ -62,10 +68,31 @@ const router = createRouter({
 })
 
 let sessionChecked = false
+let setupChecked = false
+let setupComplete = true
 
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
-  if (!sessionChecked) {
+  if (!setupChecked) {
+    try {
+      const { default: api } = await import('../lib/api')
+      const { data } = await api.get('/config/limits')
+      setupComplete = Boolean(data?.is_setup_complete)
+    } catch {
+      setupComplete = true
+    }
+    setupChecked = true
+  }
+
+  if (!setupComplete && to.name !== 'setup') {
+    return { name: 'setup' }
+  }
+
+  if (setupComplete && to.name === 'setup') {
+    return { name: 'login' }
+  }
+
+  if (setupComplete && !sessionChecked) {
     await auth.fetchSession()
     sessionChecked = true
   }

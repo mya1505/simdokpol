@@ -30,13 +30,10 @@ type LoginRequest struct {
 func (c *AuthController) ShowLoginPage(ctx *gin.Context) {
 	isSetup, _ := c.configService.IsSetupComplete()
 	if !isSetup {
-		ctx.Redirect(http.StatusFound, "/setup")
+		ctx.Redirect(http.StatusFound, "/app/setup")
 		return
 	}
-    // Menggunakan RenderHTML agar version dan changelog masuk
-	RenderHTML(ctx, "login.html", gin.H{
-		"Title":      "Login Masuk",
-	})
+	ctx.Redirect(http.StatusFound, "/app/login")
 }
 
 func (c *AuthController) Login(ctx *gin.Context) {

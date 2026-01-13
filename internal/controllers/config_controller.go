@@ -47,8 +47,10 @@ func NewConfigController(
 // @Router /api/config/limits [get]
 func (c *ConfigController) GetLimits(ctx *gin.Context) {
 	cfg, err := c.configService.GetConfig()
+	isSetup, _ := c.configService.IsSetupComplete()
 	if err != nil {
 		ctx.JSON(http.StatusOK, gin.H{
+			"is_setup_complete":     false,
 			"session_timeout":       480,
 			"idle_timeout":          15,
 			"license_status":        "UNLICENSED",
@@ -57,6 +59,7 @@ func (c *ConfigController) GetLimits(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
+		"is_setup_complete":     isSetup,
 		"session_timeout":       cfg.SessionTimeout,
 		"idle_timeout":          cfg.IdleTimeout,
 		"license_status":        cfg.LicenseStatus,
@@ -310,10 +313,8 @@ func (c *ConfigController) RestoreSetup(ctx *gin.Context) {
 
 func (c *ConfigController) ShowSetupPage(ctx *gin.Context) {
 	if ok, _ := c.configService.IsSetupComplete(); ok {
-		ctx.Redirect(http.StatusFound, "/login")
+		ctx.Redirect(http.StatusFound, "/app/login")
 		return
 	}
-	cfg, _ := c.configService.GetConfig()
-	// Menggunakan RenderHTML agar konsisten dengan halaman lain
-	RenderHTML(ctx, "setup.html", gin.H{"Title": "Konfigurasi Awal", "CurrentConfig": cfg})
+	ctx.Redirect(http.StatusFound, "/app/setup")
 }
