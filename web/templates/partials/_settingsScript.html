@@ -15,7 +15,14 @@ $(document).ready(function () {
                 // Form fill
                 $("#kop_baris_1").val(s.kop_baris_1); $("#kop_baris_2").val(s.kop_baris_2); $("#kop_baris_3").val(s.kop_baris_3);
                 $("#nama_kantor").val(s.nama_kantor); $("#tempat_surat").val(s.tempat_surat);
-                $("#format_nomor_surat").val(s.format_nomor_surat); $("#nomor_surat_terakhir").val(s.nomor_surat_terakhir);
+                const kodeSurat = s.kode_surat || "SKH";
+                const kodeArsip = s.kode_arsip || "TUK.7.2.1";
+                const formatNomor = s.format_nomor_surat || "{KODE_SURAT}/{NOMOR}/{BULAN_ROMAWI}/{KODE_ARSIP}/{TAHUN}";
+
+                $("#format_nomor_surat").val(formatNomor);
+                $("#kode_surat").val(kodeSurat);
+                $("#kode_arsip").val(kodeArsip);
+                $("#nomor_surat_terakhir").val(s.nomor_surat_terakhir);
                 $("#zona_waktu").val(s.zona_waktu); $("#archive_duration_days").val(s.archive_duration_days);
                 $("#session_timeout").val(s.session_timeout); $("#idle_timeout").val(s.idle_timeout);
                 $("#enable_https").prop('checked', s.enable_https);
@@ -148,10 +155,13 @@ $(document).ready(function () {
                     Swal.fire({
                         title: 'HTTPS Diaktifkan',
                         html: `
-                            <p class="mb-3">Agar browser tidak menampilkan peringatan "Not Secure", Anda perlu memasang sertifikat.</p>
+                            <p class="mb-3">Sistem akan mencoba memasang sertifikat secara otomatis.</p>
                             <div class="text-center mb-3">
-                                <a href="/api/settings/download-cert" class="btn btn-success btn-lg shadow-sm" target="_blank">
-                                    <i class="fas fa-download mr-2"></i> Download Sertifikat (.crt)
+                                <button class="btn btn-primary btn-lg shadow-sm" id="install-cert-btn">
+                                    <i class="fas fa-shield-alt mr-2"></i> Install Otomatis
+                                </button>
+                                <a href="/api/settings/download-cert" class="btn btn-outline-secondary btn-lg shadow-sm ml-2" target="_blank">
+                                    <i class="fas fa-download mr-2"></i> Download CA (Manual)
                                 </a>
                             </div>
                             <div class="text-left small text-muted bg-light p-3 rounded border">
@@ -159,12 +169,32 @@ $(document).ready(function () {
                             </div>
                         `,
                         icon: 'info',
-                        width: '600px',
-                        confirmButtonText: 'Saya Mengerti, Restart Sekarang',
+                        width: '640px',
+                        confirmButtonText: 'Restart Sekarang',
                         confirmButtonColor: '#4e73df',
-                        allowOutsideClick: false
+                        allowOutsideClick: false,
+                        didOpen: () => {
+                            $('#install-cert-btn').on('click', function() {
+                                const $btn = $(this);
+                                $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-2"></i> Memasang...');
+                                $.ajax({
+                                    url: "/api/settings/install-cert",
+                                    method: "POST",
+                                    success: function() {
+                                        Swal.fire('Berhasil', 'Sertifikat terpasang. Restart browser setelah restart aplikasi.', 'success');
+                                    },
+                                    error: function(xhr) {
+                                        const msg = xhr.responseJSON?.error || "Gagal install otomatis. Gunakan langkah manual.";
+                                        Swal.fire('Gagal', msg, 'warning');
+                                    },
+                                    complete: function() {
+                                        $btn.prop('disabled', false).html('<i class="fas fa-shield-alt mr-2"></i> Install Otomatis');
+                                    }
+                                });
+                            });
+                        }
                     }).then((result) => {
-                         handleRestartSequence(response.restart_required);
+                        handleRestartSequence(response.restart_required);
                     });
                 } else {
                     handleRestartSequence(response.restart_required);
@@ -179,7 +209,10 @@ $(document).ready(function () {
         submitPartialConfig({
             kop_baris_1: $("#kop_baris_1").val(), kop_baris_2: $("#kop_baris_2").val(), kop_baris_3: $("#kop_baris_3").val(),
             nama_kantor: $("#nama_kantor").val(), tempat_surat: $("#tempat_surat").val(),
-            format_nomor_surat: $("#format_nomor_surat").val(), nomor_surat_terakhir: $("#nomor_surat_terakhir").val(),
+            format_nomor_surat: $("#format_nomor_surat").val(),
+            kode_surat: $("#kode_surat").val(),
+            kode_arsip: $("#kode_arsip").val(),
+            nomor_surat_terakhir: $("#nomor_surat_terakhir").val(),
             zona_waktu: $("#zona_waktu").val(), archive_duration_days: $("#archive_duration_days").val(),
             session_timeout: $("#session_timeout").val(), idle_timeout: $("#idle_timeout").val(),
             enable_https: $("#enable_https").is(":checked") ? "true" : "false"

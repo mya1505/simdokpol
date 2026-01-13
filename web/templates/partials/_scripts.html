@@ -46,11 +46,17 @@ $(document).ready(function() {
 
     // Password Peek
     $('body').on('click', '.password-peek', function() {
-        let $input = $(this).siblings('input');
-        if ($input.length > 0) {
-            let type = $input.attr('type') === 'password' ? 'text' : 'password';
-            $input.attr('type', type);
-            $(this).toggleClass('fa-eye fa-eye-slash');
+        const $peek = $(this);
+        const target = $peek.data('target');
+        const $input = target ? $(target) : $peek.siblings('input');
+        if ($input.length === 0) {
+            return;
+        }
+        const type = $input.attr('type') === 'password' ? 'text' : 'password';
+        $input.attr('type', type);
+        const $icon = $peek.is('i') ? $peek : $peek.find('i');
+        if ($icon.length > 0) {
+            $icon.toggleClass('fa-eye fa-eye-slash');
         }
     });
 });

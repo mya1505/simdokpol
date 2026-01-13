@@ -74,14 +74,14 @@ func TestUserController_Create(t *testing.T) {
 	// --- SETUP DATA UMUM ---
 	adminUser := &models.User{ID: 1, NamaLengkap: "Admin", Peran: models.RoleSuperAdmin}
 	operatorUser := &models.User{ID: 2, NamaLengkap: "Operator", Peran: models.RoleOperator}
-	
+
 	validRequestBody := CreateUserRequest{
 		NamaLengkap: "USER BARU",
 		NRP:         "99999",
 		KataSandi:   "password123",
 		Pangkat:     "BRIPDA",
 		Peran:       models.RoleOperator,
-		Jabatan:     "ANGGOTA JAGA REGU",
+		Jabatan:     "ANGGOTA JAGA",
 		Regu:        "I",
 	}
 
@@ -106,12 +106,12 @@ func TestUserController_Create(t *testing.T) {
 				mockSvc.On("Create", createdUserMatcher, adminUser.ID).Return(nil).Once()
 			},
 			expectedStatusCode: http.StatusCreated,
-			expectedBody:       `{"id":99, "nama_lengkap":"USER BARU","nrp":"99999","pangkat":"BRIPDA","peran":"OPERATOR","jabatan":"ANGGOTA JAGA REGU","regu":"I", "created_at":"0001-01-01T00:00:00Z", "updated_at":"0001-01-01T00:00:00Z"}`,
+			expectedBody:       `{"id":99, "nama_lengkap":"USER BARU","nrp":"99999","pangkat":"BRIPDA","peran":"OPERATOR","jabatan":"ANGGOTA JAGA","regu":"I", "created_at":"0001-01-01T00:00:00Z", "updated_at":"0001-01-01T00:00:00Z"}`,
 		},
 		{
-			name:          "Failure - Operator Tries to Create User (Authorization Error)",
-			userInContext: operatorUser,
-			requestBody:   validRequestBody,
+			name:               "Failure - Operator Tries to Create User (Authorization Error)",
+			userInContext:      operatorUser,
+			requestBody:        validRequestBody,
 			mockSetup:          func(mockSvc *mocks.UserService) {}, // Mock tidak akan pernah dipanggil
 			expectedStatusCode: http.StatusForbidden,
 			expectedBody:       `{"error":"Akses ditolak. Anda tidak memiliki hak akses yang cukup."}`,
@@ -124,7 +124,7 @@ func TestUserController_Create(t *testing.T) {
 				"kata_sandi": "password123",
 				"pangkat":    "BRIPDA",
 				"peran":      "OPERATOR",
-				"jabatan":    "ANGGOTA JAGA REGU",
+				"jabatan":    "ANGGOTA JAGA",
 			},
 			mockSetup:          func(mockSvc *mocks.UserService) {},
 			expectedStatusCode: http.StatusBadRequest,
@@ -146,7 +146,7 @@ func TestUserController_Create(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			mockUserService := new(mocks.UserService)
-			
+
 			authInjector := func(c *gin.Context) {
 				if tc.userInContext != nil {
 					c.Set("currentUser", tc.userInContext)
@@ -167,11 +167,11 @@ func TestUserController_Create(t *testing.T) {
 			req.Header.Set("Accept", "application/json")
 			// --- AKHIR PERBAIKAN ---
 			recorder := httptest.NewRecorder()
-			
+
 			router.ServeHTTP(recorder, req)
 
 			assert.Equal(t, tc.expectedStatusCode, recorder.Code)
-			
+
 			if tc.expectedStatusCode == http.StatusCreated {
 				assert.JSONEq(t, tc.expectedBody, recorder.Body.String())
 				var responseUser models.User
@@ -188,12 +188,11 @@ func TestUserController_Create(t *testing.T) {
 	}
 }
 
-
 // TestUserController_UpdateProfile menguji endpoint PUT /api/profile
 func TestUserController_UpdateProfile(t *testing.T) {
 	// --- SETUP DATA UMUM ---
 	loggedInUser := &models.User{ID: 5, NamaLengkap: "User Lama", NRP: "55555", Pangkat: "BRIPTU"}
-	
+
 	validRequestBody := UpdateProfileRequest{
 		NamaLengkap: "USER BARU",
 		NRP:         "55555-NEW",
@@ -261,7 +260,7 @@ func TestUserController_UpdateProfile(t *testing.T) {
 				c.Next()
 			}
 			router, _ := setupTestRouter(mockUserService, authInjector)
-			
+
 			tc.mockSetup(mockUserService)
 
 			jsonBody, err := json.Marshal(tc.requestBody)
@@ -273,7 +272,7 @@ func TestUserController_UpdateProfile(t *testing.T) {
 			req.Header.Set("Accept", "application/json")
 			// --- AKHIR PERBAIKAN ---
 			recorder := httptest.NewRecorder()
-			
+
 			router.ServeHTTP(recorder, req)
 
 			assert.Equal(t, tc.expectedStatusCode, recorder.Code)

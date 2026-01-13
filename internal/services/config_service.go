@@ -62,11 +62,11 @@ func (s *configService) SaveConfig(configData map[string]string) error {
 		"DB_PASS":    "DB_PASS",
 		"DB_NAME":    "DB_NAME",
 		"DB_SSLMODE": "DB_SSLMODE",
-		
+
 		"enable_https":    "ENABLE_HTTPS",
 		"session_timeout": "SESSION_TIMEOUT",
 		"idle_timeout":    "IDLE_TIMEOUT",
-		
+
 		// PENTING: Flag setup juga harus masuk ke .env
 		IsSetupCompleteKey: "IS_SETUP_COMPLETE",
 	}
@@ -197,6 +197,8 @@ func (s *configService) GetConfig() (*dto.AppConfig, error) {
 		NamaKantor:          allConfigs["nama_kantor"],
 		TempatSurat:         allConfigs["tempat_surat"],
 		FormatNomorSurat:    allConfigs["format_nomor_surat"],
+		KodeSurat:           allConfigs["kode_surat"],
+		KodeArsip:           allConfigs["kode_arsip"],
 		NomorSuratTerakhir:  allConfigs["nomor_surat_terakhir"],
 		ZonaWaktu:           allConfigs["zona_waktu"],
 		BackupPath:          backupPath,
@@ -222,12 +224,22 @@ func (s *configService) GetConfig() (*dto.AppConfig, error) {
 			appConfig.DBDialect = "sqlite"
 		}
 	}
-	if appConfig.DBHost == "" { appConfig.DBHost = os.Getenv("DB_HOST") }
-	if appConfig.DBPort == "" { appConfig.DBPort = os.Getenv("DB_PORT") }
-	if appConfig.DBUser == "" { appConfig.DBUser = os.Getenv("DB_USER") }
-	if appConfig.DBName == "" { appConfig.DBName = os.Getenv("DB_NAME") }
-	if appConfig.DBSSLMode == "" { appConfig.DBSSLMode = os.Getenv("DB_SSLMODE") }
-	
+	if appConfig.DBHost == "" {
+		appConfig.DBHost = os.Getenv("DB_HOST")
+	}
+	if appConfig.DBPort == "" {
+		appConfig.DBPort = os.Getenv("DB_PORT")
+	}
+	if appConfig.DBUser == "" {
+		appConfig.DBUser = os.Getenv("DB_USER")
+	}
+	if appConfig.DBName == "" {
+		appConfig.DBName = os.Getenv("DB_NAME")
+	}
+	if appConfig.DBSSLMode == "" {
+		appConfig.DBSSLMode = os.Getenv("DB_SSLMODE")
+	}
+
 	// DSN Fallback & Normalization
 	if appConfig.DBDSN == "" {
 		appConfig.DBDSN = os.Getenv("DB_DSN")

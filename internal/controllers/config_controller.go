@@ -81,6 +81,8 @@ type SaveSetupRequest struct {
 	TempatSurat string `json:"tempat_surat" binding:"required"`
 
 	FormatNomorSurat    string `json:"format_nomor_surat" binding:"required"`
+	KodeSurat           string `json:"kode_surat" binding:"required"`
+	KodeArsip           string `json:"kode_arsip" binding:"required"`
 	NomorSuratTerakhir  string `json:"nomor_surat_terakhir" binding:"required"`
 	ZonaWaktu           string `json:"zona_waktu" binding:"required"`
 	ArchiveDurationDays string `json:"archive_duration_days" binding:"required"`
@@ -151,11 +153,14 @@ func (c *ConfigController) SaveSetup(ctx *gin.Context) {
 
 	if err := targetDB.AutoMigrate(
 		&models.User{}, &models.Resident{}, &models.LostDocument{}, &models.LostItem{},
-		&models.Configuration{}, &models.AuditLog{}, &models.ItemTemplate{}, &models.License{},
+		&models.Configuration{}, &models.AuditLog{}, &models.ItemTemplate{}, &models.License{}, &models.JobPosition{},
 	); err != nil {
 		log.Printf("ERROR: AutoMigrate: %v", err)
 		APIError(ctx, http.StatusInternalServerError, "Gagal migrasi tabel.")
 		return
+	}
+	if err := utils.EnsureDefaultJobPositions(targetDB); err != nil {
+		log.Printf("WARN: gagal seed jabatan default: %v", err)
 	}
 
 	tx := targetDB.Begin()
@@ -194,23 +199,25 @@ func (c *ConfigController) SaveSetup(ctx *gin.Context) {
 	sqlDB.Close()
 
 	configData := map[string]string{
-		"DB_DIALECT":            req.DBDialect,
-		"DB_DSN":                req.DBDSN,
-		"DB_HOST":               req.DBHost,
-		"DB_PORT":               req.DBPort,
-		"DB_USER":               req.DBUser,
-		"DB_PASS":               req.DBPass,
-		"DB_NAME":               req.DBName,
-		"DB_SSLMODE":            req.DBSSLMode,
-		"kop_baris_1":           req.KopBaris1,
-		"kop_baris_2":           req.KopBaris2,
-		"kop_baris_3":           req.KopBaris3,
-		"nama_kantor":           req.NamaKantor,
-		"tempat_surat":          req.TempatSurat,
-		"format_nomor_surat":    req.FormatNomorSurat,
-		"nomor_surat_terakhir":  req.NomorSuratTerakhir,
-		"zona_waktu":            req.ZonaWaktu,
-		"archive_duration_days": req.ArchiveDurationDays,
+		"DB_DIALECT":                req.DBDialect,
+		"DB_DSN":                    req.DBDSN,
+		"DB_HOST":                   req.DBHost,
+		"DB_PORT":                   req.DBPort,
+		"DB_USER":                   req.DBUser,
+		"DB_PASS":                   req.DBPass,
+		"DB_NAME":                   req.DBName,
+		"DB_SSLMODE":                req.DBSSLMode,
+		"kop_baris_1":               req.KopBaris1,
+		"kop_baris_2":               req.KopBaris2,
+		"kop_baris_3":               req.KopBaris3,
+		"nama_kantor":               req.NamaKantor,
+		"tempat_surat":              req.TempatSurat,
+		"format_nomor_surat":        req.FormatNomorSurat,
+		"kode_surat":                req.KodeSurat,
+		"kode_arsip":                req.KodeArsip,
+		"nomor_surat_terakhir":      req.NomorSuratTerakhir,
+		"zona_waktu":                req.ZonaWaktu,
+		"archive_duration_days":     req.ArchiveDurationDays,
 		services.IsSetupCompleteKey: "true",
 	}
 
@@ -306,6 +313,6 @@ func (c *ConfigController) ShowSetupPage(ctx *gin.Context) {
 		return
 	}
 	cfg, _ := c.configService.GetConfig()
-    // Menggunakan RenderHTML agar konsisten dengan halaman lain
+	// Menggunakan RenderHTML agar konsisten dengan halaman lain
 	RenderHTML(ctx, "setup.html", gin.H{"Title": "Konfigurasi Awal", "CurrentConfig": cfg})
 }

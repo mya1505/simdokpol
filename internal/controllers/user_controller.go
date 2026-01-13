@@ -26,7 +26,7 @@ type CreateUserRequest struct {
 	KataSandi   string `json:"kata_sandi" binding:"required,min=8" example:"password123"`
 	Pangkat     string `json:"pangkat" binding:"required" example:"BRIPDA"`
 	Peran       string `json:"peran" binding:"required" enums:"OPERATOR,SUPER_ADMIN"`
-	Jabatan     string `json:"jabatan" binding:"required" example:"ANGGOTA JAGA REGU"`
+	Jabatan     string `json:"jabatan" binding:"required" example:"ANGGOTA JAGA"`
 	Regu        string `json:"regu" example:"I"`
 }
 

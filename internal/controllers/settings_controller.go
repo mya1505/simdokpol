@@ -70,7 +70,7 @@ func (c *SettingsController) UpdateSettings(ctx *gin.Context) {
 	// --- LOGIC DETEKSI RESTART ---
 	restartRequired := false
 	criticalKeys := []string{"db_dialect", "db_host", "db_port", "db_name", "db_user", "db_pass", "db_dsn", "db_sslmode", "enable_https"}
-	
+
 	for _, key := range criticalKeys {
 		if _, exists := settings[key]; exists {
 			restartRequired = true
@@ -121,8 +121,8 @@ func (c *SettingsController) UpdateSettings(ctx *gin.Context) {
 // @Router /api/settings/download-cert [get]
 func (c *SettingsController) DownloadCertificate(ctx *gin.Context) {
 	certDir := filepath.Join(utils.GetAppDataDir(), "certs")
-	certPath := filepath.Join(certDir, "server.crt")
-	
+	certPath := filepath.Join(certDir, "ca.crt")
+
 	// Pastikan file ada
 	if _, err := os.Stat(certPath); os.IsNotExist(err) {
 		// Jika belum ada, generate dulu
@@ -130,7 +130,25 @@ func (c *SettingsController) DownloadCertificate(ctx *gin.Context) {
 	}
 
 	ctx.Header("Content-Description", "File Transfer")
-	ctx.Header("Content-Disposition", "attachment; filename=simdokpol_cert.crt")
+	ctx.Header("Content-Disposition", "attachment; filename=simdokpol_ca.crt")
 	ctx.Header("Content-Type", "application/x-x509-ca-cert")
 	ctx.File(certPath)
+}
+
+// InstallCertificate mencoba memasang sertifikat ke trust store OS secara otomatis
+// @Router /api/settings/install-cert [post]
+func (c *SettingsController) InstallCertificate(ctx *gin.Context) {
+	certDir := filepath.Join(utils.GetAppDataDir(), "certs")
+	certPath := filepath.Join(certDir, "ca.crt")
+
+	if _, err := os.Stat(certPath); os.IsNotExist(err) {
+		utils.EnsureCertificates()
+	}
+
+	if err := utils.InstallCertificate(certPath); err != nil {
+		APIError(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"message": "Sertifikat berhasil diinstall."})
 }

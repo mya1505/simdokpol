@@ -5,15 +5,6 @@ $(document).ready(function() {
     $('body').on('input', '.auto-uppercase', function() { $(this).val($(this).val().toUpperCase()); });
     $('body').on('input', '.auto-titlecase', function() { $(this).val(toTitleCase($(this).val())); });
     
-    // --- FUNGSI INTIP PASSWORD ---
-    function togglePass(inId, tgId) {
-        const p = $(inId); const t = $(tgId);
-        const type = p.attr('type') === 'password' ? 'text' : 'password';
-        p.attr('type', type); t.toggleClass('fa-eye fa-eye-slash');
-    }
-    $('#togglePassword').on('click', function() { togglePass('#kata_sandi', '#togglePassword'); });
-    $('#togglePasswordConfirm').on('click', function() { togglePass('#kata_sandi_konfirmasi', '#togglePasswordConfirm'); });
-
     const isEdit = {{.IsEdit}};
     const userID = {{.UserID}};
 
@@ -27,24 +18,48 @@ $(document).ready(function() {
     }
 
     if (isEdit) {
-        // PERUBAHAN: Gunakan .html() dan tambahkan icon
         $('#form-title').html('<i class="fas fa-user-edit mr-2 text-gray-400"></i>Edit Data Pengguna');
         $('#submit-btn').html('<i class="fas fa-save mr-2"></i>Simpan Perubahan');
         $('#passwordHelp').show();
-
-        $.ajax({
-            url: `/api/users/${userID}`,
-            method: 'GET',
-            success: populateForm,
-            error: function() { 
-                Swal.fire('Error', 'Gagal memuat data pengguna.', 'error').then(() => {
-                    window.location.href = '/users';
-                });
-            }
-        });
     } else {
         $('#kata_sandi').prop('required', true);
         $('#kata_sandi_konfirmasi').prop('required', true);
+    }
+
+    function loadJabatanOptions(selectedJabatan) {
+        $.ajax({
+            url: '/api/jabatans/active',
+            method: 'GET',
+            success: function(list) {
+                const $jabatan = $('#jabatan');
+                $jabatan.empty().append(new Option('Pilih...', ''));
+                (list || []).forEach(j => {
+                    $jabatan.append(new Option(j.nama, j.nama));
+                });
+                $jabatan.append(new Option('LAINNYA', '__OTHER__'));
+                if (selectedJabatan) {
+                    const match = (list || []).some(j => j.nama === selectedJabatan);
+                    if (match) {
+                        $jabatan.val(selectedJabatan);
+                    } else {
+                        $jabatan.val('__OTHER__');
+                        $('#jabatan_custom').val(selectedJabatan).show();
+                    }
+                }
+            }
+        });
+    }
+
+    $('#jabatan').on('change', function() {
+        if ($(this).val() === '__OTHER__') {
+            $('#jabatan_custom').show().focus();
+        } else {
+            $('#jabatan_custom').hide().val('');
+        }
+    });
+
+    if (!isEdit) {
+        loadJabatanOptions();
     }
 
     $('#user-form').on('submit', function(e) {
@@ -63,12 +78,21 @@ $(document).ready(function() {
             Swal.fire('Perhatian', 'Kata sandi baru minimal 8 karakter.', 'warning'); return;
         }
 
+        let jabatanVal = $('#jabatan').val();
+        if (jabatanVal === '__OTHER__') {
+            jabatanVal = $('#jabatan_custom').val().trim();
+        }
+        if (!jabatanVal) {
+            Swal.fire('Perhatian', 'Jabatan wajib diisi.', 'warning');
+            return;
+        }
+
         const formData = {
             nama_lengkap: $('#nama_lengkap').val(),
             nrp: $('#nrp').val(),
             pangkat: $('#pangkat').val(),
             peran: $('#peran').val(),
-            jabatan: $('#jabatan').val(),
+            jabatan: jabatanVal,
             regu: $('#regu').val(),
             kata_sandi: password,
         };
@@ -104,5 +128,21 @@ $(document).ready(function() {
 
         $.ajax(ajaxSettings);
     });
+
+    if (isEdit) {
+        $.ajax({
+            url: `/api/users/${userID}`,
+            method: 'GET',
+            success: function(data) {
+                populateForm(data);
+                loadJabatanOptions(data.jabatan);
+            },
+            error: function() { 
+                Swal.fire('Error', 'Gagal memuat data pengguna.', 'error').then(() => {
+                    window.location.href = '/users';
+                });
+            }
+        });
+    }
 });
 </script>

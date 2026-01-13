@@ -79,6 +79,7 @@ func main() {
 	var auditRepo repositories.AuditLogRepository
 	var licenseRepo repositories.LicenseRepository
 	var itemTemplateRepo repositories.ItemTemplateRepository
+	var jobPositionRepo repositories.JobPositionRepository
 
 	if db != nil {
 		userRepo = repositories.NewUserRepository(db)
@@ -88,6 +89,7 @@ func main() {
 		auditRepo = repositories.NewAuditLogRepository(db)
 		licenseRepo = repositories.NewLicenseRepository(db)
 		itemTemplateRepo = repositories.NewItemTemplateRepository(db)
+		jobPositionRepo = repositories.NewJobPositionRepository(db)
 	}
 
 	auditService := services.NewAuditLogService(auditRepo)
@@ -105,6 +107,7 @@ func main() {
 	dashboardService := services.NewDashboardService(docRepo, userRepo, configService)
 	reportService := services.NewReportService(docRepo, configService, exeDir)
 	itemTemplateService := services.NewItemTemplateService(itemTemplateRepo)
+	jobPositionService := services.NewJobPositionService(jobPositionRepo, auditService)
 	dbTestService := services.NewDBTestService()
 	updateService := services.NewUpdateService()
 
@@ -119,6 +122,7 @@ func main() {
 	licenseController := controllers.NewLicenseController(licenseService, auditService)
 	reportController := controllers.NewReportController(reportService, configService)
 	itemTemplateController := controllers.NewItemTemplateController(itemTemplateService)
+	jobPositionController := controllers.NewJobPositionController(jobPositionService)
 	dbTestController := controllers.NewDBTestController(dbTestService)
 	updateController := controllers.NewUpdateController(updateService, version)
 	systemController := controllers.NewSystemController(db)
@@ -243,6 +247,9 @@ func main() {
 	admin.GET("/users", func(c *gin.Context) {
 		controllers.RenderHTML(c, "user_list.html", gin.H{"Title": "Manajemen Pengguna"})
 	})
+	admin.GET("/jabatan", func(c *gin.Context) {
+		controllers.RenderHTML(c, "jabatan_list.html", gin.H{"Title": "Master Jabatan"})
+	})
 	admin.GET("/users/new", func(c *gin.Context) {
 		controllers.RenderHTML(c, "user_form.html", gin.H{"Title": "Tambah Pengguna", "IsEdit": false, "UserID": 0})
 	})
@@ -256,6 +263,12 @@ func main() {
 	admin.PUT("/api/users/:id", userController.Update)
 	admin.DELETE("/api/users/:id", userController.Delete)
 	admin.POST("/api/users/:id/activate", userController.Activate)
+	admin.GET("/api/jabatans", jobPositionController.FindAll)
+	admin.GET("/api/jabatans/active", jobPositionController.FindAllActive)
+	admin.POST("/api/jabatans", jobPositionController.Create)
+	admin.PUT("/api/jabatans/:id", jobPositionController.Update)
+	admin.DELETE("/api/jabatans/:id", jobPositionController.Delete)
+	admin.POST("/api/jabatans/:id/restore", jobPositionController.Restore)
 	admin.GET("/settings", func(c *gin.Context) {
 		controllers.RenderHTML(c, "settings.html", gin.H{"Title": "Pengaturan Sistem"})
 	})
@@ -265,6 +278,7 @@ func main() {
 	admin.POST("/api/restore", backupController.RestoreBackup)
 	admin.POST("/api/settings/migrate", configController.MigrateDatabase)
 	admin.GET("/api/settings/download-cert", settingsController.DownloadCertificate)
+	admin.POST("/api/settings/install-cert", settingsController.InstallCertificate)
 	admin.GET("/api/audit-logs", auditController.FindAll)
 	admin.GET("/api/audit-logs/export", auditController.Export)
 	admin.GET("/api/metrics", systemController.Metrics)
@@ -437,9 +451,15 @@ func setupDatabase(cfg *config.Config) (*gorm.DB, error) {
 	sqlDB.SetMaxIdleConns(10)
 	sqlDB.SetMaxOpenConns(100)
 	sqlDB.SetConnMaxLifetime(time.Hour)
-	err = db.AutoMigrate(&models.User{}, &models.Resident{}, &models.LostDocument{}, &models.LostItem{}, &models.AuditLog{}, &models.Configuration{}, &models.ItemTemplate{}, &models.License{})
+	err = db.AutoMigrate(&models.User{}, &models.Resident{}, &models.LostDocument{}, &models.LostItem{}, &models.AuditLog{}, &models.Configuration{}, &models.ItemTemplate{}, &models.License{}, &models.JobPosition{})
 	if err != nil {
 		return nil, fmt.Errorf("migrasi gagal: %w", err)
+	}
+	if err := utils.NormalizeLegacyJabatanRegu(db); err != nil {
+		log.Printf("WARN: gagal normalisasi jabatan regu: %v", err)
+	}
+	if err := utils.EnsureDefaultJobPositions(db); err != nil {
+		log.Printf("WARN: gagal seed jabatan default: %v", err)
 	}
 	return db, nil
 }

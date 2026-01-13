@@ -84,6 +84,7 @@ Sistem secara otomatis memeriksa ketersediaan versi terbaru dari GitHub releases
 - **Template Barang**: daftar & editor template barang (Pro) dengan drag-and-drop.
 - **Laporan & Print Preview**: laporan agregat PDF, preview cetak, dan ekspor Excel (Pro).
 - **Pengguna & Audit Log**: manajemen user RBAC, log aktivitas dengan filter dan ekspor.
+- **Master Jabatan**: kelola daftar jabatan (aktif/nonaktif) yang dipakai di form pengguna.
 - **Backup & Migrasi**: backup/restore SQLite, migrasi ke MySQL/PostgreSQL, test koneksi DB.
 - **Pengaturan Sistem**: kop surat, format nomor surat, HTTPS toggle, domain/vhost, durasi arsip.
 - **Upgrade & Tentang**: info lisensi, Hardware ID (copy/paste), aktivasi kode Pro, panduan & kontak.
@@ -177,12 +178,21 @@ Pada peluncuran pertama kali, aplikasi secara otomatis membuka browser default m
 **Konfigurasi Baru**
 Wizard lima langkah akan memandu proses setup lengkap yang mencakup pemilihan jenis database dengan testing koneksi untuk memverifikasi konfigurasi, pengaturan informasi kop surat organisasi termasuk nama instansi dan alamat, konfigurasi domain kustom jika diperlukan, dan pembuatan akun Super Admin pertama dengan password yang terenkripsi.
 
+**Format Nomor Surat Fleksibel**
+Penomoran dapat diatur menggunakan token berikut:
+`{KODE_SURAT}/{NOMOR}/{BULAN_ROMAWI}/{KODE_ARSIP}/{TAHUN}`.
+Contoh default: `SKH/001/X/TUK.7.2.1/2025`.
+
 **Pemulihan dari Backup**
 Khusus untuk database SQLite, pengguna dapat mengunggah file `simdokpol.db` dari instalasi sebelumnya untuk memulihkan semua data termasuk konfigurasi sistem, data pengguna, dan dokumen yang tersimpan. Proses ini memastikan transisi yang mulus saat melakukan migrasi atau reinstalasi.
 
 ### 🔒 Konfigurasi HTTPS (Opsional)
 
 Untuk meningkatkan keamanan komunikasi, administrator dapat mengaktifkan mode HTTPS melalui menu Pengaturan Sistem. Setelah aktivasi, aplikasi akan meminta izin untuk menginstal sertifikat SSL self-signed ke Windows Trusted Root Certificate Store. Proses ini memerlukan elevasi hak administrator dan akan menghilangkan peringatan keamanan browser pada akses berikutnya.
+
+### 🔐 Instal Sertifikat Otomatis (Semua Platform)
+
+Saat HTTPS diaktifkan, sistem akan menawarkan pemasangan sertifikat otomatis untuk **CA cert**. Jika gagal (butuh izin admin/root), gunakan tombol download manual dan ikuti petunjuk OS masing-masing.
 
 ### 🔑 Aktivasi Lisensi (Offline)
 

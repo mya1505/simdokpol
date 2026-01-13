@@ -82,7 +82,9 @@
                                                 <label>Password</label>
                                                 <div class="password-wrapper">
                                                     <input type="password" class="form-control" id="db_pass">
-                                                    <i class="fas fa-eye password-peek" id="toggleDbPassword"></i>
+                                                    <button type="button" class="btn btn-link password-peek" data-target="#db_pass" aria-label="Tampilkan password database">
+                                                        <i class="fas fa-eye"></i>
+                                                    </button>
                                                 </div>
                                             </div>
 
@@ -123,7 +125,21 @@
                                         <div class="stepper-slide" id="slide-4">
                                             <hr>
                                             <h5 class="text-primary mb-3">Langkah 4: Penomoran & Arsip</h5>
-                                            <div class="form-group"><label>Format Nomor</label><input type="text" class="form-control" id="format_nomor_surat" value="SKH/%03d/%s/TUK.7.2.1/%d" required></div>
+                                            <div class="form-row">
+                                                <div class="col-6">
+                                                    <label>Kode Surat</label>
+                                                    <input type="text" class="form-control auto-uppercase" id="kode_surat" value="SKH" required>
+                                                </div>
+                                                <div class="col-6">
+                                                    <label>Kode Arsip</label>
+                                                    <input type="text" class="form-control auto-uppercase" id="kode_arsip" value="TUK.7.2.1" required>
+                                                </div>
+                                            </div>
+                                            <div class="form-group mt-2">
+                                                <label>Format Nomor</label>
+                                                <input type="text" class="form-control" id="format_nomor_surat" value="{KODE_SURAT}/{NOMOR}/{BULAN_ROMAWI}/{KODE_ARSIP}/{TAHUN}" required>
+                                                <small class="text-muted">Token: {KODE_SURAT}, {NOMOR}, {BULAN_ROMAWI}, {KODE_ARSIP}, {TAHUN}</small>
+                                            </div>
                                             <div class="form-row">
                                                 <div class="col-6"><label>No. Terakhir</label><input type="number" class="form-control" id="nomor_surat_terakhir" value="0" required></div>
                                                 <div class="col-6"><label>Lama Arsip (Hari)</label><input type="number" class="form-control" id="archive_duration_days" value="15" required></div>
@@ -156,14 +172,18 @@
                                                     <label>Password</label>
                                                     <div class="password-wrapper">
                                                         <input type="password" class="form-control" id="admin_password" minlength="8" required>
-                                                        <i class="fas fa-eye password-peek" id="togglePassword"></i>
+                                                        <button type="button" class="btn btn-link password-peek" data-target="#admin_password" aria-label="Tampilkan password admin">
+                                                            <i class="fas fa-eye"></i>
+                                                        </button>
                                                     </div>
                                                 </div>
                                                 <div class="col-6">
                                                     <label>Konfirmasi</label>
                                                     <div class="password-wrapper">
                                                         <input type="password" class="form-control" id="admin_password_confirm" required>
-                                                        <i class="fas fa-eye password-peek" id="togglePasswordConfirm"></i>
+                                                        <button type="button" class="btn btn-link password-peek" data-target="#admin_password_confirm" aria-label="Tampilkan konfirmasi password admin">
+                                                            <i class="fas fa-eye"></i>
+                                                        </button>
                                                     </div>
                                                 </div>
                                             </div>

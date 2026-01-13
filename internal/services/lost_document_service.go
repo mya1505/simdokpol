@@ -27,21 +27,21 @@ type LostDocumentService interface {
 	DeleteLostDocument(id uint, loggedInUserID uint) error
 	ExportDocuments(query string, statusFilter string) (*bytes.Buffer, string, error)
 	GenerateDocumentPDF(docID uint, actorID uint) (*bytes.Buffer, string, error)
-	
+
 	// FIX: Update Signature Interface (4 Parameter)
 	GetDocumentsPaged(req dto.DataTableRequest, statusFilter string, userID uint, userRole string) (*dto.DataTableResponse, error)
 }
 
 type lostDocumentService struct {
-	db           *gorm.DB
-	docRepo      repositories.LostDocumentRepository
-	residentRepo repositories.ResidentRepository
-	userRepo     repositories.UserRepository
-	auditService AuditLogService
+	db            *gorm.DB
+	docRepo       repositories.LostDocumentRepository
+	residentRepo  repositories.ResidentRepository
+	userRepo      repositories.UserRepository
+	auditService  AuditLogService
 	configService ConfigService
-	configRepo   repositories.ConfigRepository
-	exeDir       string
-	docNumMutex  sync.Mutex
+	configRepo    repositories.ConfigRepository
+	exeDir        string
+	docNumMutex   sync.Mutex
 }
 
 func NewLostDocumentService(db *gorm.DB, docRepo repositories.LostDocumentRepository, residentRepo repositories.ResidentRepository, userRepo repositories.UserRepository, auditService AuditLogService, configService ConfigService, configRepo repositories.ConfigRepository, exeDir string) LostDocumentService {
@@ -120,7 +120,7 @@ func (s *lostDocumentService) ExportDocuments(query string, statusFilter string)
 		return nil, "", err
 	}
 	f.DeleteSheet("Sheet1")
-	
+
 	loc, _ := s.configService.GetLocation()
 	if loc == nil {
 		loc = time.UTC
@@ -137,7 +137,7 @@ func (s *lostDocumentService) ExportDocuments(query string, statusFilter string)
 	}
 
 	for i, doc := range docs {
-		row := i + 2 
+		row := i + 2
 		var itemNames, itemDescs []string
 		for _, item := range doc.LostItems {
 			itemNames = append(itemNames, item.NamaBarang)
@@ -185,7 +185,7 @@ func (s *lostDocumentService) FindByID(id uint, actorID uint) (*models.LostDocum
 	}
 
 	appConfig, _ := s.configService.GetConfig()
-	
+
 	if appConfig != nil && appConfig.ArchiveDurationDays > 0 {
 		archiveDuration := time.Duration(appConfig.ArchiveDurationDays) * 24 * time.Hour
 		if doc.Status == "DITERBITKAN" && time.Now().After(doc.TanggalLaporan.Add(archiveDuration)) {
@@ -210,9 +210,19 @@ func (s *lostDocumentService) generateDocumentNumber(tx *gorm.DB) (string, strin
 	if err != nil {
 		return "", "", fmt.Errorf("gagal memuat konfigurasi: %w", err)
 	}
-	format := "SKH/%03d/%s/TUK.7.2.1/%d"
+	format := "{KODE_SURAT}/{NOMOR}/{BULAN_ROMAWI}/{KODE_ARSIP}/{TAHUN}"
 	if appConfig != nil && appConfig.FormatNomorSurat != "" {
 		format = appConfig.FormatNomorSurat
+	}
+	kodeSurat := "SKH"
+	kodeArsip := "TUK.7.2.1"
+	if appConfig != nil {
+		if appConfig.KodeSurat != "" {
+			kodeSurat = appConfig.KodeSurat
+		}
+		if appConfig.KodeArsip != "" {
+			kodeArsip = appConfig.KodeArsip
+		}
 	}
 
 	lastNumFromDB := 0
@@ -245,41 +255,62 @@ func (s *lostDocumentService) generateDocumentNumber(tx *gorm.DB) (string, strin
 	if year != lastYearFromConfig {
 		lastNumFromConfig = 0
 	}
-	
+
 	runningNumber := 0
 	if lastNumFromDB > lastNumFromConfig {
 		runningNumber = lastNumFromDB + 1
 	} else {
 		runningNumber = lastNumFromConfig + 1
 	}
-	
+
 	newNomorStr := strconv.Itoa(runningNumber)
 	newTahunStr := strconv.Itoa(year)
-	
+
 	configsToSet := map[string]string{
-		"nomor_surat_terakhir":  newNomorStr,
+		"nomor_surat_terakhir":       newNomorStr,
 		"nomor_surat_tahun_terakhir": newTahunStr,
 	}
 
 	if err := s.configRepo.SetMultiple(tx, configsToSet); err != nil {
 		return "", "", fmt.Errorf("gagal update config nomor surat: %w", err)
 	}
-	
-	docNumber := fmt.Sprintf(format, runningNumber, monthRoman, year)
+
+	docNumber := formatDocumentNumber(format, map[string]string{
+		"KODE_SURAT":   kodeSurat,
+		"NOMOR":        fmt.Sprintf("%03d", runningNumber),
+		"BULAN_ROMAWI": monthRoman,
+		"KODE_ARSIP":   kodeArsip,
+		"TAHUN":        strconv.Itoa(year),
+	})
 	return docNumber, newNomorStr, nil
+}
+
+func formatDocumentNumber(format string, values map[string]string) string {
+	if strings.Contains(format, "{") {
+		for key, value := range values {
+			format = strings.ReplaceAll(format, "{"+key+"}", value)
+		}
+		return format
+	}
+	if strings.Contains(format, "%") {
+		num, _ := strconv.Atoi(values["NOMOR"])
+		year, _ := strconv.Atoi(values["TAHUN"])
+		return fmt.Sprintf(format, num, values["BULAN_ROMAWI"], year)
+	}
+	return format
 }
 
 func (s *lostDocumentService) CreateLostDocument(residentData models.Resident, items []models.LostItem, operatorID uint, lokasiHilang string, petugasPelaporID uint, pejabatPersetujuID uint) (*models.LostDocument, error) {
 	var createdDocID uint
 	var finalDocNumber string
-	
+
 	s.docNumMutex.Lock()
 	defer s.docNumMutex.Unlock()
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		var existingResident models.Resident
 		err := tx.Where("nama_lengkap = ? AND tanggal_lahir = ?", residentData.NamaLengkap, residentData.TanggalLahir).First(&existingResident).Error
-		
+
 		if err == gorm.ErrRecordNotFound {
 			residentData.NIK = s.generateTempNIK()
 			newResident, createErr := s.residentRepo.Create(tx, &residentData)
@@ -296,11 +327,13 @@ func (s *lostDocumentService) CreateLostDocument(residentData models.Resident, i
 			return err
 		}
 		finalDocNumber = docNumber
-		
+
 		loc, err := s.configService.GetLocation()
-		if err != nil { loc = time.UTC }
+		if err != nil {
+			loc = time.UTC
+		}
 		now := time.Now().In(loc)
-		
+
 		newDoc := &models.LostDocument{
 			NomorSurat:         docNumber,
 			TanggalLaporan:     now,
@@ -313,23 +346,23 @@ func (s *lostDocumentService) CreateLostDocument(residentData models.Resident, i
 			TanggalPersetujuan: &now,
 			LostItems:          items,
 		}
-		
+
 		created, err := s.docRepo.Create(tx, newDoc)
 		if err != nil {
 			return err
 		}
 		createdDocID = created.ID
-		
+
 		log.Printf("INFO: Nomor surat baru: %s (Nomor urut: %s)", finalDocNumber, newNomor)
 		return nil
 	})
-	
+
 	if err != nil {
 		return nil, err
 	}
-	
+
 	s.auditService.LogActivity(operatorID, models.AuditCreateDocument, fmt.Sprintf("Membuat surat keterangan hilang baru dengan nomor: %s", finalDocNumber))
-	
+
 	finalDoc, err := s.docRepo.FindByID(createdDocID)
 	if err != nil {
 		return nil, err
@@ -341,15 +374,19 @@ func (s *lostDocumentService) UpdateLostDocument(docID uint, residentData models
 	var updatedDoc *models.LostDocument
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		existingDoc, err := s.docRepo.FindByID(docID)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 
 		loggedInUser, err := s.userRepo.FindByID(loggedInUserID)
-		if err != nil { return errors.New("pengguna tidak valid") }
+		if err != nil {
+			return errors.New("pengguna tidak valid")
+		}
 
 		if loggedInUser.Peran != models.RoleSuperAdmin && existingDoc.OperatorID != loggedInUserID {
 			return ErrAccessDenied
 		}
-		
+
 		if !strings.HasPrefix(existingDoc.Resident.NIK, "TEMP") {
 			residentData.NIK = existingDoc.Resident.NIK
 		} else {
@@ -357,7 +394,7 @@ func (s *lostDocumentService) UpdateLostDocument(docID uint, residentData models
 				residentData.NIK = s.generateTempNIK()
 			}
 		}
-		
+
 		existingDoc.Resident.NamaLengkap = residentData.NamaLengkap
 		existingDoc.Resident.TempatLahir = residentData.TempatLahir
 		existingDoc.Resident.TanggalLahir = residentData.TanggalLahir
@@ -366,21 +403,25 @@ func (s *lostDocumentService) UpdateLostDocument(docID uint, residentData models
 		existingDoc.Resident.Pekerjaan = residentData.Pekerjaan
 		existingDoc.Resident.Alamat = residentData.Alamat
 		existingDoc.Resident.NIK = residentData.NIK
-		
+
 		existingDoc.LokasiHilang = lokasiHilang
 		existingDoc.PetugasPelaporID = petugasPelaporID
 		existingDoc.PejabatPersetujuID = &pejabatPersetujuID
 		existingDoc.LastUpdatedByID = &loggedInUserID
-		
+
 		if err := tx.Where("lost_document_id = ?", docID).Delete(&models.LostItem{}).Error; err != nil {
 			return err
 		}
 		existingDoc.LostItems = items
 		updatedDoc, err = s.docRepo.Update(tx, existingDoc)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 		return nil
 	})
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 
 	s.auditService.LogActivity(loggedInUserID, models.AuditUpdateDocument, fmt.Sprintf("Memperbarui dokumen dengan Nomor Surat: %s", updatedDoc.NomorSurat))
 	return updatedDoc, nil
@@ -394,7 +435,9 @@ func (s *lostDocumentService) DeleteLostDocument(id uint, loggedInUserID uint) e
 	originalNomorSurat := docToDelete.NomorSurat
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		loggedInUser, err := s.userRepo.FindByID(loggedInUserID)
-		if err != nil { return errors.New("pengguna tidak valid") }
+		if err != nil {
+			return errors.New("pengguna tidak valid")
+		}
 
 		if loggedInUser.Peran != models.RoleSuperAdmin && docToDelete.OperatorID != loggedInUserID {
 			return ErrAccessDenied
@@ -408,14 +451,18 @@ func (s *lostDocumentService) DeleteLostDocument(id uint, loggedInUserID uint) e
 		}
 		return nil
 	})
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	s.auditService.LogActivity(loggedInUserID, models.AuditDeleteDocument, fmt.Sprintf("Menghapus dokumen dengan Nomor Surat: %s", originalNomorSurat))
 	return nil
 }
 
 func (s *lostDocumentService) processDocsStatus(docs []models.LostDocument) ([]models.LostDocument, error) {
 	appConfig, err := s.configService.GetConfig()
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 
 	if appConfig == nil || appConfig.ArchiveDurationDays == 0 {
 		return docs, nil
@@ -433,26 +480,34 @@ func (s *lostDocumentService) processDocsStatus(docs []models.LostDocument) ([]m
 
 func (s *lostDocumentService) SearchGlobal(query string, limit int) ([]models.LostDocument, error) {
 	docs, err := s.docRepo.SearchGlobal(query, limit)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	return s.processDocsStatus(docs)
 }
 
 func (s *lostDocumentService) FindAll(query string, statusFilter string) ([]models.LostDocument, error) {
 	appConfig, err := s.configService.GetConfig()
-	if err != nil { return nil, err }
-	
+	if err != nil {
+		return nil, err
+	}
+
 	archiveDays := 15
 	if appConfig != nil && appConfig.ArchiveDurationDays > 0 {
 		archiveDays = appConfig.ArchiveDurationDays
 	}
 
 	docs, err := s.docRepo.FindAll(query, statusFilter, archiveDays)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	return s.processDocsStatus(docs)
 }
 
 func intToRoman(num int) string {
 	romanNumeralMap := map[int]string{1: "I", 2: "II", 3: "III", 4: "IV", 5: "V", 6: "VI", 7: "VII", 8: "VIII", 9: "IX", 10: "X", 11: "XI", 12: "XII"}
-	if val, ok := romanNumeralMap[num]; ok { return val }
+	if val, ok := romanNumeralMap[num]; ok {
+		return val
+	}
 	return ""
 }

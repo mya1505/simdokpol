@@ -65,14 +65,18 @@
                                     <label for="old_password">Kata Sandi Saat Ini</label>
                                     <div class="password-wrapper">
                                         <input type="password" class="form-control" id="old_password" required>
-                                        <i class="fas fa-eye password-peek" id="togglePassword"></i>
+                                        <button type="button" class="btn btn-link password-peek" data-target="#old_password" aria-label="Tampilkan kata sandi saat ini">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
                                     </div>
                                 </div>
                                 <div class="form-group">
                                     <label for="new_password">Kata Sandi Baru</label>
                                     <div class="password-wrapper">
                                         <input type="password" class="form-control" id="new_password" required minlength="8">
-                                        <i class="fas fa-eye password-peek" id="togglePasswordNew"></i>
+                                        <button type="button" class="btn btn-link password-peek" data-target="#new_password" aria-label="Tampilkan kata sandi baru">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
                                     </div>
                                     <small class="form-text text-muted">Minimal 8 karakter.</small>
                                 </div>
@@ -80,7 +84,9 @@
                                     <label for="confirm_password">Konfirmasi Kata Sandi Baru</label>
                                     <div class="password-wrapper">
                                         <input type="password" class="form-control" id="confirm_password" required>
-                                        <i class="fas fa-eye password-peek" id="togglePasswordConfirm"></i>
+                                        <button type="button" class="btn btn-link password-peek" data-target="#confirm_password" aria-label="Tampilkan konfirmasi kata sandi">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
                                     </div>
                                 </div>
                                 <hr>
@@ -100,17 +106,4 @@
 </div>
 
 {{template "_scripts.html" .}}
-<script>
-    // Script Intip Password Khusus Halaman Profil (Inline biar praktis)
-    $(document).ready(function() {
-        $('body').on('click', '.password-peek', function() {
-            let $input = $(this).siblings('input');
-            if ($input.length > 0) {
-                let type = $input.attr('type') === 'password' ? 'text' : 'password';
-                $input.attr('type', type);
-                $(this).toggleClass('fa-eye fa-eye-slash');
-            }
-        });
-    });
-</script>
 {{template "_profileScript.html" .}}

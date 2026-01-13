@@ -1,0 +1,116 @@
+<script>
+$(document).ready(function() {
+    $("body").on("input", ".auto-uppercase", function () { $(this).val($(this).val().toUpperCase()); });
+
+    function loadJabatan() {
+        $.ajax({
+            url: "/api/jabatans",
+            method: "GET",
+            success: function(data) {
+                const $tbody = $("#jabatan-table tbody");
+                $tbody.empty();
+                if (!data || data.length === 0) {
+                    $tbody.append('<tr><td colspan="3" class="text-center text-muted">Belum ada data.</td></tr>');
+                    return;
+                }
+                data.forEach(function(item) {
+                    const statusBadge = item.is_active ? '<span class="badge badge-success">Aktif</span>' : '<span class="badge badge-secondary">Nonaktif</span>';
+                    const toggleLabel = item.is_active ? 'Nonaktifkan' : 'Aktifkan';
+                    const toggleClass = item.is_active ? 'btn-warning' : 'btn-success';
+                    const row = `
+                        <tr>
+                            <td>${item.nama}</td>
+                            <td>${statusBadge}</td>
+                            <td>
+                                <button class="btn btn-sm ${toggleClass} mr-1 btn-toggle" data-id="${item.id}" data-active="${item.is_active}">
+                                    ${toggleLabel}
+                                </button>
+                                <button class="btn btn-sm btn-danger btn-delete" data-id="${item.id}">
+                                    Hapus
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                    $tbody.append(row);
+                });
+            },
+            error: function() {
+                Swal.fire('Gagal', 'Tidak bisa memuat data jabatan.', 'error');
+            }
+        });
+    }
+
+    $('#jabatan-form').on('submit', function(e) {
+        e.preventDefault();
+        const payload = {
+            nama: $('#jabatan_nama').val(),
+            is_active: $('#jabatan_status').val() === 'true'
+        };
+
+        $.ajax({
+            url: "/api/jabatans",
+            method: "POST",
+            contentType: "application/json",
+            data: JSON.stringify(payload),
+            success: function() {
+                $('#jabatan_nama').val('');
+                $('#jabatan_status').val('true');
+                loadJabatan();
+            },
+            error: function(xhr) {
+                const msg = xhr.responseJSON?.error || "Gagal menambah jabatan.";
+                Swal.fire('Gagal', msg, 'error');
+            }
+        });
+    });
+
+    $('#jabatan-table').on('click', '.btn-toggle', function() {
+        const id = $(this).data('id');
+        const isActive = $(this).data('active');
+        const payload = {
+            nama: $(this).closest('tr').find('td:first').text().trim(),
+            is_active: !isActive
+        };
+
+        $.ajax({
+            url: `/api/jabatans/${id}`,
+            method: "PUT",
+            contentType: "application/json",
+            data: JSON.stringify(payload),
+            success: function() {
+                loadJabatan();
+            },
+            error: function(xhr) {
+                const msg = xhr.responseJSON?.error || "Gagal mengubah status.";
+                Swal.fire('Gagal', msg, 'error');
+            }
+        });
+    });
+
+    $('#jabatan-table').on('click', '.btn-delete', function() {
+        const id = $(this).data('id');
+        Swal.fire({
+            title: 'Hapus Jabatan?',
+            text: 'Data akan dinonaktifkan.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Ya, hapus',
+            cancelButtonText: 'Batal'
+        }).then((result) => {
+            if (!result.isConfirmed) return;
+            $.ajax({
+                url: `/api/jabatans/${id}`,
+                method: "DELETE",
+                success: function() {
+                    loadJabatan();
+                },
+                error: function() {
+                    Swal.fire('Gagal', 'Tidak bisa menghapus jabatan.', 'error');
+                }
+            });
+        });
+    });
+
+    loadJabatan();
+});
+</script>

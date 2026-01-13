@@ -52,28 +52,28 @@ type Resident struct {
 
 // LostDocument data surat kehilangan
 type LostDocument struct {
-	ID                 uint           `gorm:"primarykey" json:"id"`
-	NomorSurat         string         `gorm:"size:255;not null;unique" json:"nomor_surat"`
-	TanggalLaporan     time.Time      `gorm:"not null" json:"tanggal_laporan"`
-	Status             string         `gorm:"size:50;not null;default:'DITERBITKAN'" json:"status"`
-	LokasiHilang       string         `gorm:"type:text" json:"lokasi_hilang"`
-	
-	ResidentID         uint           `gorm:"not null" json:"resident_id"`
-	Resident           Resident       `gorm:"foreignKey:ResidentID" json:"resident"`
-	
-	LostItems          []LostItem     `gorm:"foreignKey:LostDocumentID" json:"lost_items"`
-	
-	PetugasPelaporID   uint           `gorm:"not null" json:"petugas_pelapor_id"`
-	PetugasPelapor     User           `gorm:"foreignKey:PetugasPelaporID" json:"petugas_pelapor"`
-	
-	PejabatPersetujuID *uint          `json:"pejabat_persetuju_id"`
-	PejabatPersetuju   User           `gorm:"foreignKey:PejabatPersetujuID" json:"pejabat_persetuju"`
-	
-	OperatorID         uint           `gorm:"not null" json:"operator_id"`
-	Operator           User           `gorm:"foreignKey:OperatorID" json:"operator"`
-	
-	LastUpdatedByID    *uint          `json:"last_updated_by_id"`
-	LastUpdatedBy      User           `gorm:"foreignKey:LastUpdatedByID" json:"last_updated_by"`
+	ID             uint      `gorm:"primarykey" json:"id"`
+	NomorSurat     string    `gorm:"size:255;not null;unique" json:"nomor_surat"`
+	TanggalLaporan time.Time `gorm:"not null" json:"tanggal_laporan"`
+	Status         string    `gorm:"size:50;not null;default:'DITERBITKAN'" json:"status"`
+	LokasiHilang   string    `gorm:"type:text" json:"lokasi_hilang"`
+
+	ResidentID uint     `gorm:"not null" json:"resident_id"`
+	Resident   Resident `gorm:"foreignKey:ResidentID" json:"resident"`
+
+	LostItems []LostItem `gorm:"foreignKey:LostDocumentID" json:"lost_items"`
+
+	PetugasPelaporID uint `gorm:"not null" json:"petugas_pelapor_id"`
+	PetugasPelapor   User `gorm:"foreignKey:PetugasPelaporID" json:"petugas_pelapor"`
+
+	PejabatPersetujuID *uint `json:"pejabat_persetuju_id"`
+	PejabatPersetuju   User  `gorm:"foreignKey:PejabatPersetujuID" json:"pejabat_persetuju"`
+
+	OperatorID uint `gorm:"not null" json:"operator_id"`
+	Operator   User `gorm:"foreignKey:OperatorID" json:"operator"`
+
+	LastUpdatedByID *uint `json:"last_updated_by_id"`
+	LastUpdatedBy   User  `gorm:"foreignKey:LastUpdatedByID" json:"last_updated_by"`
 
 	TanggalPersetujuan *time.Time     `json:"tanggal_persetujuan"`
 	CreatedAt          time.Time      `json:"created_at"`
@@ -97,4 +97,14 @@ type AuditLog struct {
 	Aksi      string    `gorm:"size:255;not null"`
 	Detail    string    `gorm:"type:text"`
 	Timestamp time.Time `gorm:"not null"`
+}
+
+// JobPosition master data jabatan
+type JobPosition struct {
+	ID        uint           `gorm:"primarykey" json:"id"`
+	Nama      string         `gorm:"size:150;not null;unique" json:"nama"`
+	IsActive  bool           `gorm:"not null;default:true" json:"is_active"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 }

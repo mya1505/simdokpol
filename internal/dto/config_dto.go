@@ -8,23 +8,25 @@ type AppConfig struct {
 	NamaKantor          string `json:"nama_kantor"`
 	TempatSurat         string `json:"tempat_surat"`
 	FormatNomorSurat    string `json:"format_nomor_surat"`
+	KodeSurat           string `json:"kode_surat"`
+	KodeArsip           string `json:"kode_arsip"`
 	NomorSuratTerakhir  string `json:"nomor_surat_terakhir"`
 	ZonaWaktu           string `json:"zona_waktu"`
 	BackupPath          string `json:"backup_path"`
 	ArchiveDurationDays int    `json:"archive_duration_days"`
-	
+
 	// --- FITUR BARU: TIMEOUTS ---
-	SessionTimeout      int    `json:"session_timeout"` // Max durasi login (Jam)
-	IdleTimeout         int    `json:"idle_timeout"`    // Durasi diam (Menit)
+	SessionTimeout int `json:"session_timeout"` // Max durasi login (Jam)
+	IdleTimeout    int `json:"idle_timeout"`    // Durasi diam (Menit)
 	// ----------------------------
 
-	EnableHTTPS         bool   `json:"enable_https"` 
-	DBDialect           string `json:"db_dialect"`
-	DBHost              string `json:"db_host"`
-	DBPort              string `json:"db_port"`
-	DBUser              string `json:"db_user"`
-	DBName              string `json:"db_name"`
-	DBDSN               string `json:"db_dsn"`
-	DBSSLMode           string `json:"db_sslmode"`
-	LicenseStatus       string `json:"license_status"`
+	EnableHTTPS   bool   `json:"enable_https"`
+	DBDialect     string `json:"db_dialect"`
+	DBHost        string `json:"db_host"`
+	DBPort        string `json:"db_port"`
+	DBUser        string `json:"db_user"`
+	DBName        string `json:"db_name"`
+	DBDSN         string `json:"db_dsn"`
+	DBSSLMode     string `json:"db_sslmode"`
+	LicenseStatus string `json:"license_status"`
 }

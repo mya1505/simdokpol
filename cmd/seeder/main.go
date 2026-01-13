@@ -28,15 +28,15 @@ import (
 var (
 	firstNames = []string{"Agus", "Budi", "Citra", "Dewi", "Eko", "Fajar", "Gita", "Hendra", "Indah", "Joko", "Kartika", "Lukman", "Maya", "Nur", "Oki", "Putri", "Rudi", "Siti", "Tono", "Wawan", "Dedi", "Yudi", "Rina", "Sari", "Bambang", "Slamet", "Widya", "Reza", "Dian", "Faisal"}
 	lastNames  = []string{"Santoso", "Purnomo", "Wijaya", "Saputra", "Hidayat", "Suryana", "Kusuma", "Pratama", "Setiawan", "Wulandari", "Permana", "Kurniawan", "Nugroho", "Susanti", "Rahayu", "Siregar", "Nasution", "Chaniago", "Wibowo", "Utami", "Firmansyah", "Ramadhan", "Haryanto"}
-	
+
 	pangkatPerwira = []string{"IPDA", "IPTU", "AKP", "KOMPOL"}
 	pangkatBintara = []string{"BRIPDA", "BRIPTU", "BRIGPOL", "BRIPKA", "AIPDA", "AIPTU"}
-	
+
 	jabatanKanitRegu   = "KANIT JAGA"
-	jabatanAnggotaJaga = "ANGGOTA JAGA REGU"
-	
+	jabatanAnggotaJaga = "ANGGOTA JAGA"
+
 	regus = []string{"I", "II", "III"}
-	
+
 	agamaList  = []string{"Islam", "Kristen Protestan", "Katolik", "Hindu", "Buddha", "Konghucu"}
 	pekerjaans = []string{"Wiraswasta", "Petani/Pekebun", "Nelayan", "Karyawan Swasta", "Pegawai Negeri Sipil", "Pelajar/Mahasiswa", "Buruh Harian Lepas", "Mengurus Rumah Tangga", "Pedagang"}
 	locations  = []string{"Pasar Bahodopi", "Jalan Trans Sulawesi", "Pantai Kurisa", "Depan Bank BRI", "Area Parkir PT IMIP", "Warung Makan Jawa", "Masjid Raya", "Lapangan Bola", "Dusun I", "Dusun II", "Dusun III"}
@@ -56,13 +56,13 @@ var (
 	simGolongan = []string{"A", "B I", "B II", "C", "D"}
 	motorBrands = []string{"Honda Beat", "Yamaha Mio", "Honda Vario", "Suzuki Nex", "Honda Scoopy", "Yamaha Aerox"}
 	mobilBrands = []string{"Toyota Avanza", "Daihatsu Xenia", "Suzuki Ertiga", "Honda Mobilio"}
-	
+
 	bankNames = []string{
 		"BRI", "BCA", "Mandiri", "BNI", "BSI", "BTN", "CIMB Niaga",
 		"Danamon", "Permata", "Panin", "Maybank", "Mega",
 		"BTPN / Jenius", "Bank Daerah (BPD)",
 	}
-	
+
 	ijazahLevels = []string{"SD", "SMP", "SMA", "SMK", "D3", "S1", "S2"}
 )
 
@@ -109,6 +109,7 @@ func main() {
 	db := setupDatabase(cfg)
 
 	seedConfigurations(db)
+	seedJobPositions(db)
 	seedTemplates(db)
 	users, userStats := seedSmartUsers(db, cfg.BcryptCost, anggotaPerRegu, includeInactive)
 	docStats := seedEnhancedDocuments(db, users, docCountInput)
@@ -121,7 +122,7 @@ func main() {
 	fmt.Printf("📄 Dokumen       : %d\n", docStats.Total)
 	fmt.Printf("⏱️  Waktu         : %v\n", time.Since(startTime))
 	fmt.Println(strings.Repeat("-", 70))
-	
+
 	if userStats.SampleAdmin != nil {
 		fmt.Println("🔑 SUPER ADMIN LOGIN:")
 		fmt.Printf("   User : %s\n", userStats.SampleAdmin.NRP)
@@ -170,7 +171,7 @@ func setupDatabase(cfg *config.Config) *gorm.DB {
 	if err != nil {
 		log.Fatalf("❌ Gagal koneksi database: %v", err)
 	}
-	
+
 	db.AutoMigrate(&models.User{}, &models.Resident{}, &models.LostDocument{}, &models.LostItem{}, &models.AuditLog{}, &models.Configuration{}, &models.ItemTemplate{}, &models.License{})
 	return db
 }
@@ -184,7 +185,9 @@ func seedConfigurations(db *gorm.DB) {
 		{Key: "kop_baris_3", Value: "RESOR MOROWALI"},
 		{Key: "nama_kantor", Value: "POLSEK BAHODOPI"},
 		{Key: "tempat_surat", Value: "Bahodopi"},
-		{Key: "format_nomor_surat", Value: "SKH/%03d/%s/TUK.7.2.1/%d"},
+		{Key: "format_nomor_surat", Value: "{KODE_SURAT}/{NOMOR}/{BULAN_ROMAWI}/{KODE_ARSIP}/{TAHUN}"},
+		{Key: "kode_surat", Value: "SKH"},
+		{Key: "kode_arsip", Value: "TUK.7.2.1"},
 		{Key: "nomor_surat_terakhir", Value: "0"},
 		{Key: "zona_waktu", Value: "Asia/Makassar"},
 		{Key: "archive_duration_days", Value: "15"},
@@ -195,9 +198,36 @@ func seedConfigurations(db *gorm.DB) {
 	}
 }
 
+func seedJobPositions(db *gorm.DB) {
+	fmt.Println("   ↳ Menyuntikkan Master Jabatan...")
+	for _, name := range defaultJobPositions() {
+		position := models.JobPosition{
+			Nama:     name,
+			IsActive: true,
+		}
+		db.Where("nama = ?", name).FirstOrCreate(&position)
+	}
+}
+
+func defaultJobPositions() []string {
+	return []string{
+		"KAPOLSEK",
+		"KANIT SPKT",
+		"KASPKT/KASI SPKT",
+		"KA SIAGA",
+		"PA SIAGA",
+		"PETUGAS SPKT",
+		"PIKET SPKT",
+		"PIKET FUNGSI",
+		"OPERATOR PELAYANAN",
+		"KANIT JAGA",
+		"ANGGOTA JAGA",
+	}
+}
+
 func seedTemplates(db *gorm.DB) {
 	fmt.Println("   ↳ Menyuntikkan Template Barang (Synchronized)...")
-	
+
 	bankOptions := []string{
 		"BRI", "BCA", "Mandiri", "BNI", "BSI", "BTN",
 		"CIMB Niaga", "Danamon", "Permata", "Panin", "Maybank",
@@ -325,7 +355,7 @@ func seedTemplates(db *gorm.DB) {
 			FieldsConfig: models.JSONFieldArray{},
 		},
 	}
-	
+
 	for _, t := range templates {
 		var existing models.ItemTemplate
 		if err := db.Where("nama_barang = ?", t.NamaBarang).First(&existing).Error; err == nil {
@@ -341,8 +371,8 @@ func seedTemplates(db *gorm.DB) {
 
 type UserSeederStats struct {
 	Total, SuperAdmins, Operators, KanitCount, AnggotaCount, Active, Inactive int
-	PerRegu     map[string]int
-	SampleAdmin *models.User
+	PerRegu                                                                   map[string]int
+	SampleAdmin                                                               *models.User
 }
 
 func seedSmartUsers(db *gorm.DB, bcryptCost int, anggotaPerRegu int, includeInactive bool) ([]models.User, *UserSeederStats) {
@@ -377,7 +407,7 @@ func seedSmartUsers(db *gorm.DB, bcryptCost int, anggotaPerRegu int, includeInac
 	}
 	db.Where("nrp = ?", sysAdmin.NRP).FirstOrCreate(&sysAdmin)
 	db.Model(&sysAdmin).Update("kata_sandi", hashPassword(sysAdminNRP))
-	
+
 	stats.Total++
 	stats.SuperAdmins++
 	stats.Active++
@@ -473,7 +503,7 @@ func seedEnhancedDocuments(db *gorm.DB, users []models.User, count int) *Documen
 		daysAgo := rand.Intn(90)
 		docDate := time.Now().AddDate(0, 0, -daysAgo)
 		op := activeOperators[rand.Intn(len(activeOperators))]
-		
+
 		var pj models.User
 		sameRegu := []models.User{}
 		for _, k := range activeKanits {
@@ -504,15 +534,15 @@ func seedEnhancedDocuments(db *gorm.DB, users []models.User, count int) *Documen
 		docNum := fmt.Sprintf("SKH/%03d/%s/TUK.7.2.1/%d", startNum+i, intToRoman(int(docDate.Month())), docDate.Year())
 
 		doc := models.LostDocument{
-			NomorSurat:          docNum,
-			TanggalLaporan:      docDate,
-			Status:              status,
-			LokasiHilang:        locations[rand.Intn(len(locations))],
-			ResidentID:          resident.ID,
-			PetugasPelaporID:    op.ID,
-			PejabatPersetujuID:  &pj.ID,
-			OperatorID:          op.ID,
-			TanggalPersetujuan:  &docDate,
+			NomorSurat:         docNum,
+			TanggalLaporan:     docDate,
+			Status:             status,
+			LokasiHilang:       locations[rand.Intn(len(locations))],
+			ResidentID:         resident.ID,
+			PetugasPelaporID:   op.ID,
+			PejabatPersetujuID: &pj.ID,
+			OperatorID:         op.ID,
+			TanggalPersetujuan: &docDate,
 		}
 
 		if err := db.Create(&doc).Error; err == nil {
@@ -521,7 +551,7 @@ func seedEnhancedDocuments(db *gorm.DB, users []models.User, count int) *Documen
 			if err := db.Create(&item).Error; err == nil {
 				stats.Items++
 			}
-			
+
 			db.Create(&models.AuditLog{
 				UserID:    op.ID,
 				Aksi:      models.AuditCreateDocument,
@@ -541,21 +571,21 @@ func randomName() string {
 func generateResident() *models.Resident {
 	nik := fmt.Sprintf("72%02d%02d%02d%02d%02d%04d", rand.Intn(90)+10, rand.Intn(90)+10, rand.Intn(28)+1, rand.Intn(12)+1, rand.Intn(99), rand.Intn(9999))
 	return &models.Resident{
-		NIK:           nik,
-		NamaLengkap:   randomName(),
-		TempatLahir:   "Morowali",
-		TanggalLahir:  time.Now().AddDate(-20-rand.Intn(30), 0, 0),
-		JenisKelamin:  []string{"Laki-laki", "Perempuan"}[rand.Intn(2)],
-		Agama:         agamaList[rand.Intn(len(agamaList))],
-		Pekerjaan:     pekerjaans[rand.Intn(len(pekerjaans))],
-		Alamat:        fmt.Sprintf("Desa Bahodopi Dusun %d", rand.Intn(5)+1),
+		NIK:          nik,
+		NamaLengkap:  randomName(),
+		TempatLahir:  "Morowali",
+		TanggalLahir: time.Now().AddDate(-20-rand.Intn(30), 0, 0),
+		JenisKelamin: []string{"Laki-laki", "Perempuan"}[rand.Intn(2)],
+		Agama:        agamaList[rand.Intn(len(agamaList))],
+		Pekerjaan:    pekerjaans[rand.Intn(len(pekerjaans))],
+		Alamat:       fmt.Sprintf("Desa Bahodopi Dusun %d", rand.Intn(5)+1),
 	}
 }
 
 func generateLostItem(docID uint, owner string) *models.LostItem {
 	tmpl := itemTypes[rand.Intn(len(itemTypes))]
 	var desc string
-	
+
 	switch tmpl.Name {
 	case "KTP":
 		nik := fmt.Sprintf("72%014d", rand.Intn(99999999999999))
@@ -581,7 +611,7 @@ func generateLostItem(docID uint, owner string) *models.LostItem {
 		noIjazah := fmt.Sprintf("IJ/%05d", 10000+rand.Intn(90000))
 		desc = fmt.Sprintf(tmpl.DescTemplate, level, noIjazah, owner)
 	}
-	
+
 	return &models.LostItem{
 		LostDocumentID: docID,
 		NamaBarang:     tmpl.Name,

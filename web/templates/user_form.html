@@ -35,7 +35,11 @@
                     <div class="card-body">
                         <div class="form-row">
                             <div class="form-group col-md-4"><label for="peran">Peran (Hak Akses)</label><select id="peran" class="form-control" required><option selected value="">Pilih...</option><option value="OPERATOR">OPERATOR</option><option value="SUPER_ADMIN">SUPER_ADMIN</option></select></div>
-                            <div class="form-group col-md-4"><label for="jabatan">Jabatan</label><select id="jabatan" class="form-control" required><option selected value="">Pilih...</option><option>KAPOLSEK</option><option>KANIT SPKT</option><option>ANGGOTA JAGA REGU</option></select></div>
+                            <div class="form-group col-md-4">
+                                <label for="jabatan">Jabatan</label>
+                                <select id="jabatan" class="form-control" required></select>
+                                <input type="text" id="jabatan_custom" class="form-control mt-2 auto-uppercase" placeholder="Isi jabatan lain..." style="display:none;">
+                            </div>
                              <div class="form-group col-md-4"><label for="regu">Regu</label><select id="regu" class="form-control"><option selected value="">Tidak Ada</option><option>I</option><option>II</option><option>III</option></select></div>
                         </div>
                     </div>
@@ -52,7 +56,9 @@
                                 <label for="kata_sandi">Kata Sandi</label>
                                 <div class="password-wrapper">
                                     <input type="password" class="form-control" id="kata_sandi">
-                                    <i class="fas fa-eye password-peek" id="togglePassword"></i>
+                                    <button type="button" class="btn btn-link password-peek" data-target="#kata_sandi" aria-label="Tampilkan kata sandi">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
                                 </div>
                                 <small class="form-text text-muted">Minimal 8 karakter.</small>
                             </div>
@@ -60,7 +66,9 @@
                                 <label for="kata_sandi_konfirmasi">Konfirmasi Kata Sandi</label>
                                 <div class="password-wrapper">
                                     <input type="password" class="form-control" id="kata_sandi_konfirmasi">
-                                    <i class="fas fa-eye password-peek" id="togglePasswordConfirm"></i>
+                                    <button type="button" class="btn btn-link password-peek" data-target="#kata_sandi_konfirmasi" aria-label="Tampilkan konfirmasi kata sandi">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
                                 </div>
                             </div>
                         </div>
